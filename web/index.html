@@ -60,7 +60,7 @@
   #allin:not(:disabled) { box-shadow: 0 0 14px rgba(190, 50, 70, .65), inset 0 0 0 1px rgba(232, 207, 133, .35); }
 
   /* ===== 시작 화면: 빈티지 네온 간판 ===== */
-  html:has(#screen-home:not([hidden])) { background:
+  html:has(#screen-home:not([hidden])), html:has(#screen-setup.solo:not([hidden])) { background:
       radial-gradient(circle at 13% 9%, rgba(235, 238, 255, 0.8) 0 1.2px, transparent 2.0px),
       radial-gradient(circle at 71% 4%, rgba(235, 238, 255, 0.5) 0 1px, transparent 1.8px),
       radial-gradient(circle at 37% 21%, rgba(235, 238, 255, 0.55) 0 1px, transparent 1.8px),
@@ -215,6 +215,32 @@
   .row { display: flex; gap: 6px; }
   .row > button { flex: 1; }
 
+  /* 설정 화면: 프리셋, 상세 설정 */
+  .presets { display: flex; flex-direction: column; gap: 12px; padding: 4px 2px; }
+  .preset { --glow: #19e6ff; --tint: #c9fbff; display: grid; grid-template-columns: 1fr auto; align-items: center; text-align: left; column-gap: 10px;
+    min-height: 74px; padding: 10px 16px; border: 2px solid color-mix(in srgb, var(--glow) 55%, transparent); border-radius: 14px; background: #0a0d1c; color: #fff; }
+  .preset.gold { --glow: #ffb52e; --tint: #ffe7ac; }
+  .preset.pink { --glow: #ff2d78; --tint: #ffd0e0; }
+  .preset b { font-family: var(--serif); font-size: 22px; text-shadow: 0 0 8px var(--glow); }
+  .preset small { grid-column: 1; font-size: 13px; font-weight: 500; color: var(--tint); }
+  .preset::after { content: ""; grid-column: 2; grid-row: 1 / span 2; width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--tint);
+    display: grid; place-items: center; font-size: 17px; font-weight: 800; color: #0a0d1c; }
+  /* 선택한 프리셋: 색뿐 아니라 체크 표시로도 알 수 있게 */
+  .preset[aria-pressed="true"] { border-color: var(--tint); box-shadow: 0 0 6px var(--glow), 0 0 18px var(--glow), inset 0 0 18px color-mix(in srgb, var(--glow) 40%, transparent); }
+  .preset[aria-pressed="true"]::after { content: "✓"; background: var(--tint); }
+  #advanced > summary { min-height: 44px; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; font-weight: 700;
+    color: var(--gold-light); border: 1px dashed var(--line); border-radius: 10px; list-style: none; }
+  #advanced > summary::-webkit-details-marker { display: none; }
+  #advanced > summary::after { content: "▾"; }
+  #advanced[open] > summary::after { content: "▴"; }
+  #advanced[open] > summary { margin-bottom: 8px; }
+  #screen-setup:not(.solo) #advanced > summary, #screen-setup:not(.solo) .help { display: none; }
+  #screen-setup.solo label { flex-wrap: wrap; row-gap: 0; padding: 4px 0; border-bottom: 1px solid rgba(201, 162, 75, .14); }
+  #screen-setup.solo label:last-child { border-bottom: 0; }
+  .help { flex-basis: 100%; font-size: 12px; line-height: 1.4; color: var(--muted); }
+  #setupWarn { color: #ffcf8a; font-size: 14px; line-height: 1.5; text-align: center; }
+  #setupWarn:empty { display: none; }
+
   @media (max-width: 480px) {
     body { padding: 6px; }
     h1 { font-size: 17px; }
@@ -333,18 +359,32 @@
   <!-- 3) 게임 설정 (혼자 하기 / 방 만들기) -->
   <section class="screen" id="screen-setup" hidden>
     <h2 id="setupTitle"></h2>
-    <div class="panel">
-      <label class="multi">내 닉네임 <input id="hostName" maxlength="10" placeholder="한글/영문 1~10자"></label>
-      <label>시작 칩 <input type="number" id="chips" inputmode="numeric"></label>
-      <label>스몰 블라인드 <input type="number" id="sb" inputmode="numeric"></label>
-      <label>빅 블라인드 <input type="number" id="bb" inputmode="numeric"></label>
-      <label>봇 수 <select id="bots"></select></label>
-      <label class="multi">제한 시간 <select id="turnSeconds">
-        <option value="30">30초</option><option value="60" selected>60초</option><option value="120">2분</option>
-      </select></label>
-      <label>승률 힌트 <input type="checkbox" id="useHint" checked></label>
+    <div class="presets" id="presets" role="group" aria-label="게임 방식 고르기">
+      <button type="button" class="preset" data-preset="easy" aria-pressed="false"><b>입문</b><small>봇 2명 · 승률 힌트 켜짐</small></button>
+      <button type="button" class="preset gold" data-preset="normal" aria-pressed="true"><b>보통</b><small>봇 3명 · 승률 힌트 켜짐</small></button>
+      <button type="button" class="preset pink" data-preset="full" aria-pressed="false"><b>풀 테이블</b><small>봇 5명 · 승률 힌트 꺼짐</small></button>
     </div>
+    <details id="advanced">
+      <summary>상세 설정</summary>
+      <div class="panel">
+        <label class="multi">내 닉네임 <input id="hostName" maxlength="10" placeholder="한글/영문 1~10자"></label>
+        <label>시작 칩 <input type="number" id="chips" inputmode="numeric">
+          <small class="help">처음 갖고 시작하는 가상 칩이에요. 돈이 아니에요.</small></label>
+        <label>스몰 블라인드 <input type="number" id="sb" inputmode="numeric">
+          <small class="help">카드를 받기 전에 한 사람이 강제로 내는 작은 판돈이에요.</small></label>
+        <label>빅 블라인드 <input type="number" id="bb" inputmode="numeric">
+          <small class="help">다른 사람이 강제로 내는 큰 판돈이에요. 이 판의 최소 베팅 금액이기도 해요. 보통 스몰 블라인드의 2배예요.</small></label>
+        <label>봇 수 <select id="bots"></select>
+          <small class="help">같이 치는 컴퓨터 상대의 수예요.</small></label>
+        <label class="multi">제한 시간 <select id="turnSeconds">
+          <option value="30">30초</option><option value="60" selected>60초</option><option value="120">2분</option>
+        </select></label>
+        <label>승률 힌트 <input type="checkbox" id="useHint" checked>
+          <small class="help">내 패로 이길 확률을 화면에 보여줘요.</small></label>
+      </div>
+    </details>
     <button class="primary big" id="startSetup"></button>
+    <div id="setupWarn" role="status"></div>
     <button class="back">뒤로</button>
   </section>
 
@@ -737,6 +777,83 @@ function showHomeStep(friends) {
 }
 $("goFriends").onclick = () => showHomeStep(true);
 $("homeBack").onclick = () => showHomeStep(false);
+
+// ---- 설정 화면 보조: 프리셋, 상세 설정, 입력 검사 (서버로 보내는 내용과 방식은 그대로) ----
+// base가 true면 서버 기본값(칩, 블라인드)을 쓴다.
+const PRESETS = {
+  easy: { base: false, bots: 2, hint: true },
+  normal: { base: true, bots: 3, hint: true },
+  full: { base: true, bots: 5, hint: false },
+};
+const STANDARD = { chips: 10000, sb: 50, bb: 100 };
+let preset = "normal";
+
+function fillMoney(values) {
+  for (const key of ["chips", "sb", "bb"]) $(key).value = values[key];
+}
+function serverDefaults() { return (state && state.defaults) || STANDARD; }
+
+// 고른 프리셋 표시 (name이 빈 값이면 직접 설정한 상태)
+function markPreset(name) {
+  document.querySelectorAll(".preset").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.preset === name)));
+}
+
+function applyPreset(name) {
+  preset = name;
+  const p = PRESETS[name];
+  fillMoney(p.base ? serverDefaults() : STANDARD);
+  $("bots").value = String(p.bots);
+  $("useHint").checked = p.hint;
+  markPreset(name);
+  checkSetup();
+}
+
+// 서버의 validateSettings와 같은 범위를 미리 검사해서 쉬운 말로 알려 준다.
+function setupProblem() {
+  const [chips, sb, bb] = ["chips", "sb", "bb"].map((id) => ($(id).value.trim() === "" ? NaN : Number($(id).value)));
+  if (![chips, sb, bb].every(Number.isInteger)) return "시작 칩과 블라인드 칸에 숫자(소수점 없이)를 채워 주세요.";
+  if (chips < 100) return "시작 칩이 너무 적어요. 100개 이상으로 해 주세요.";
+  if (chips > 1000000) return "시작 칩이 너무 많아요. 1,000,000개 이하로 해 주세요.";
+  if (sb < 1) return "스몰 블라인드는 1 이상이어야 해요.";
+  if (bb < 2) return "빅 블라인드는 2 이상이어야 해요.";
+  if (bb < sb) return "빅 블라인드가 스몰 블라인드보다 작아요. 보통은 2배(" + (sb * 2).toLocaleString() + ")로 해요.";
+  if (bb > chips) return "빅 블라인드가 시작 칩보다 커요. 블라인드를 줄이거나 시작 칩을 늘려 주세요.";
+  return "";
+}
+
+function checkSetup() {
+  const problem = setupProblem();
+  $("setupWarn").textContent = problem;
+  $("startSetup").disabled = !!problem;
+}
+
+// 설정 화면이 열릴 때 (openSetup이 먼저 실행된 다음에 호출된다)
+function arrangeSetup() {
+  const screen = $("screen-setup");
+  screen.classList.toggle("solo", setupSolo);
+  $("presets").hidden = !setupSolo;
+  // 혼자 하기: 상세 설정은 시작 버튼 아래에 접어 둔다. 방 만들기: 예전처럼 위에 펼쳐 둔다.
+  screen.insertBefore($("advanced"), setupSolo ? screen.querySelector(".back") : $("startSetup"));
+  $("advanced").open = !setupSolo;
+  if (setupSolo) {
+    applyPreset(preset);
+  } else {
+    fillMoney(serverDefaults());
+    $("useHint").checked = true;
+    checkSetup();
+  }
+}
+$("goSolo").addEventListener("click", arrangeSetup);
+$("goCreate").addEventListener("click", arrangeSetup);
+document.querySelectorAll(".preset").forEach((b) => { b.onclick = () => applyPreset(b.dataset.preset); });
+// 스몰 블라인드를 바꾸면 빅 블라인드는 2배로 따라간다 (그 뒤에 직접 고칠 수 있다)
+$("sb").addEventListener("input", () => {
+  const sb = Number($("sb").value);
+  if (Number.isInteger(sb) && sb > 0) $("bb").value = sb * 2;
+});
+for (const id of ["chips", "sb", "bb", "bots", "useHint"]) {
+  $(id).addEventListener("input", () => { markPreset(""); checkSetup(); });
+}
 
 // 겉모습 전용: 팟과 베팅액 크기(빅 블라인드의 몇 배인지)에 따라 칩 아이콘 색을 정한다.
 // 게임 로직은 건드리지 않고 data-chip 속성만 붙인다.
