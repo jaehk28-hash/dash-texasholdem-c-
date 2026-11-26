@@ -3,6 +3,7 @@
 콘솔에서 **나 1명 + 봇 5명**이 한 테이블에서 노리밋 텍사스 홀덤을 연습하는 C++17 프로그램입니다.
 홀덤 펍 규칙을 그대로 따르고, 칩만 쓰므로 실제 돈은 오가지 않습니다.
 내 차례에는 승률과 팟 오즈 같은 **힌트**를 보여 주고, 판이 끝나면 **핸드 히스토리**를 볼 수 있습니다.
+브라우저에서 플레이하는 [웹 모드](#웹-모드)도 있습니다.
 
 ## 빌드
 
@@ -19,11 +20,14 @@ CMake가 없을 때는 컴파일러로 바로 빌드할 수 있습니다 (macOS/
 ```bash
 mkdir -p build
 CORE=(src/card.cpp src/evaluator.cpp src/pot.cpp src/game.cpp src/equity.cpp src/bots.cpp src/human_player.cpp)
-c++ -std=c++17 -O2 -Wall -Wextra -Isrc "${CORE[@]}" src/main.cpp  -o build/holdem
+WEB=(src/web_json.cpp src/web_session.cpp src/web_server.cpp)
+WEBFLAGS=(-isystem third_party -pthread -DHOLDEM_WEB_DIR="\"$PWD/web\"")
+c++ -std=c++17 -O2 -Wall -Wextra -Isrc "${WEBFLAGS[@]}" "${CORE[@]}" "${WEB[@]}" src/main.cpp -o build/holdem
 c++ -std=c++17 -O2 -Wall -Wextra -Isrc "${CORE[@]}" src/bench.cpp -o build/holdem_bench
 for t in evaluator pot game; do
   c++ -std=c++17 -O2 -Wall -Wextra -Isrc "${CORE[@]}" tests/test_$t.cpp -o build/test_$t && ./build/test_$t
 done
+c++ -std=c++17 -O2 -Wall -Wextra -Isrc "${WEBFLAGS[@]}" "${CORE[@]}" "${WEB[@]}" tests/test_web.cpp -o build/test_web && ./build/test_web
 ```
 
 모든 빌드는 `-Wall -Wextra`로 경고 없이 컴파일됩니다.
@@ -44,6 +48,8 @@ done
 | `--hint-trials N` | 힌트 승률 계산 시행 횟수 | 10000 |
 | `--chips N` | 시작 칩 | 10000 |
 | `--sb N`, `--bb N` | 스몰/빅 블라인드 | 50 / 100 |
+| `--web` | 웹 모드로 실행 | 꺼짐 (콘솔) |
+| `--port N` | 웹 모드 포트 (환경변수 `PORT`로도 지정, `--port`가 우선) | 8080 |
 
 ### 내 차례에 입력하는 법
 
@@ -67,6 +73,94 @@ done
 ```
 
 승률은 "상대가 무작위 카드를 가졌다"는 가정의 값이라, 상대가 베팅을 했다면 실제 상대 핸드는 평균보다 강하다는 점을 감안하세요.
+
+## 웹 모드
+
+```bash
+./build/holdem --web                 # http://localhost:8080
+./build/holdem --web --port 9000
+PORT=9000 ./build/holdem --web
+./build/holdem --web --seed 42       # 재현용 (공개 서버에서는 쓰지 마세요)
+```
+
+처음 접속하면 **규칙 설명**이 나오고, 확인하면 메뉴가 보입니다 (규칙은 오른쪽 위 버튼으로 언제든 다시 볼 수 있습니다).
+
+| 메뉴 | 내용 |
+|---|---|
+| 혼자 봇과 하기 | 시작 칩, 블라인드, 봇 수(1~5), 힌트를 고르고 바로 시작 |
+| 방 만들기 | 위 설정 + 닉네임, 제한 시간(30초/60초/2분), 봇 수(0~5). **6자리 방 코드**가 나옵니다 |
+| 코드로 들어가기 | 친구에게 받은 코드와 닉네임을 입력 |
+
+### 친구와 하는 법
+
+1. 모두 **같은 서버 주소**로 접속합니다. 같은 와이파이라면 `http://서버를_켠_컴퓨터의_IP:8080`, 멀리 있는 친구라면 아래 "서버 배포"가 필요합니다.
+2. 한 사람이 방을 만들고 코드를 알려 주면, 친구들이 코드를 입력해 들어옵니다 (최대 6명).
+3. 방장이 **게임 시작**을 누릅니다. 빈 자리에는 설정한 수만큼(남는 자리 한도) 봇이 앉습니다.
+
+- 제한 시간 안에 행동하지 않으면 자동으로 체크, 낼 칩이 있으면 폴드합니다.
+- 게임 중에 나가면 그 자리는 자동으로 체크/폴드하며, 다시 들어올 수 없습니다. 새로고침이나 탭을 다시 여는 것은 괜찮습니다.
+- 시작한 방에는 새로 들어올 수 없습니다. 게임이 끝나면 방장이 **다시 하기**를 누를 수 있습니다.
+- 방장이 나가면 다음으로 들어온 사람이 방장이 됩니다.
+- 브라우저 하나가 한 사람입니다(쿠키). 한 컴퓨터에서 두 명을 시험하려면 시크릿 창이나 다른 브라우저를 쓰세요.
+
+### 공통
+
+- `--chips`, `--sb`, `--bb`는 설정 화면의 기본값이 되고, `--no-hint`는 모든 방의 힌트를 끕니다.
+- 방은 동시에 최대 20개이고(혼자 하기 포함), 30분 동안 입력(시작, 입장, 행동)이 없으면 정리됩니다. 서버를 끄면 모두 사라집니다.
+- 봇은 0.5초 간격으로 행동하고, 판이 끝나면 5초 뒤 다음 판이 자동으로 시작됩니다.
+- 남의 홀 카드는 쇼다운에서 폴드하지 않은 사람 것만 서버가 보냅니다.
+- `--seed N`을 주면 만든 방 순서대로 N, N+1, N+2 … 시드를 씁니다. 시드를 아는 사람은 카드를 미리 알 수 있습니다.
+- 화면 파일은 `web/index.html`입니다. 서버를 시작할 때 한 번 읽으므로, 고친 뒤에는 다시 실행하세요.
+
+### API
+
+| 요청 | 본문 (JSON) |
+|---|---|
+| `POST /api/new` | 혼자 하기. 모두 선택: `chips, sb, bb, bots, hint` |
+| `POST /api/room/create` | `name` 필수, 선택: `chips, sb, bb, bots, hint, turnSeconds` |
+| `POST /api/room/join` | `code, name`. 없는 코드를 1분에 10번 넣으면 429 |
+| `POST /api/room/start` | 방장만. 시작 또는 다시 하기 |
+| `POST /api/room/leave` | 방 나가기 |
+| `GET /api/state` | 내 시점의 상태. 방이 없으면 `{"hasGame":false, ...}` |
+| `POST /api/action` | `{"action":"fold\|check\|call\|raise\|allin","amount":N,"turnId":T}`. `amount`는 `raise`의 이번 라운드 **총액**, `turnId`는 선택 |
+
+잘못된 요청은 400, 방 20개가 모두 차면 503으로 응답합니다. 접속자는 쿠키 `sid`로 구분합니다.
+
+## 서버 배포 (Ubuntu 22.04)
+
+```bash
+sudo apt update
+sudo apt install -y g++ cmake make git
+
+git clone https://github.com/jaehk28-hash/dash-texasholdem-c-.git holdem-practice
+cd holdem-practice
+cmake -S . -B build
+cmake --build build -j2              # 메모리가 작은 서버라면 -j 없이
+ctest --test-dir build --output-on-failure
+
+./build/holdem --web --port 8080
+```
+
+포트 열기:
+
+```bash
+sudo ufw allow 8080/tcp              # ufw를 쓰는 경우
+```
+
+클라우드 서버(AWS, GCP, Oracle 등)는 서버 안의 설정과 별개로, 콘솔의 **보안 그룹/방화벽 규칙**에서도 TCP 8080 인바운드를 열어야 합니다.
+그다음 브라우저에서 `http://서버IP:8080`으로 접속합니다.
+
+SSH를 끊어도 계속 실행하려면:
+
+```bash
+nohup ./build/holdem --web --port 8080 > holdem.log 2>&1 &
+pkill -f "holdem --web"              # 끌 때
+```
+
+실행 파일에는 빌드할 때의 `web/` 폴더 경로가 기록되므로, 폴더를 옮겼다면 다시 빌드하세요.
+
+**주의**: 연습용 서버라 로그인과 HTTPS가 없습니다. 주소를 아는 사람은 누구나 접속할 수 있고, 방 만들기 횟수 제한이 없어 한 사람이 방 20개를 모두 차지할 수도 있습니다.
+가능하면 방화벽에서 나와 친구들의 IP만 허용하세요. (코드 대입 제한은 접속 IP 기준이라, 프록시 뒤에 두면 모두가 한 IP로 계산됩니다.)
 
 ## 규칙 요약
 
@@ -104,8 +198,12 @@ src/
   player.h        Player 추상 클래스, GameState, 행동
   game.*          한 판 진행, 베팅 라운드      bots.*        봇 5종
   human_player.*  콘솔 입력/출력, 힌트         main.cpp      실행 파일
+  web_json.*      작은 JSON 도구               web_session.* 게임 방과 게임 스레드
+  web_server.*    HTTP 서버와 API
   bench.cpp       성능/정확도 측정 프로그램 (docs/bench.md 생성)
-tests/            test_evaluator / test_pot / test_game (외부 라이브러리 없는 CHECK 방식)
+web/index.html    웹 화면 (HTML+CSS+JS 한 파일)
+third_party/      httplib.h (cpp-httplib v0.67.0, MIT 라이선스)
+tests/            test_evaluator / test_pot / test_game / test_web (CHECK 방식)
 docs/bench.md     측정 결과 전체
 ```
 
@@ -115,6 +213,8 @@ docs/bench.md     측정 결과 전체
 - 팟: 올인이 여러 명인 사이드 팟, 폴드한 사람의 칩, 동점 분배, 홀수 칩, 무작위 입력에서 칩 보존.
 - 진행: 버튼/블라인드 이동, 행동 순서, 헤즈업, 딜 순서, 최소 레이즈, 숏 올인/풀 올인의 레이즈 권리, 콜 못 받은 베팅 반환, 사이드 팟 쇼다운, 탈락, 무작위로 행동하는 플레이어 수천 판에서 칩 보존.
 - 승률: AA/AKs/72o의 알려진 승률과 비교, 봇 성격이 통계로 드러나는지, 사람 입력 파싱과 재질문, 힌트 출력.
+
+- 웹: 방 정리(30분)와 20개 제한, 입장/나가기/방장 승계, 설정과 닉네임 검사, 잘못된 요청의 400 거절, 코드 대입 제한, 제한 시간, 쇼다운 전 남의 카드 비노출, JSON 해석.
 
 ## 측정 결과 요약 (자세한 내용은 [docs/bench.md](docs/bench.md))
 

@@ -30,7 +30,15 @@ struct HandSummary {
     std::vector<Card> board;
     std::vector<std::array<Card, 2>> holes;  // 좌석별 홀 카드 (참여한 좌석만 유효)
     std::vector<bool> dealtIn;           // 이번 판에 카드를 받은 좌석
+    std::vector<bool> folded;            // 이번 판에 폴드한 좌석 (쇼다운에서 누구 카드를 공개할지 판단)
     std::vector<std::string> history;    // 행동 기록 (핸드 히스토리)
+};
+
+// 화면 갱신용: 특정 좌석의 시점에서 본 현재 테이블.
+// 상대의 홀 카드는 담기지 않는다 (state.myHole은 보는 사람 자신의 카드).
+struct TableSnapshot {
+    GameState state;
+    bool holeDealt = false;  // 이번 판의 홀 카드를 이미 나눠 줬는가 (false면 myHole은 의미 없음)
 };
 
 // 테이블 전체를 관리하고 한 판씩 진행하는 클래스.
@@ -51,6 +59,10 @@ public:
     int chips(int seat) const { return seats_[seat].chips; }
     const Player& player(int seat) const { return *seats_[seat].player; }
     const GameConfig& config() const { return config_; }
+
+    // viewer 좌석이 볼 수 있는 정보만 담아 돌려준다.
+    // 게임을 진행하는 스레드에서만 호출할 것 (예: 로거 콜백 안).
+    TableSnapshot snapshot(int viewer) const;
 
     // 진행 중 사건을 한 줄씩 받는 콜백 (화면 출력용). 기록은 HandSummary.history에도 남는다.
     void setLogger(std::function<void(const std::string&)> logger) { logger_ = std::move(logger); }
@@ -111,6 +123,7 @@ private:
     int lastRaise_ = 0;    // 직전 (풀) 벳/레이즈 증가분 = 최소 레이즈 폭
     int expectedTotal_ = 0;  // 칩 보존 검사용: 판 시작 시 전체 칩
     bool showdown_ = false;
+    bool holeDealt_ = false;  // 이번 판의 홀 카드를 나눠 줬는가
 
     int forcedButton_ = -1;
     bool hasNextDeck_ = false;

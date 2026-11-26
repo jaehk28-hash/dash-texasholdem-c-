@@ -1,0 +1,526 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>홀덤 연습</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #10201a; color: #eef3ef; font-family: system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; padding: 10px; }
+  .wrap { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 10px; }
+  header { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  h1 { font-size: 18px; }
+  button { font: inherit; border: 0; border-radius: 8px; padding: 10px 12px; background: #e9eee9; color: #17221c; cursor: pointer; min-height: 44px; }
+  button:disabled { opacity: .35; cursor: default; }
+  /* 6인 테이블: 3열 격자에 좌석을 시계 방향으로 배치 */
+  .table { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; background: #1b5e43; border-radius: 28px; padding: 10px;
+           grid-template-areas: "s2 s3 s4" "s1 mid s5" ". s0 ."; }
+  .seat { background: #12291f; border: 2px solid transparent; border-radius: 10px; padding: 6px 4px; text-align: center; font-size: 13px; min-width: 0; }
+  .seat.me { border-color: #f0c64a; }
+  .seat.out, .seat.folded { opacity: .45; }
+  .name { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pos { color: #f0c64a; font-size: 11px; margin-left: 3px; }
+  .status { min-height: 18px; color: #9fd6b8; font-size: 12px; }
+  .mid { grid-area: mid; align-self: center; text-align: center; min-width: 0; }
+  .pot { font-weight: 700; margin-bottom: 6px; }
+  .cards { display: flex; justify-content: center; gap: 3px; min-height: 40px; margin-top: 4px; }
+  .card { flex: 0 1 30px; height: 40px; border-radius: 5px; background: #fff; color: #111; display: flex; flex-direction: column;
+          align-items: center; justify-content: center; font-weight: 700; font-size: 13px; line-height: 1.1; min-width: 0; }
+  .card.red { color: #c62828; }
+  .card.back { background: repeating-linear-gradient(45deg, #7a2230, #7a2230 4px, #96303f 4px, #96303f 8px); }
+  .panel { background: #17302400; border: 1px solid #2d4a3b; border-radius: 10px; padding: 10px; }
+  .hint { font-size: 14px; line-height: 1.5; min-height: 62px; }
+  .buttons { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  .raise { display: grid; grid-template-columns: minmax(0, 1fr) 90px auto auto; gap: 6px; margin-top: 8px; align-items: center; }
+  .raise input { width: 100%; min-width: 0; min-height: 40px; font: inherit; }
+  .raise input[type=number] { border-radius: 8px; border: 0; padding: 4px 8px; }
+  #notice { color: #ffd98a; font-size: 14px; min-height: 20px; text-align: center; }
+  #log { height: 180px; overflow-y: auto; font-size: 12px; line-height: 1.6; color: #cfe0d6; overflow-wrap: anywhere; }
+  /* 메뉴, 설정, 대기실 화면 */
+  [hidden] { display: none !important; }
+  .screen { display: flex; flex-direction: column; gap: 10px; }
+  .screen h2 { font-size: 17px; }
+  .screen h3 { font-size: 15px; color: #f0c64a; margin-bottom: 4px; }
+  .screen ul, .screen ol { padding-left: 20px; line-height: 1.6; font-size: 14px; }
+  .big { font-size: 17px; padding: 16px; }
+  .primary { background: #f0c64a; font-weight: 700; }
+  label { display: flex; justify-content: space-between; align-items: center; gap: 10px; min-height: 40px; }
+  label input:not([type=checkbox]), label select { width: 55%; min-width: 0; min-height: 40px; font: inherit; border: 0; border-radius: 8px; padding: 4px 8px; }
+  label input[type=checkbox] { width: 22px; height: 22px; }
+  .code { font-size: 40px; font-weight: 800; letter-spacing: 8px; text-align: center; color: #f0c64a; user-select: all; }
+  .row { display: flex; gap: 6px; }
+  .row > button { flex: 1; }
+  .seat.turn { border-color: #6fe3a5; }
+  @media (max-width: 480px) {
+    body { padding: 6px; }
+    .table { padding: 6px; gap: 5px; border-radius: 18px;
+             grid-template-areas: "s2 s3 s4" "s1 . s5" "mid mid mid" ". s0 ."; }
+    .card { flex-basis: 26px; height: 36px; font-size: 12px; }
+    .seat { font-size: 12px; }
+    .raise { grid-template-columns: 1fr 1fr 1fr; }
+    .raise input[type=range] { grid-column: 1 / -1; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>♠ 홀덤 연습</h1>
+    <span id="info"></span>
+    <button id="showRules">규칙</button>
+  </header>
+
+  <div id="error" role="alert" style="color:#ffb4a8; text-align:center"></div>
+
+  <!-- 1) 규칙 설명 (처음 들어오면 보임) -->
+  <section class="screen" id="screen-rules" hidden>
+    <div class="panel">
+      <h3>한 판의 흐름</h3>
+      <ol>
+        <li>두 사람이 블라인드(의무 베팅)를 냅니다.</li>
+        <li>각자 홀 카드 2장을 받고 첫 베팅을 합니다 (프리플랍).</li>
+        <li>공용 카드 3장(플랍), 1장(턴), 1장(리버)이 차례로 깔리고 그때마다 베팅합니다.</li>
+        <li>끝까지 남으면 카드를 공개합니다(쇼다운). 7장 중 가장 좋은 5장이 이깁니다.</li>
+        <li>나머지가 모두 폴드하면 남은 한 사람이 바로 팟을 가져갑니다.</li>
+      </ol>
+    </div>
+    <div class="panel">
+      <h3>내 차례에 할 수 있는 것</h3>
+      <ul>
+        <li><b>폴드</b>: 이번 판 포기</li>
+        <li><b>체크</b>: 낼 칩이 없을 때 그냥 넘기기</li>
+        <li><b>콜</b>: 앞사람이 건 만큼 맞추기</li>
+        <li><b>벳/레이즈</b>: 더 걸기. 입력하는 금액은 이번 라운드에 거는 <b>총액</b></li>
+        <li><b>올인</b>: 가진 칩 전부 걸기</li>
+      </ul>
+    </div>
+    <div class="panel">
+      <h3>족보 (위가 강함)</h3>
+      <ol>
+        <li>스트레이트 플러시: 같은 무늬의 연속된 5장</li>
+        <li>포카드: 같은 숫자 4장</li>
+        <li>풀하우스: 같은 숫자 3장 + 2장</li>
+        <li>플러시: 같은 무늬 5장</li>
+        <li>스트레이트: 연속된 5장 (A-2-3-4-5 포함)</li>
+        <li>트리플: 같은 숫자 3장</li>
+        <li>투 페어</li>
+        <li>원 페어</li>
+        <li>하이 카드</li>
+      </ol>
+    </div>
+    <div class="panel">
+      <h3>알아 둘 점</h3>
+      <ul>
+        <li>연습용 칩만 사용하며 실제 돈은 오가지 않습니다.</li>
+        <li>칩이 0이 되면 탈락합니다.</li>
+        <li>친구와 할 때는 제한 시간이 지나면 자동으로 체크 또는 폴드됩니다.</li>
+      </ul>
+    </div>
+    <button class="primary big" id="rulesOk">확인했어요</button>
+  </section>
+
+  <!-- 2) 메뉴 -->
+  <section class="screen" id="screen-home" hidden>
+    <button class="primary big" id="goSolo">🤖 혼자 봇과 하기</button>
+    <button class="big" id="goCreate">🏠 친구와 하기: 방 만들기</button>
+    <button class="big" id="goJoin">🔑 코드로 방 들어가기</button>
+  </section>
+
+  <!-- 3) 게임 설정 (혼자 하기 / 방 만들기) -->
+  <section class="screen" id="screen-setup" hidden>
+    <h2 id="setupTitle"></h2>
+    <div class="panel">
+      <label class="multi">내 닉네임 <input id="hostName" maxlength="10" placeholder="한글/영문 1~10자"></label>
+      <label>시작 칩 <input type="number" id="chips" inputmode="numeric"></label>
+      <label>스몰 블라인드 <input type="number" id="sb" inputmode="numeric"></label>
+      <label>빅 블라인드 <input type="number" id="bb" inputmode="numeric"></label>
+      <label>봇 수 <select id="bots"></select></label>
+      <label class="multi">제한 시간 <select id="turnSeconds">
+        <option value="30">30초</option><option value="60" selected>60초</option><option value="120">2분</option>
+      </select></label>
+      <label>승률 힌트 <input type="checkbox" id="useHint" checked></label>
+    </div>
+    <button class="primary big" id="startSetup"></button>
+    <button class="back">뒤로</button>
+  </section>
+
+  <!-- 4) 코드 입력 -->
+  <section class="screen" id="screen-join" hidden>
+    <h2>코드로 방 들어가기</h2>
+    <div class="panel">
+      <label>방 코드 <input id="joinCode" inputmode="numeric" maxlength="6" placeholder="숫자 6자리"></label>
+      <label>내 닉네임 <input id="joinName" maxlength="10" placeholder="한글/영문 1~10자"></label>
+    </div>
+    <button class="primary big" id="joinRoom">들어가기</button>
+    <button class="back">뒤로</button>
+  </section>
+
+  <!-- 5) 대기실 -->
+  <section class="screen" id="screen-lobby" hidden>
+    <h2>대기실</h2>
+    <div class="panel">
+      <div>친구에게 이 코드를 알려 주세요</div>
+      <div class="code" id="roomCode"></div>
+    </div>
+    <div class="panel">
+      <div id="roomSettings"></div>
+      <ul id="memberList"></ul>
+    </div>
+    <div id="lobbyWait"></div>
+    <button class="primary big" id="startRoom">게임 시작</button>
+    <button class="leave">방 나가기</button>
+  </section>
+
+  <!-- 6) 게임 테이블 -->
+  <section class="screen" id="screen-game" hidden>
+    <div class="table" id="table">
+      <div class="mid">
+        <div class="pot" id="pot"></div>
+        <div class="cards" id="board"></div>
+      </div>
+    </div>
+
+    <div id="notice"></div>
+
+    <div class="panel">
+      <div class="buttons">
+        <button id="fold" disabled>폴드</button>
+        <button id="check" disabled>체크</button>
+        <button id="call" disabled>콜</button>
+        <button id="allin" disabled>올인</button>
+      </div>
+      <div class="raise">
+        <input type="range" id="slider" aria-label="레이즈 금액 조절" disabled>
+        <input type="number" id="amount" aria-label="레이즈 총액" inputmode="numeric" disabled>
+        <button id="potBet" disabled>팟</button>
+        <button id="raise" disabled>레이즈</button>
+      </div>
+    </div>
+
+    <div class="panel hint" id="hint"></div>
+    <div class="panel"><div id="log"></div></div>
+    <div class="row">
+      <button class="primary" id="restart" hidden>다시 하기</button>
+      <button class="leave">나가기</button>
+    </div>
+  </section>
+</div>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const SUITS = { s: "♠", h: "♥", d: "♦", c: "♣" };
+let state = null;       // 서버에서 받은 최신 상태 (아직 없으면 null)
+let menu = "home";      // 방에 없을 때 보여 줄 화면: home / setup / join
+let showingRules = false;
+let setupSolo = true;   // 설정 화면이 "혼자 하기"용인가
+let defaultsFilled = false;
+let lastTurnId = -1;    // 레이즈 입력창을 새 차례에만 초기화하기 위한 값
+let requestSeq = 0;     // 늦게 도착한 옛 응답을 버리기 위한 번호
+let sending = false;    // 행동을 보내는 중에는 버튼을 잠근다
+
+// 화면 글자는 모두 textContent로 넣는다 (HTML 삽입 방지).
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+function cardNode(code) {
+  if (!code) return el("div", "card back");
+  const suit = code[1];
+  const node = el("div", "card" + (suit === "h" || suit === "d" ? " red" : ""));
+  node.append(el("span", "", code[0] === "T" ? "10" : code[0]), el("span", "", SUITS[suit]));
+  return node;
+}
+
+// 인원수별로 사용할 자리 (0 = 아래 가운데, 시계 방향)
+const LAYOUTS = { 2: [0, 3], 3: [0, 2, 4], 4: [0, 1, 3, 5], 5: [0, 1, 2, 4, 5], 6: [0, 1, 2, 3, 4, 5] };
+
+function renderSeats(players) {
+  document.querySelectorAll(".seat").forEach((n) => n.remove());
+  const mine = Math.max(0, players.findIndex((p) => p.isMe));
+  for (const p of players) {
+    let cls = "seat";
+    if (p.seat === state.turnSeat) cls += " turn";
+    if (p.isMe) cls += " me";
+    if (!p.inHand) cls += " out";
+    else if (p.folded) cls += " folded";
+    const seat = el("div", cls);
+    // 내 자리(mine)를 아래로 돌려서 배치한다.
+    seat.style.gridArea = "s" + LAYOUTS[players.length][(p.seat - mine + players.length) % players.length];
+    const name = el("div", "name", p.name);
+    name.append(el("span", "pos", p.position));
+    seat.append(name, el("div", "", "칩 " + p.chips.toLocaleString()));
+    const cards = el("div", "cards");
+    if (p.cards.length) p.cards.forEach((c) => cards.append(cardNode(c)));
+    else if (p.inHand && !p.folded) cards.append(cardNode(null), cardNode(null));
+    seat.append(cards);
+    let status = "";
+    if (!p.inHand) status = p.chips === 0 ? "탈락" : "";
+    else if (p.folded) status = "폴드";
+    else if (p.allIn) status = "올인";
+    if (p.bet > 0) status += (status ? " · " : "") + "베팅 " + p.bet.toLocaleString();
+    seat.append(el("div", "status", status));
+    $("table").append(seat);
+  }
+}
+
+function renderControls() {
+  const a = state && state.myTurn && !sending ? state.actions : null;
+  $("fold").disabled = !(a && a.fold);
+  $("check").disabled = !(a && a.check);
+  $("call").disabled = !(a && a.call);
+  $("allin").disabled = !(a && a.allIn);
+  $("call").textContent = a && a.call ? "콜 " + a.callAmount.toLocaleString() : "콜";
+  const canRaise = !!(a && a.raise);
+  for (const id of ["slider", "amount", "potBet", "raise"]) $(id).disabled = !canRaise;
+  $("raise").textContent = canRaise && a.currentBet === 0 ? "벳" : "레이즈";
+  // 1초마다 갱신해도 내가 고른 금액이 지워지지 않도록, 새 차례일 때만 초기화한다.
+  if (canRaise && state.turnId !== lastTurnId) {
+    lastTurnId = state.turnId;
+    for (const id of ["slider", "amount"]) {
+      $(id).min = a.minRaiseTo;
+      $(id).max = a.maxRaiseTo;
+      $(id).value = a.minRaiseTo;
+    }
+  }
+}
+
+function renderHint() {
+  const box = $("hint");
+  box.replaceChildren();
+  const h = state.hint;
+  if (!h) {
+    box.textContent = !state.settings.hint ? "이 게임은 승률 힌트를 끄고 진행합니다."
+                                          : "승률 힌트는 내 차례에 표시됩니다.";
+    return;
+  }
+  const pct = (x) => (x * 100).toFixed(1) + "%";
+  let advice = "콜 비용이 없습니다. 체크하면 공짜로 다음 카드를 볼 수 있습니다.";
+  if (state.actions.call) {
+    advice = h.equity > h.potOdds ? "승률이 팟 오즈보다 높아 콜하면 장기적으로 이득입니다."
+                                  : "승률이 팟 오즈보다 낮아 콜은 손해입니다.";
+  }
+  box.append(
+    el("div", "", "승률 " + pct(h.equity) + " (상대 " + h.opponents + "명, 무작위 카드 가정)"),
+    el("div", "", "팟 오즈 " + pct(h.potOdds)),
+    el("div", "", advice));
+}
+
+function renderLog(lines) {
+  const box = $("log");
+  const text = lines.join("\n");
+  if (box.dataset.text === text) return;  // 바뀌지 않았으면 스크롤을 건드리지 않는다
+  box.dataset.text = text;
+  box.replaceChildren(...lines.map((line) => el("div", "", line)));
+  box.scrollTop = box.scrollHeight;
+}
+
+function showScreen(name) {
+  for (const section of document.querySelectorAll("section.screen")) {
+    section.hidden = section.id !== "screen-" + name;
+  }
+}
+
+function renderLobby() {
+  const st = state.settings;
+  $("roomCode").textContent = state.code;
+  $("roomSettings").textContent = "시작 칩 " + st.chips.toLocaleString() + " · 블라인드 " + st.sb + "/" + st.bb
+    + " · 봇 " + st.bots + " · 제한 " + st.turnSeconds + "초 · 힌트 " + (st.hint ? "켬" : "끔");
+  $("memberList").replaceChildren(...state.members.map((m) =>
+    el("li", "", m.name + (m.isHost ? " (방장)" : "") + (m.isMe ? " ← 나" : ""))));
+  const bots = Math.min(st.bots, 6 - state.members.length);
+  const total = state.members.length + bots;
+  $("lobbyWait").textContent = "지금 시작하면 사람 " + state.members.length + "명 + 봇 " + bots + "명"
+    + (state.isHost ? "" : " · 방장이 시작하기를 기다리는 중...");
+  $("startRoom").hidden = !state.isHost;
+  $("startRoom").disabled = total < 2 || sending;
+}
+
+function renderGame() {
+  $("info").textContent = "제 " + state.handNumber + " 판 · " + state.settings.sb + "/" + state.settings.bb
+    + (state.solo ? "" : " · 방 " + state.code);
+  $("pot").textContent = "팟 " + state.pot.toLocaleString();
+  $("board").replaceChildren(...state.board.map(cardNode));
+  if (state.players.length) renderSeats(state.players);
+
+  let notice = "진행 중...";
+  if (state.phase === "over") notice = state.message;
+  else if (state.handOver) notice = "판 종료! 잠시 후 다음 판이 시작됩니다.";
+  else if (state.myTurn) notice = "내 차례입니다.";
+  else if (state.turnSeat >= 0 && state.players[state.turnSeat]) {
+    notice = state.players[state.turnSeat].name + " 님의 차례입니다.";
+  }
+  if (state.phase === "playing" && state.turnSeat >= 0 && state.settings.turnSeconds) {
+    notice += " (" + state.secondsLeft + "초)";
+  }
+  $("notice").textContent = notice;
+
+  $("restart").hidden = !(state.phase === "over" && state.isHost);
+  renderControls();
+  renderHint();
+  renderLog(state.log);
+}
+
+function render() {
+  $("info").textContent = "";
+  if (showingRules) return showScreen("rules");
+  if (!state) return;
+  if (!state.hasGame) return showScreen(menu);
+  if (state.phase === "lobby") {
+    showScreen("lobby");
+    renderLobby();
+  } else {
+    showScreen("game");
+    renderGame();
+  }
+}
+
+async function refresh() {
+  const seq = ++requestSeq;
+  try {
+    const res = await fetch("/api/state", { cache: "no-store" });
+    const data = await res.json();
+    if (seq !== requestSeq) return;  // 더 새로운 요청이 이미 나갔다
+    state = data;
+    // 설정 칸의 기본값은 처음 한 번만 채운다 (입력 중인 값을 지우지 않게).
+    if (data.defaults && !defaultsFilled) {
+      for (const key of ["chips", "sb", "bb"]) $(key).value = data.defaults[key];
+      defaultsFilled = true;
+    }
+    render();
+  } catch (e) {
+    $("error").textContent = "서버에 연결할 수 없습니다.";
+  }
+}
+
+// POST 요청을 보내고, 실패하면 이유를 알려 준다. 성공하면 true.
+async function post(path, body) {
+  if (sending) return false;
+  sending = true;
+  renderControls();
+  let error = "";
+  try {
+    const res = await fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body || {}),
+    });
+    if (!res.ok) error = (await res.json()).error;
+  } catch (e) {
+    error = "서버에 연결할 수 없습니다.";
+  }
+  sending = false;
+  await refresh();
+  $("error").textContent = error;
+  return !error;
+}
+
+function goMenu(name) {
+  menu = name;
+  $("error").textContent = "";
+  render();
+}
+
+function openSetup(solo) {
+  setupSolo = solo;
+  $("setupTitle").textContent = solo ? "혼자 봇과 하기" : "방 만들기";
+  $("startSetup").textContent = solo ? "게임 시작" : "방 만들기";
+  document.querySelectorAll("#screen-setup .multi").forEach((n) => { n.hidden = solo; });
+  const options = [];
+  for (let n = solo ? 1 : 0; n <= 5; n++) {
+    const option = el("option", "", n === 0 ? "봇 없이 (친구끼리)" : n + "명");
+    option.value = n;
+    options.push(option);
+  }
+  $("bots").replaceChildren(...options);
+  $("bots").value = "5";
+  goMenu("setup");
+}
+
+// 닉네임은 다음에 또 쓰도록 브라우저에 저장해 둔다 (저장이 막혀 있어도 동작).
+function remember(key, value) { try { localStorage.setItem(key, value); } catch (e) {} }
+function recall(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
+
+$("showRules").onclick = () => { showingRules = true; render(); window.scrollTo(0, 0); };
+$("rulesOk").onclick = () => { showingRules = false; remember("rulesSeen", "1"); render(); };
+$("goSolo").onclick = () => openSetup(true);
+$("goCreate").onclick = () => openSetup(false);
+$("goJoin").onclick = () => goMenu("join");
+document.querySelectorAll(".back").forEach((b) => { b.onclick = () => goMenu("home"); });
+
+$("startSetup").onclick = () => {
+  const body = {
+    chips: Number($("chips").value), sb: Number($("sb").value), bb: Number($("bb").value),
+    bots: Number($("bots").value), hint: $("useHint").checked,
+  };
+  if (![body.chips, body.sb, body.bb].every(Number.isInteger)) {
+    $("error").textContent = "칩과 블라인드는 정수로 입력하세요.";
+    return;
+  }
+  if (!setupSolo) {
+    body.name = $("hostName").value;
+    body.turnSeconds = Number($("turnSeconds").value);
+    remember("nickname", body.name);
+  }
+  lastTurnId = -1;
+  post(setupSolo ? "/api/new" : "/api/room/create", body);
+};
+
+$("joinRoom").onclick = () => {
+  remember("nickname", $("joinName").value);
+  lastTurnId = -1;
+  post("/api/room/join", { code: $("joinCode").value.trim(), name: $("joinName").value });
+};
+
+$("startRoom").onclick = () => { lastTurnId = -1; post("/api/room/start"); };
+$("restart").onclick = () => { lastTurnId = -1; post("/api/room/start"); };
+document.querySelectorAll(".leave").forEach((b) => {
+  b.onclick = () => {
+    const playing = state.phase === "playing";
+    if (playing && !confirm("게임에서 나갈까요? 다시 들어올 수 없습니다.")) return;
+    menu = "home";
+    post("/api/room/leave");
+  };
+});
+
+// 어느 차례에 누른 것인지 함께 보내서, 늦게 도착한 요청이 다음 차례에 적용되지 않게 한다.
+function act(action, amount) {
+  const body = { action, turnId: state.turnId };
+  if (amount !== undefined) body.amount = amount;
+  post("/api/action", body);
+}
+for (const name of ["fold", "check", "call", "allin"]) {
+  $(name).onclick = () => act(name);
+}
+$("raise").onclick = () => {
+  const value = Number($("amount").value);
+  if (!Number.isInteger(value)) { $("error").textContent = "금액은 정수로 입력하세요."; return; }
+  act("raise", value);
+};
+$("slider").oninput = () => { $("amount").value = $("slider").value; };
+$("amount").oninput = () => { $("slider").value = $("amount").value; };
+// 팟 크기 레이즈: 콜한 뒤의 팟만큼 더 올린다.
+$("potBet").onclick = () => {
+  const a = state.actions;
+  if (!a) return;
+  const target = a.currentBet + state.pot + a.callAmount;
+  const value = Math.min(a.maxRaiseTo, Math.max(a.minRaiseTo, target));
+  $("amount").value = value;
+  $("slider").value = value;
+};
+
+// 1초마다 상태를 확인한다. (이전 요청이 끝난 뒤 다음 요청을 예약)
+async function poll() {
+  if (!sending) await refresh();
+  setTimeout(poll, 1000);
+}
+$("hostName").value = $("joinName").value = recall("nickname") || "";
+showingRules = !recall("rulesSeen");  // 처음 들어온 사람에게는 규칙부터
+render();
+poll();
+</script>
+</body>
+</html>

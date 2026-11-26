@@ -168,6 +168,20 @@ GameState Game::makeState(int seat, Street street) const {
     return st;
 }
 
+TableSnapshot Game::snapshot(int viewer) const {
+    // 라운드(스트리트)는 공용 카드 장수로 알 수 있다.
+    Street street = Street::Preflop;
+    if (board_.size() == 3) street = Street::Flop;
+    else if (board_.size() == 4) street = Street::Turn;
+    else if (board_.size() == 5) street = Street::River;
+
+    TableSnapshot snap;
+    snap.state = makeState(viewer, street);
+    snap.holeDealt = holeDealt_ && seats_[viewer].inHand;
+    if (!snap.holeDealt) snap.state.myHole = {};  // 지난 판 카드가 남지 않게 지운다
+    return snap;
+}
+
 // ---------------------------------------------------------------------------
 // 칩 이동
 // ---------------------------------------------------------------------------
@@ -352,6 +366,7 @@ HandSummary Game::playHand() {
     pot_ = 0;
     board_.clear();
     showdown_ = false;
+    holeDealt_ = false;
     expectedTotal_ = totalChips();
     for (const Seat& s : seats_) summary.startChips.push_back(s.chips);
 
@@ -401,6 +416,7 @@ HandSummary Game::playHand() {
             seat = next(seat);
         }
     }
+    holeDealt_ = true;
 
     // 7) 프리플랍: BB 다음(UTG)부터. 헤즈업이면 버튼(SB)이 먼저.
     bool live = bettingRound(headsUp ? button_ : nextInHand(bbSeat_), Street::Preflop);
@@ -426,6 +442,7 @@ HandSummary Game::playHand() {
         summary.endChips.push_back(s.chips);
         summary.holes.push_back(s.hole);
         summary.dealtIn.push_back(s.inHand);
+        summary.folded.push_back(s.folded);
     }
     history_ = nullptr;
     return summary;

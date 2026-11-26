@@ -1,4 +1,5 @@
 // main.cpp - 6인 노리밋 텍사스 홀덤 연습 시뮬레이터 (사람 1명 + 봇 5명)
+// 기본은 콘솔 모드, --web을 주면 웹 모드로 실행한다.
 #include <cstdlib>
 #include <iostream>
 #include <random>
@@ -7,6 +8,7 @@
 #include "bots.h"
 #include "game.h"
 #include "human_player.h"
+#include "web_server.h"
 
 namespace {
 
@@ -18,6 +20,8 @@ void printUsage() {
                  "  --sb N          스몰 블라인드 (기본 50)\n"
                  "  --bb N          빅 블라인드 (기본 100)\n"
                  "  --hint-trials N 힌트 승률 계산 시행 횟수 (기본 10000)\n"
+                 "  --web           웹 모드 (브라우저에서 플레이)\n"
+                 "  --port N        웹 모드 포트 (기본 8080, 환경변수 PORT로도 지정)\n"
                  "  --help          이 도움말\n";
 }
 
@@ -60,6 +64,8 @@ int main(int argc, char** argv) {
     HumanOptions human;
     unsigned seed = std::random_device{}();
     bool seedGiven = false;
+    bool web = false;
+    int port = 0;  // 0이면 아직 지정되지 않음
 
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
@@ -73,6 +79,10 @@ int main(int argc, char** argv) {
         if (arg == "--help" || arg == "-h") {
             printUsage();
             return 0;
+        } else if (arg == "--web") {
+            web = true;
+        } else if (arg == "--port") {
+            needValue(port);
         } else if (arg == "--no-hint") {
             human.showHint = false;
         } else if (arg == "--seed") {
@@ -104,6 +114,33 @@ int main(int argc, char** argv) {
     if (config.smallBlind > config.bigBlind) {
         std::cerr << "스몰 블라인드는 빅 블라인드보다 클 수 없습니다.\n";
         return 1;
+    }
+
+    if (!web && port != 0) {
+        std::cerr << "--port는 --web과 함께 써야 합니다.\n";
+        return 1;
+    }
+    if (web) {
+        // 포트 우선순위: --port > 환경변수 PORT > 8080
+        if (port == 0) {
+            const char* env = std::getenv("PORT");
+            if (env == nullptr || *env == '\0') {
+                port = 8080;
+            } else if (!parsePositive(env, port)) {
+                std::cerr << "환경변수 PORT가 올바른 숫자가 아닙니다.\n";
+                return 1;
+            }
+        }
+        if (port > 65535) {
+            std::cerr << "포트는 1~65535 사이여야 합니다.\n";
+            return 1;
+        }
+        WebOptions options;
+        options.config = config;
+        options.showHint = human.showHint;
+        options.hintTrials = human.hintTrials;
+        if (seedGiven) options.seed = seed;
+        return runWebServer(port, options);
     }
 
     // 좌석 0이 나, 1~5가 봇 5종

@@ -21,9 +21,23 @@ add_library(holdem_core
 )
 target_include_directories(holdem_core PUBLIC src)
 
+# 웹 모드: 세션 관리 + HTTP 서버 (third_party/httplib.h 사용, pthread 필요)
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_package(Threads REQUIRED)
+add_library(holdem_web
+  src/web_json.cpp
+  src/web_session.cpp
+  src/web_server.cpp
+)
+# SYSTEM: 외부 헤더에서 나는 경고는 숨긴다
+target_include_directories(holdem_web SYSTEM PUBLIC third_party)
+# web/index.html 위치를 실행 파일에 알려 준다
+target_compile_definitions(holdem_web PRIVATE HOLDEM_WEB_DIR="${CMAKE_CURRENT_SOURCE_DIR}/web")
+target_link_libraries(holdem_web PUBLIC holdem_core Threads::Threads)
+
 # 실행 파일
 add_executable(holdem src/main.cpp)
-target_link_libraries(holdem holdem_core)
+target_link_libraries(holdem holdem_web)
 
 # 성능 측정 프로그램 (docs/bench.md 생성)
 add_executable(holdem_bench src/bench.cpp)
@@ -40,3 +54,8 @@ endfunction()
 add_holdem_test(test_evaluator)
 add_holdem_test(test_pot)
 add_holdem_test(test_game)
+
+# 웹 테스트는 holdem_web(holdem_core 포함)에 연결한다
+add_executable(test_web tests/test_web.cpp)
+target_link_libraries(test_web holdem_web)
+add_test(NAME test_web COMMAND test_web)
