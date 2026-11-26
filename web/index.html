@@ -56,8 +56,7 @@
   #fold { background: linear-gradient(#45484a, #2b2d2f); border-color: #6a6e70; color: #f0f0ee; }
   #check, #call { background: linear-gradient(#1d7a52, #0f5036); border-color: #3a9a70; color: #fff; }
   #raise { background: linear-gradient(#ecd591, #bd9440); border-color: var(--gold-light); color: #17120a; font-weight: 800; }
-  #allin { background: linear-gradient(#962a39, var(--wine) 55%, #561520); border: 2px solid var(--gold); color: #f6df9c; font-weight: 800; font-size: 17px; letter-spacing: .08em; }
-  #allin:not(:disabled) { box-shadow: 0 0 14px rgba(190, 50, 70, .65), inset 0 0 0 1px rgba(232, 207, 133, .35); }
+  #allin { background: linear-gradient(#2e2615, #15110a); border: 3px double var(--gold-light); color: #f6df9c; font-weight: 800; font-size: 17px; letter-spacing: .08em; }
 
   /* ===== 시작 화면: 빈티지 네온 간판 ===== */
   html:has(#screen-home:not([hidden])), html:has(#screen-setup.solo:not([hidden])) { background:
@@ -97,8 +96,8 @@
   .bulbs.left, .bulbs.right { top: 22px; bottom: 22px; flex-direction: column; }
   .bulbs.top { top: 5px; } .bulbs.bottom { bottom: 5px; } .bulbs.left { left: 5px; } .bulbs.right { right: 5px; }
   .bulb { width: 8px; height: 8px; border-radius: 50%; background: #fff3cc; box-shadow: 0 0 6px 2px rgba(255, 213, 120, .85);
-    animation: chase 1.2s steps(1) infinite; }
-  @keyframes chase { 0% { opacity: 1; } 34% { opacity: .25; } }
+    animation: chase 3.6s ease-in-out infinite; }
+  @keyframes chase { 0%, 100% { opacity: 1; } 50% { opacity: .65; } }  /* 느리고 부드럽게 */
   .star { position: absolute; width: 16px; height: 16px; fill: #ffe7a3; filter: drop-shadow(0 0 4px #ffb52e); }
   .star.tl { top: 17px; left: 17px; } .star.tr { top: 17px; right: 17px; }
   .star.bl { bottom: 17px; left: 17px; } .star.br { bottom: 17px; right: 17px; }
@@ -125,9 +124,9 @@
   .neon-sub { font-size: 15px; font-weight: 700; color: var(--tint); text-shadow: 0 0 6px color-mix(in srgb, var(--glow) 70%, transparent); }
 
   /* 가끔 깜빡이는 글자 */
-  .flicker { animation: flicker 7s linear infinite; }
-  .flicker.late { animation-delay: -3.4s; animation-duration: 9s; }
-  @keyframes flicker { 0%, 91%, 93%, 95%, 100% { opacity: 1; } 92% { opacity: .35; } 94% { opacity: .55; } }
+  .flicker { animation: flicker 8s ease-in-out infinite; }
+  .flicker.late { animation-delay: -4s; animation-duration: 11s; }
+  @keyframes flicker { 0%, 60%, 100% { opacity: 1; } 80% { opacity: .75; } }
   @media (prefers-reduced-motion: reduce) {
     .bulb, .flicker { animation: none; opacity: 1; }
     #screen-home .neon:hover, #screen-home .neon:active { transform: none; }
@@ -198,10 +197,7 @@
 
   /* 상태 연출 */
   .seat.turn:not(.me) { transform: scale(1.05); z-index: 3; }
-  .seat.turn:not(.me) > :is(.name, .stack, .status) { background: #24372e; border-color: #7ff0b5; }
-  .seat.turn:not(.me)::before { box-shadow: 0 0 18px rgba(127, 240, 181, .7); }
-  .seat.allin:not(.me) > :is(.name, .stack, .status) { border-color: #ff4a5c; background: #2a0f14; }
-  .seat.allin:not(.me)::after { content: ""; position: absolute; z-index: -1; inset: 14px 0 42px; border-radius: 8px; box-shadow: 0 0 6px #ff4a5c, 0 0 18px #ff2038; }
+  .seat.turn:not(.me) > :is(.name, .stack, .status) { background: #22241c; border-color: var(--gold-light); }
   .seat.out, .seat.folded { filter: grayscale(1) brightness(.75); }
   .seat.folded:not(.me) > .cards::before { content: ""; width: 34px; height: 22px; margin-top: 8px; border-radius: 3px; background: #3a2a2d; border: 1px solid #77706a; transform: rotate(-14deg); }
   .dealer { position: absolute; z-index: 3; top: 16px; right: -2px; width: 18px; height: 18px; border-radius: 50%; background: var(--ivory); color: #17150f;
@@ -213,9 +209,12 @@
             text-align: left; background: rgba(5, 8, 7, .88); padding: 2px 6px; white-space: nowrap; }
   .seat.me > .name { bottom: 26px; border-radius: 8px 8px 0 0; }
   .seat.me > .stack { bottom: 8px; border-radius: 0 0 8px 8px; }
-  .seat.me.turn > :is(.name, .stack) { background: #24543e; }
-  .seat.me.turn .card { box-shadow: 0 0 12px rgba(127, 240, 181, .85); }
-  .seat.me.allin .card { box-shadow: 0 0 14px #ff2038; }
+  .seat.me.turn > :is(.name, .stack) { background: #22241c; box-shadow: inset 3px 0 0 var(--gold-light); }
+  .seat.me.turn .card { border: 2px solid var(--gold-light); }
+  /* 올인, 큰 베팅은 글자 배지로만 알린다 */
+  .badge { position: absolute; z-index: 4; top: 0; left: 50%; transform: translateX(-50%); padding: 0 7px; border-radius: 4px; white-space: nowrap;
+           font-size: 11px; font-weight: 800; line-height: 14px; background: var(--ivory); color: #17150f; }
+  .seat.me .badge { left: 6px; transform: none; top: auto; bottom: 82px; }
   .seat.me .dealer { top: auto; bottom: 60px; left: 6px; right: auto; }
   .seat.me > .status { position: absolute; top: 0; left: 0; text-shadow: 0 1px 3px #000; }
   .seat.me > .cards { position: absolute; bottom: 0; left: 50%; width: 164px; height: 112px; margin-left: -82px; align-items: flex-start; gap: 0;
@@ -286,7 +285,6 @@
     .status { font-size: 9.5px; letter-spacing: -.04em; }
     .mid { top: 266px; }
     .seat.me { top: 380px; }
-    .fx > .fx-turn { top: 378px; }
   }
   /* ---- 연출 층: 전부 터치를 통과시키고 transform, opacity만 움직인다 ---- */
   .fx { position: absolute; inset: 0; z-index: 6; overflow: hidden; pointer-events: none; }
@@ -298,29 +296,13 @@
   /* 손: 손끝이 (0, 0)에 오도록 놓고 위(-y)를 향한다 */
   .fx-hand { width: 66px; height: 190px; margin: -26px 0 0 -33px; transform-origin: 33px 26px; filter: drop-shadow(0 6px 6px rgba(0, 0, 0, .7)); }
   .fx-hand.opp { --skin: #8a674f; --skin-shade: #6d5040; }
-  .fx > .fx-spot { inset: 0; background: radial-gradient(circle at var(--x) var(--y), rgba(255, 240, 200, .18) 0 40px, rgba(0, 0, 0, .78) 105px); opacity: 0; }
-  .fx > .fx-big { left: 0; right: 0; top: 190px; text-align: center; font-family: var(--serif); font-size: 52px; font-weight: 800; letter-spacing: .08em;
-            color: #fff1f1; text-shadow: 0 0 4px #fff, 0 0 14px #ff2038, 0 0 34px #ff2038, 0 4px 0 #4a0910; white-space: nowrap; opacity: 0; }
-  .fx > .fx-turn { left: 50%; top: 366px; padding: 5px 16px; border-radius: 20px; background: rgba(5, 20, 12, .92); border: 1px solid #7ff0b5; color: #eafff4;
-             font-weight: 800; font-size: 15px; white-space: nowrap; opacity: 0; }
-  .fx > .fx-gold { width: 190px; height: 190px; margin: -95px 0 0 -95px; border-radius: 50%; opacity: 0;
-             background: radial-gradient(circle, rgba(255, 232, 150, .85), rgba(232, 190, 80, .35) 40%, transparent 68%); }
-  .fx > .fx-gray { inset: 0; background: #808080; mix-blend-mode: saturation; opacity: 0; }
-  .fx > .fx-gray + .fx-gray { display: none; }
-  /* 내 차례: 가장자리를 살짝 어둡게, 카드를 조금 올린다 */
-  .shade, .heart { position: absolute; inset: 0; pointer-events: none; opacity: 0; }
-  .shade { background: radial-gradient(ellipse 80% 60% at 50% 62%, transparent 40%, rgba(0, 0, 0, .8)); transition: opacity .3s; }
-  .table.myturn .shade { opacity: .75; }
+  /* 내 차례: 카드를 조금 올린다 */
   .table.myturn .seat.me > .cards, .table.myturn .hands, .table.myturn .thumbs { transform: translateY(-9px); }
-  /* 큰 베팅 뒤: 가장자리가 심장 박동처럼 맥동 */
-  .heart { z-index: 5; background: radial-gradient(ellipse 80% 70% at 50% 50%, transparent 45%, rgba(40, 0, 6, .95)); }
-  .table.tense .heart { animation: heart 1.5s ease-in-out infinite; }
-  @keyframes heart { 0%, 40%, 100% { opacity: .35; } 10% { opacity: .85; } 20% { opacity: .5; } 28% { opacity: .75; } }
   .potpile.bump { animation: bump .3s ease-out .35s; }
   @keyframes bump { 40% { transform: scale(1.35); } }
-  #skipRow { justify-content: center; min-height: 44px; font-size: 14px; color: var(--muted); cursor: pointer; }
-  #screen-game #skipRow { flex-wrap: nowrap; border: 0; }
-  @media (prefers-reduced-motion: reduce) { .table.tense .heart, .potpile.bump { animation: none; } }
+  #reduceRow { justify-content: center; min-height: 44px; font-size: 14px; color: var(--muted); cursor: pointer; }
+  #screen-game #reduceRow { flex-wrap: nowrap; border: 0; }
+  @media (prefers-reduced-motion: reduce) { .potpile.bump { animation: none; } }
 
   @media (min-width: 600px) {
     .table { --seat-w: 132px; height: 548px; }
@@ -382,14 +364,12 @@
   .bubble.fold { background: #44474a; color: #fff; border-color: #8b8f92; }
   .bubble.call { background: #17714b; color: #fff; border-color: #6fd0a4; }
   .bubble.raise { background: #e8cf85; border-color: #8f6f22; }
-  .bubble.allin { background: #8f2231; color: #ffe9b0; border-color: var(--gold); }
-  .bubble.thinking { background: rgba(8, 12, 11, .95); color: #bff5d8; border-color: #7ff0b5; }
+  .bubble.allin { background: #15110a; color: #ffe9b0; border: 3px double var(--gold-light); }
+  .bubble.thinking { background: rgba(8, 12, 11, .95); color: var(--ivory); border-color: var(--gold); }
   .seat.me .bubble { top: -6px; }
   .bubble.pop { animation: pop .3s ease-out var(--d) backwards; }
-  .bubble.thinking { animation: breathe 1.2s ease-in-out infinite; }
   @keyframes pop { from { opacity: 0; transform: translateX(-50%) scale(.6); } }
-  @keyframes breathe { 50% { opacity: .55; } }
-  @media (prefers-reduced-motion: reduce) { .bubble.pop, .bubble.thinking { animation: none; } }
+  @media (prefers-reduced-motion: reduce) { .bubble.pop { animation: none; } }
 
   /* 이번 판 결과 */
   #result { display: flex; flex-direction: column; gap: 6px; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; border-color: var(--gold); }
@@ -402,6 +382,14 @@
   .rk-sub { grid-column: 2 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
   .rk.out { opacity: .65; }
   #result .rv-cards .card, .rk .card { flex-basis: 27px; height: 38px; }
+
+  /* 효과 줄이기: 움직임과 빛을 모두 끈다 (회색 처리 같은 의미 표시는 남긴다) */
+  html.reduce-fx *, html.reduce-fx *::before, html.reduce-fx *::after { animation: none !important; transition: none !important; text-shadow: none !important; }
+  html.reduce-fx body::before, html.reduce-fx body::after { display: none; }
+  html.reduce-fx :is(button, .neon, .preset, .marquee, .bulb, .bubble, .card, .seat, .seat::before, .pile i, .rv-key, #screen-home header button) { box-shadow: none !important; }
+  html.reduce-fx .wrap header button { box-shadow: none !important; }
+  html.reduce-fx :is(.star, .neon svg) { filter: none !important; }
+  html.reduce-fx button:active:not(:disabled), html.reduce-fx #screen-home .neon { transform: none !important; }
 
   /* 지금 상황, 핸드 리뷰 */
   #now { font-size: 14px; line-height: 1.55; display: flex; flex-direction: column; gap: 4px; }
@@ -534,10 +522,10 @@
   <section class="screen" id="screen-home" hidden>
     <!-- 마키 간판 -->
     <div class="marquee">
-        <div class="bulbs top" aria-hidden="true"><span class="bulb" style="animation-delay:-1.2s"></span><span class="bulb" style="animation-delay:-0.8s"></span><span class="bulb" style="animation-delay:-0.4s"></span><span class="bulb" style="animation-delay:-1.2s"></span><span class="bulb" style="animation-delay:-0.8s"></span><span class="bulb" style="animation-delay:-0.4s"></span><span class="bulb" style="animation-delay:-1.2s"></span><span class="bulb" style="animation-delay:-0.8s"></span><span class="bulb" style="animation-delay:-0.4s"></span><span class="bulb" style="animation-delay:-1.2s"></span><span class="bulb" style="animation-delay:-0.8s"></span><span class="bulb" style="animation-delay:-0.4s"></span><span class="bulb" style="animation-delay:-1.2s"></span></div>
-        <div class="bulbs right" aria-hidden="true"><span class="bulb" style="animation-delay:-0.8s"></span><span class="bulb" style="animation-delay:-0.4s"></span><span class="bulb" style="animation-delay:-1.2s"></span><span class="bulb" style="animation-delay:-0.8s"></span><span class="bulb" style="animation-delay:-0.4s"></span></div>
-        <div class="bulbs bottom" aria-hidden="true"><span class="bulb" style="animation-delay:-1.2s"></span><span class="bulb" style="animation-delay:-0.4s"></span><span class="bulb" style="animation-delay:-0.8s"></span><span class="bulb" style="animation-delay:-1.2s"></span><span class="bulb" style="animation-delay:-0.4s"></span><span class="bulb" style="animation-delay:-0.8s"></span><span class="bulb" style="animation-delay:-1.2s"></span><span class="bulb" style="animation-delay:-0.4s"></span><span class="bulb" style="animation-delay:-0.8s"></span><span class="bulb" style="animation-delay:-1.2s"></span><span class="bulb" style="animation-delay:-0.4s"></span><span class="bulb" style="animation-delay:-0.8s"></span><span class="bulb" style="animation-delay:-1.2s"></span></div>
-        <div class="bulbs left" aria-hidden="true"><span class="bulb" style="animation-delay:-0.4s"></span><span class="bulb" style="animation-delay:-0.8s"></span><span class="bulb" style="animation-delay:-1.2s"></span><span class="bulb" style="animation-delay:-0.4s"></span><span class="bulb" style="animation-delay:-0.8s"></span></div>
+        <div class="bulbs top" aria-hidden="true"><span class="bulb" style="animation-delay:-3.6s"></span><span class="bulb" style="animation-delay:-2.4s"></span><span class="bulb" style="animation-delay:-1.2s"></span><span class="bulb" style="animation-delay:-3.6s"></span><span class="bulb" style="animation-delay:-2.4s"></span><span class="bulb" style="animation-delay:-1.2s"></span><span class="bulb" style="animation-delay:-3.6s"></span><span class="bulb" style="animation-delay:-2.4s"></span><span class="bulb" style="animation-delay:-1.2s"></span><span class="bulb" style="animation-delay:-3.6s"></span><span class="bulb" style="animation-delay:-2.4s"></span><span class="bulb" style="animation-delay:-1.2s"></span><span class="bulb" style="animation-delay:-3.6s"></span></div>
+        <div class="bulbs right" aria-hidden="true"><span class="bulb" style="animation-delay:-2.4s"></span><span class="bulb" style="animation-delay:-1.2s"></span><span class="bulb" style="animation-delay:-3.6s"></span><span class="bulb" style="animation-delay:-2.4s"></span><span class="bulb" style="animation-delay:-1.2s"></span></div>
+        <div class="bulbs bottom" aria-hidden="true"><span class="bulb" style="animation-delay:-3.6s"></span><span class="bulb" style="animation-delay:-1.2s"></span><span class="bulb" style="animation-delay:-2.4s"></span><span class="bulb" style="animation-delay:-3.6s"></span><span class="bulb" style="animation-delay:-1.2s"></span><span class="bulb" style="animation-delay:-2.4s"></span><span class="bulb" style="animation-delay:-3.6s"></span><span class="bulb" style="animation-delay:-1.2s"></span><span class="bulb" style="animation-delay:-2.4s"></span><span class="bulb" style="animation-delay:-3.6s"></span><span class="bulb" style="animation-delay:-1.2s"></span><span class="bulb" style="animation-delay:-2.4s"></span><span class="bulb" style="animation-delay:-3.6s"></span></div>
+        <div class="bulbs left" aria-hidden="true"><span class="bulb" style="animation-delay:-1.2s"></span><span class="bulb" style="animation-delay:-2.4s"></span><span class="bulb" style="animation-delay:-3.6s"></span><span class="bulb" style="animation-delay:-1.2s"></span><span class="bulb" style="animation-delay:-2.4s"></span></div>
         <svg class="star tl" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1l2.9 7.6 8.1.4-6.3 5.1 2.1 7.9L12 17.5 5.2 22l2.1-7.9L1 9l8.1-.4z"/></svg>
         <svg class="star tr" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1l2.9 7.6 8.1.4-6.3 5.1 2.1 7.9L12 17.5 5.2 22l2.1-7.9L1 9l8.1-.4z"/></svg>
         <svg class="star bl" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1l2.9 7.6 8.1.4-6.3 5.1 2.1 7.9L12 17.5 5.2 22l2.1-7.9L1 9l8.1-.4z"/></svg>
@@ -597,6 +585,8 @@
           <small class="help">내 패로 이길 확률을 화면에 보여줘요.</small></label>
         <label>진행 속도 <select id="pace"><option value="slow">느리게(5초)</option><option value="normal">보통(3초)</option><option value="fast">빠르게(1초)</option></select>
           <small class="help">봇 한 명이 행동하는 데 걸리는 시간이에요. 게임 중에도 바꿀 수 있어요.</small></label>
+        <label>효과 줄이기 <input type="checkbox" id="reduceFxSetup">
+          <small class="help">움직임과 빛나는 효과를 끄고 가만히 보여 줘요.</small></label>
       </div>
     </details>
     <button class="primary big" id="startSetup"></button>
@@ -672,7 +662,7 @@
     <div class="panel"><div id="log"></div></div>
     <div class="settings-row">
       <label>진행 속도 <select id="paceLive"><option value="slow">느리게(5초)</option><option value="normal">보통(3초)</option><option value="fast">빠르게(1초)</option></select></label>
-      <label id="skipRow"><input type="checkbox" id="skipFx"> 연출 건너뛰기</label>
+      <label id="reduceRow"><input type="checkbox" id="reduceFx"> 효과 줄이기</label>
     </div>
     <div class="row">
       <button class="primary" id="restart" hidden>다시 하기</button>
@@ -1511,18 +1501,18 @@ for (const id of ["chips", "sb", "bb", "bots", "useHint"]) {
 const FX = (() => {
   const table = $("table");
   const still = window.matchMedia("(prefers-reduced-motion: reduce)");
-  // "연출 건너뛰기": localStorage가 막혀 있으면 이 변수에만 남는다.
-  let skip = recall("skipFx") === "1";
-  const off = () => skip || still.matches || document.hidden;
+  // "효과 줄이기": 운영체제의 '움직임 줄이기'가 켜져 있으면 자동으로 켠다. 저장이 막혀 있으면 이번 접속에만 유지.
+  let reduce = (recall("reduceFx") || recall("skipFx")) === "1";
+  const reduced = () => reduce || still.matches;
+  const off = () => reduced() || document.hidden;
 
-  const shade = el("div", "shade"), heart = el("div", "heart"), layer = el("div", "fx");
+  const layer = el("div", "fx");
   layer.setAttribute("aria-hidden", "true");
-  table.prepend(shade);
-  table.append(heart, layer);
+  table.append(layer);
 
   let timers = [];
-  let prevLog = null, prevKey = "", turnShown = -1;
-  let pot = 0, bets = {}, tense = false;  // 기록을 따라 계산한 이번 판의 팟, 라운드 베팅, 긴장 상태
+  let prevLog = null, prevKey = "";
+  let pot = 0, bets = {}, big = {};  // 기록을 따라 계산한 이번 판의 팟, 라운드 베팅, 큰 베팅을 한 좌석
 
   // 남은 연출을 즉시 끝낸다.
   function clear() {
@@ -1590,27 +1580,6 @@ const FX = (() => {
     }
   }
 
-  function flashBig(i, allIn) {
-    const s = seatAt(i);
-    if (!s) return;
-    const at = middle(s.querySelector(".name"));
-    const spot = el("div", "fx-spot");
-    spot.style.setProperty("--x", at[0] + "px");
-    spot.style.setProperty("--y", at[1] + "px");
-    play(spot, [{ opacity: 0 }, { opacity: 1, offset: 0.2 }, { opacity: 1, offset: 0.7 }, { opacity: 0 }], { duration: 1300 });
-    play(el("div", "fx-big", allIn ? "ALL IN" : "BIG BET"), [
-      { opacity: 0, transform: "scale(1.8)" }, { opacity: 1, transform: "scale(1)", offset: 0.2 },
-      { opacity: 1, transform: "scale(1.04)", offset: 0.75 }, { opacity: 0, transform: "scale(1.1)" },
-    ], { duration: 1300 });
-  }
-
-  function myTurnBanner() {
-    play(el("div", "fx-turn", "내 차례입니다"), [
-      { opacity: 0, transform: "translate(-50%, 10px)" }, { opacity: 1, transform: "translate(-50%, 0)", offset: 0.15 },
-      { opacity: 1, transform: "translate(-50%, 0)", offset: 0.8 }, { opacity: 0, transform: "translate(-50%, -6px)" },
-    ], { duration: 1500 });
-  }
-
   // 손 그림: 위를 향한 손과 소매 (정해진 문자열만 넣는다)
   const HAND = '<svg viewBox="0 0 66 190" width="66" height="190"><path fill="var(--sleeve)" d="M12 84h42l8 106H4z"/><path fill="#eee6d4" d="M13 76h40v12H13z"/>'
     + '<path fill="var(--skin)" stroke="var(--skin-shade)" stroke-width="1.5" d="M16 78 10 56 2 42q-1-8 6-5l11 13-3-34q4-9 9 0l4 27 1-35q5-8 9 0l1 35 6-28q7-7 9 2l-4 33 7-17q8-5 7 5l-8 28-6 16z"/></svg>';
@@ -1662,14 +1631,6 @@ const FX = (() => {
     });
   }
 
-  function gold(point, duration) {
-    const node = el("div", "fx-gold");
-    play(node, [
-      { opacity: 0, transform: move(point, " scale(.4)") }, { opacity: 1, transform: move(point, " scale(1)"), offset: 0.3 },
-      { opacity: 0, transform: move(point, " scale(1.4)") },
-    ], { duration });
-  }
-
   // 새로 생긴 기록 줄: 앞부분이 직전 기록의 끝부분과 겹치는 만큼을 뺀다.
   function newLines(log) {
     if (prevLog === null) return log;
@@ -1684,18 +1645,18 @@ const FX = (() => {
     const key = state.code + ":" + state.handNumber;
     const first = prevLog === null || prevKey.split(":")[0] !== state.code;  // 처음 보는 게임은 조용히 따라잡는다
     let lines = first ? state.log : newLines(state.log);
-    if (key !== prevKey) { clear(); tense = false; }
+    if (key !== prevKey) { clear(); big = {}; }
     prevKey = key;
     prevLog = state.log.slice();
 
     const header = lines.map((l) => l.startsWith("=====")).lastIndexOf(true);
-    if (header >= 0) { clear(); pot = 0; bets = {}; tense = false; lines = lines.slice(header + 1); }
+    if (header >= 0) { clear(); pot = 0; bets = {}; big = {}; lines = lines.slice(header + 1); }
 
     const quiet = first || off();
     const wins = {};
     let wait = 0;
     for (const line of lines) {
-      if (line.startsWith("[")) { bets = {}; continue; }
+      if (line.startsWith("[")) { bets = {}; big = {}; continue; }
       const cut = line.indexOf(": ");
       const name = line.slice(0, cut), text = line.slice(cut + 2);
       const i = state.players.findIndex((p) => p.name === name);
@@ -1709,24 +1670,20 @@ const FX = (() => {
       } else if ((m = text.match(/에서 (\d+) 획득/))) {
         wins[i] = true;
       } else if ((m = text.match(/^(스몰 블라인드|빅 블라인드|콜|벳|레이즈) (\d+)( \(올인\))?/))) {
-        const kind = m[1], amount = Number(m[2]), allIn = !!m[3];
+        const kind = m[1], amount = Number(m[2]);
         const before = bets[name] || 0;
         const added = kind === "벳" || kind === "레이즈" ? amount - before : amount;
-        const big = allIn || ((kind === "벳" || kind === "레이즈") && added >= pot * 0.75);
+        if ((kind === "벳" || kind === "레이즈") && added >= pot * 0.75) big[i] = true;
         bets[name] = before + added;
         pot += added;
-        const opponent = !state.players[i].isMe;
-        if (big && opponent) tense = true;
         if (!quiet) {
           betChips(i, wait);
           wait += 90;
-          if (big && opponent) flashBig(i, allIn);
         }
       }
     }
 
     const winners = Object.keys(wins).map((i) => ({ seat: Number(i), isMe: state.players[i].isMe }));
-    if (winners.length) tense = false;
     if (winners.length && !quiet) {
       const flipAt = reveal ? reveal.flipAt : 0;
       const payAt = reveal ? flipAt + 450 : 250;
@@ -1741,36 +1698,44 @@ const FX = (() => {
         // 멈칫하며 살짝 확대하고, 뒤집히는 순간 금빛
         table.animate([{ transform: "scale(1)" }, { transform: "scale(1.03)", offset: 0.45 }, { transform: "scale(1.03)", offset: 0.75 }, { transform: "scale(1)" }],
           { duration: flipAt + 700, easing: "ease-in-out" });
-        later(flipAt + 150, () => gold(middle($("board")), 600));
       }
       later(payAt, () => {
         sweep(winners);
-        winners.forEach((w) => { const p = stackPoint(w.seat); if (p) gold(p, 950); });
-        const me = state.players.find((p) => p.isMe);
-        if (reveal && me && me.inHand && !me.folded && !winners.some((w) => w.isMe)) {
-          play(el("div", "fx-gray"), [{ opacity: 0 }, { opacity: 1, offset: 0.2 }, { opacity: 1, offset: 0.7 }, { opacity: 0 }], { duration: 1400 });
-        }
       });
     }
 
-    const mine = state.myTurn && !off();
-    table.classList.toggle("myturn", mine);
-    table.classList.toggle("tense", tense && !off());
-    if (!state.myTurn) layer.querySelectorAll(".fx-turn").forEach((n) => n.remove());  // 지난 안내는 바로 지운다
-    if (mine && !first && state.turnId !== turnShown) myTurnBanner();
-    if (state.myTurn) turnShown = state.turnId;
+    table.classList.toggle("myturn", state.myTurn && !off());
+    // 올인, 큰 베팅: 좌석에 글자 배지만 붙인다 (좌석은 매번 새로 만들어지므로 매번 붙인다)
+    state.players.forEach((p, i) => {
+      const seat = seatAt(i);
+      if (!seat || state.handOver || !p.inHand || p.folded) return;
+      const label = p.allIn ? "올인" : big[i] ? "큰 베팅" : "";
+      if (label) seat.append(el("div", "badge", label));
+    });
   }
 
-  $("skipFx").checked = skip;
-  $("skipFx").onchange = () => {
-    skip = $("skipFx").checked;
-    remember("skipFx", skip ? "1" : "0");
-    if (skip) {
+  const boxes = [$("reduceFx"), $("reduceFxSetup")];
+  function applyReduce() {
+    document.documentElement.classList.toggle("reduce-fx", reduced());
+    for (const box of boxes) {
+      box.checked = reduced();
+      box.disabled = still.matches;  // 운영체제 설정이 켜져 있으면 항상 줄인다
+    }
+    if (reduced()) {
       clear();
-      table.classList.remove("myturn", "tense");
+      table.classList.remove("myturn");
       table.querySelectorAll(".deal, .flip").forEach((n) => n.classList.remove("deal", "flip"));
     }
-  };
+  }
+  for (const box of boxes) {
+    box.onchange = () => {
+      reduce = box.checked;
+      remember("reduceFx", reduce ? "1" : "0");
+      applyReduce();
+    };
+  }
+  still.addEventListener("change", applyReduce);
+  applyReduce();
 
   return { off, update };
 })();
