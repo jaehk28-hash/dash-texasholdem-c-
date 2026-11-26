@@ -137,10 +137,11 @@ void createRoom(const httplib::Request& req, httplib::Response& res, RoomManager
     settings.config = options.config;
     settings.turnSeconds = solo ? 0 : 60;
     std::string name = solo ? "나" : "";
+    std::string pace = "slow";
     if (!getString(body, "name", name) || !getInt(body, "chips", settings.config.startingChips) ||
         !getInt(body, "sb", settings.config.smallBlind) ||
         !getInt(body, "bb", settings.config.bigBlind) || !getInt(body, "bots", settings.bots) ||
-        !getBool(body, "hint", settings.hint) ||
+        !getBool(body, "hint", settings.hint) || !getString(body, "pace", pace) || !parsePace(pace, settings.pace) ||
         (!solo && !getInt(body, "turnSeconds", settings.turnSeconds))) {
         sendError(res, 400, "설정값의 형식이 잘못되었습니다.");
         return;
@@ -227,6 +228,62 @@ void setupRoutes(httplib::Server& server, RoomManager& rooms, const std::string&
         auto room = rooms.find(token);
         std::string error = "들어가 있는 방이 없습니다.";
         if (!room || !room->start(token, error)) {
+            sendError(res, 400, error);
+            return;
+        }
+        rooms.touch(token);
+        res.set_content("{\"ok\":true}", kJson);
+    });
+
+    // 다음 단계 / 다음 판으로
+    server.Post("/api/continue", [&rooms](const httplib::Request& req, httplib::Response& res) {
+        const std::string token = sessionToken(req);
+        auto room = rooms.find(token);
+        Body body;
+        if (!readBody(req, res, body)) return;
+        std::optional<long long> gateId;
+        const auto found = body.find("gateId");
+        if (found != body.end()) {
+            if (found->second.type != JsonValue::Type::Integer) {
+                sendError(res, 400, "gateId는 정수여야 합니다.");
+                return;
+            }
+            gateId = found->second.number;
+        }
+        std::string error = "들어가 있는 방이 없습니다.";
+        if (!room || !room->proceed(token, gateId, error)) {
+            sendError(res, 400, error);
+            return;
+        }
+        rooms.touch(token);
+        res.set_content("{\"ok\":true}", kJson);
+    });
+
+    server.Post("/api/skip", [&rooms](const httplib::Request& req, httplib::Response& res) {
+        const std::string token = sessionToken(req);
+        auto room = rooms.find(token);
+        std::string error = "들어가 있는 방이 없습니다.";
+        if (!room || !room->skipHand(token, error)) {
+            sendError(res, 400, error);
+            return;
+        }
+        rooms.touch(token);
+        res.set_content("{\"ok\":true}", kJson);
+    });
+
+    server.Post("/api/pace", [&rooms](const httplib::Request& req, httplib::Response& res) {
+        const std::string token = sessionToken(req);
+        auto room = rooms.find(token);
+        Body body;
+        if (!readBody(req, res, body)) return;
+        std::string text;
+        Pace pace = Pace::Slow;
+        if (!getString(body, "pace", text) || !parsePace(text, pace)) {
+            sendError(res, 400, "pace는 slow, normal, fast 중 하나여야 합니다.");
+            return;
+        }
+        std::string error = "들어가 있는 방이 없습니다.";
+        if (!room || !room->setPace(token, pace, error)) {
             sendError(res, 400, error);
             return;
         }

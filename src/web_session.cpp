@@ -122,11 +122,8 @@ public:
     PacedPlayer(Room& room, std::unique_ptr<Player> bot) : room_(room), bot_(std::move(bot)) {}
     std::string name() const override { return bot_->name(); }
     Action decide(const GameState& state) override {
-        room_.setActing(state.mySeat);
-        room_.pause(room_.options_.botDelay);
-        const Action action = bot_->decide(state);
-        room_.setActing(-1);
-        return action;
+        room_.think(state.mySeat);
+        return bot_->decide(state);
     }
 
 private:
@@ -205,6 +202,18 @@ std::string compareJson(const std::optional<HandCompare>& c) {
 
 }  // namespace
 
+bool parsePace(const std::string& text, Pace& out) {
+    if (text == "slow") out = Pace::Slow;
+    else if (text == "normal") out = Pace::Normal;
+    else if (text == "fast") out = Pace::Fast;
+    else return false;
+    return true;
+}
+
+const char* paceName(Pace pace) {
+    return pace == Pace::Slow ? "slow" : pace == Pace::Normal ? "normal" : "fast";
+}
+
 std::string reviewToJson(const HandReview& r, const ReviewFlow* flow) {
     std::string j = "{\"handNumber\":" + std::to_string(r.handNumber);
     j += std::string(",\"showdown\":") + boolJson(r.showdown);
@@ -222,6 +231,7 @@ std::string reviewToJson(const HandReview& r, const ReviewFlow* flow) {
         for (std::size_t k = 0; k < e.key.size(); ++k) j += std::string(k ? "," : "") + boolJson(e.key[k]);
         j += "],\"category\":" + std::to_string(static_cast<int>(categoryOf(e.score)));
         j += ",\"handName\":" + jsonString(e.name);
+        j += ",\"detail\":" + jsonString(e.detail);
         j += ",\"nextSeat\":" + std::to_string(e.nextSeat);
         j += ",\"versusNext\":" + compareJson(e.versusNext) + "}";
     }
@@ -241,6 +251,25 @@ std::string reviewToJson(const HandReview& r, const ReviewFlow* flow) {
         j += ",\"loserSeat\":" + std::to_string(p.loserSeat);
         j += std::string(",\"oddChip\":") + boolJson(p.oddChip);
         j += ",\"compare\":" + compareJson(p.compare) + "}";
+    }
+    j += "],\"ranking\":[";
+    for (std::size_t i = 0; i < r.ranking.size(); ++i) {
+        const HandRankRow& row = r.ranking[i];
+        j += i ? "," : "";
+        j += "{\"seat\":" + std::to_string(row.seat) + ",\"place\":" + std::to_string(row.place);
+        j += std::string(",\"folded\":") + boolJson(row.folded) + ",\"tie\":" + boolJson(row.tie);
+        j += ",\"handName\":" + jsonString(row.handName);
+        j += ",\"cards\":" + (row.cards ? cardListJson(row.cards->data(), row.cards->size()) : std::string("[]"));
+        j += ",\"delta\":" + std::to_string(row.delta) + "}";
+    }
+    j += "],\"standings\":[";
+    for (std::size_t i = 0; i < r.standings.size(); ++i) {
+        const StandingRow& row = r.standings[i];
+        j += i ? "," : "";
+        j += "{\"seat\":" + std::to_string(row.seat) + ",\"rank\":" + std::to_string(row.rank);
+        j += std::string(",\"tie\":") + boolJson(row.tie) + ",\"chips\":" + std::to_string(row.chips);
+        j += ",\"change\":" + (row.change ? std::to_string(*row.change) : std::string("null"));
+        j += std::string(",\"out\":") + boolJson(row.out) + "}";
     }
     j += "],\"me\":";
     if (!flow) return j + "null}";
@@ -287,6 +316,35 @@ std::string viewToJson(const RoomView& v) {
     j += std::string(",\"myTurn\":") + boolJson(v.myTurn);
     j += ",\"turnSeat\":" + std::to_string(v.turnSeat);
     j += ",\"actingSeat\":" + std::to_string(v.actingSeat);
+    j += ",\"actionPhase\":" + jsonString(v.actionPhase);
+    j += ",\"lastAction\":";
+    if (v.lastAction) {
+        j += "{\"seq\":" + std::to_string(v.lastAction->seq) + ",\"seat\":" +
+             std::to_string(v.lastAction->seat) + ",\"text\":" + jsonString(v.lastAction->text) + "}";
+    } else {
+        j += "null";
+    }
+    j += ",\"myHand\":";
+    if (v.myHand) {
+        j += "{\"name\":" + jsonString(v.myHand->name) + ",\"level\":" + std::to_string(v.myHand->level) +
+             ",\"boardOnly\":" + boolJson(v.myHand->boardOnly) + "}";
+    } else {
+        j += "null";
+    }
+    j += std::string(",\"pace\":\"") + paceName(v.pace) + "\"";
+    j += ",\"waiting\":";
+    if (v.waiting != Waiting::None) {
+        const char* next = v.waiting == Waiting::Flop       ? "flop"
+                           : v.waiting == Waiting::Turn     ? "turn"
+                           : v.waiting == Waiting::River    ? "river"
+                           : v.waiting == Waiting::Showdown ? "showdown"
+                                                            : "nextHand";
+        j += std::string("{\"next\":\"") + next + "\",\"gateId\":" + std::to_string(v.gateId) +
+             ",\"canContinue\":" + boolJson(v.canContinue) + "}";
+    } else {
+        j += "null";
+    }
+    j += std::string(",\"canSkip\":") + boolJson(v.canSkip) + ",\"skipping\":" + boolJson(v.skipping);
     j += ",\"turnId\":" + std::to_string(v.turnId);
     j += ",\"secondsLeft\":" + std::to_string(v.secondsLeft);
     j += std::string(",\"handOver\":") + boolJson(v.handOver);
@@ -375,7 +433,8 @@ std::string viewToJson(const RoomView& v) {
 Room::Room(const WebOptions& options, const RoomSettings& settings, std::string code, bool solo,
            unsigned seed)
     : options_(options), settings_(settings), code_(std::move(code)), solo_(solo), nextSeed_(seed),
-      hintRng_(seed + 1) {}
+      hintRng_(seed + 1) {
+    pace_ = settings_.pace;}
 
 Room::~Room() {
     stop();
@@ -498,6 +557,11 @@ bool Room::start(const std::string& token, std::string& error) {
         review_.reset();
         flows_.clear();
         actingSeat_ = -1;
+        actionPhase_.clear();
+        lastAction_.reset();
+        waiting_ = Waiting::None;
+        skip_ = false;
+        holdAction_ = false;
         log_.clear();
         seed = nextSeed_++;
     }
@@ -554,6 +618,26 @@ std::optional<RoomView> Room::view(const std::string& token) const {
     v.revealed = revealed_;
     v.handOver = handOver_;
     v.actingSeat = actingSeat_;
+    v.actionPhase = actionPhase_;
+    v.lastAction = lastAction_;
+    v.pace = pace_;
+    // 이미 "다음"을 눌렀으면 게임 스레드가 깨어나기 전이라도 대기 중이 아닌 것으로 알린다.
+    v.waiting = continue_ ? Waiting::None : waiting_;
+    v.gateId = gateId_;
+    v.canContinue = v.waiting != Waiting::None && v.isHost;
+    v.canSkip = v.isHost && canSkipLocked(*me);
+    v.skipping = skip_;
+    // 지금 족보: 내 홀 카드와 공용 카드만 쓰므로 남의 정보는 섞이지 않는다.
+    if (v.table.holeDealt && v.table.state.board.size() >= 3) {
+        std::vector<Card> cards = v.table.state.board;
+        cards.insert(cards.end(), v.table.state.myHole.begin(), v.table.state.myHole.end());
+        const HandScore score = evaluateBest(cards);
+        MyHand hand;
+        hand.name = describeHand(score);
+        hand.level = strengthLevel(score);
+        hand.boardOnly = v.table.state.board.size() == 5 && evaluate5(v.table.state.board.data()) == score;
+        v.myHand = hand;
+    }
     v.review = review_;
     if (me->seat >= 0 && me->seat < static_cast<int>(flows_.size())) v.reviewFlow = flows_[me->seat];
     v.log = log_;
@@ -603,9 +687,10 @@ Action Room::waitForAction(int seat, const GameState& state) {
         left = seatLeft(seat);
     }
     if (left) {
-        pause(options_.botDelay);
+        think(seat);
         return automatic;
     }
+    finishAction();  // 앞사람의 행동을 다 보여 준 뒤에 내 차례를 연다
 
     // 승률 계산은 시간이 걸리므로 mutex를 잡기 전에 한다.
     std::optional<double> equity;
@@ -621,6 +706,7 @@ Action Room::waitForAction(int seat, const GameState& state) {
     pending_.reset();
     turnSeat_ = seat;
     actingSeat_ = seat;
+    actionPhase_.clear();
     ++turnId_;
     deadline_ = std::chrono::steady_clock::now() + std::chrono::seconds(settings_.turnSeconds);
 
@@ -631,7 +717,6 @@ Action Room::waitForAction(int seat, const GameState& state) {
     else cv_.wait(lock, ready);
 
     turnSeat_ = -1;
-    actingSeat_ = -1;
     if (stopping_) throw StopRequested{};
     if (timedOut) addLog(state.players[seat].name + ": 시간 초과");
     const Action action = pending_ ? *pending_ : automatic;
@@ -641,16 +726,130 @@ Action Room::waitForAction(int seat, const GameState& state) {
 
 void Room::pause(std::chrono::milliseconds time) {
     std::unique_lock<std::mutex> lock(mutex_);
-    if (cv_.wait_for(lock, time, [this] { return stopping_; })) throw StopRequested{};
+    const bool skipping = skip_;
+    // 대기 중에 "빠르게 보기"를 누르면 바로 깨어난다.
+    cv_.wait_for(lock, time, [this, skipping] { return stopping_ || skip_ != skipping; });
+    if (stopping_) throw StopRequested{};
 }
 
-void Room::setActing(int seat) {
+void Room::paceHalf() {
+    std::chrono::milliseconds time;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        time = options_.aiAction;
+        if (pace_ == Pace::Normal) time = time * 3 / 5;
+        if (pace_ == Pace::Fast) time = time / 5;
+        if (skip_) time = std::min(time, std::chrono::milliseconds(AI_SKIP_MS));
+    }
+    pause(time / 2);
+}
+
+void Room::finishAction() {
+    if (holdAction_) {
+        holdAction_ = false;
+        paceHalf();
+    }
     std::lock_guard<std::mutex> lock(mutex_);
-    actingSeat_ = seat;
+    actingSeat_ = -1;
+    actionPhase_.clear();
 }
 
-void Room::publishReview(const HandSummary& hand, const std::vector<std::string>& names, int humans) {
-    auto review = std::make_shared<const HandReview>(buildHandReview(hand, names));
+void Room::think(int seat) {
+    finishAction();  // 한 번에 한 명씩: 앞사람 행동을 다 보여 준 다음에 시작
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        actingSeat_ = seat;
+        actionPhase_ = "thinking";
+    }
+    paceHalf();
+    holdAction_ = true;
+}
+
+void Room::waitAt(Waiting point) {
+    if (options_.autoContinue) {
+        if (point == Waiting::NextHand) pause(options_.nextHandDelay);
+        return;
+    }
+    std::unique_lock<std::mutex> lock(mutex_);
+    // 빠르게 보기는 이번 판의 단계만 넘긴다. 다음 판은 항상 눌러야 시작한다.
+    const bool skippable = point != Waiting::NextHand;
+    if (skippable && skip_) return;
+    waiting_ = point;
+    ++gateId_;
+    continue_ = false;
+    cv_.wait(lock, [this, skippable] { return stopping_ || continue_ || (skippable && skip_); });
+    waiting_ = Waiting::None;
+    continue_ = false;
+    if (stopping_) throw StopRequested{};
+}
+
+bool Room::isHostLocked(const std::string& token) const {
+    // 방장 = 남아 있는 사람 중 가장 먼저 들어온 사람
+    const auto host = std::find_if(members_.begin(), members_.end(), [](const Member& m) { return !m.left; });
+    return host != members_.end() && host->token == token;
+}
+
+bool Room::canSkipLocked(const Member& viewer) const {
+    if (phase_ != RoomPhase::Playing || handOver_ || skip_) return false;
+    auto canStillAct = [this](int seat) {
+        if (seat < 0 || seat >= static_cast<int>(tables_.size())) return true;
+        const auto& players = tables_[seat].state.players;
+        if (seat >= static_cast<int>(players.size())) return true;
+        const PlayerView& p = players[seat];
+        return p.inHand && !p.folded && !p.allIn;
+    };
+    if (canStillAct(viewer.seat)) return false;
+    // 다른 사람이 아직 행동할 수 있으면 재촉하지 않는다.
+    return std::none_of(members_.begin(), members_.end(),
+                        [&](const Member& m) { return !m.left && canStillAct(m.seat); });
+}
+
+bool Room::proceed(const std::string& token, std::optional<long long> gateId, std::string& error) {
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (stopping_ || !findMember(token) || !isHostLocked(token)) {
+            error = "방장만 다음으로 넘길 수 있습니다.";
+            return false;
+        }
+        if (waiting_ == Waiting::None || continue_ || (gateId && *gateId != gateId_)) {
+            error = "지금은 넘길 단계가 없습니다.";
+            return false;
+        }
+        continue_ = true;
+    }
+    cv_.notify_all();
+    return true;
+}
+
+bool Room::skipHand(const std::string& token, std::string& error) {
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        const Member* me = findMember(token);
+        if (stopping_ || !me || !isHostLocked(token) || !canSkipLocked(*me)) {
+            error = "지금은 건너뛸 수 없습니다.";
+            return false;
+        }
+        skip_ = true;
+    }
+    cv_.notify_all();
+    return true;
+}
+
+bool Room::setPace(const std::string& token, Pace pace, std::string& error) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (stopping_ || !findMember(token) || !isHostLocked(token)) {
+        error = "방장만 진행 속도를 바꿀 수 있습니다.";
+        return false;
+    }
+    pace_ = pace;
+    return true;
+}
+
+void Room::publishReview(const HandSummary& hand, const std::vector<std::string>& names, int humans,
+                         std::vector<int>& previousRanks) {
+    auto review = std::make_shared<const HandReview>(buildHandReview(hand, names, previousRanks));
+    previousRanks.assign(names.size(), 0);
+    for (const StandingRow& row : review->standings) previousRanks[row.seat] = row.rank;
     std::vector<std::optional<ReviewFlow>> flows;
     for (int seat = 0; seat < humans; ++seat) flows.push_back(buildReviewFlow(*review, seat));
     {
@@ -703,6 +902,28 @@ void Room::run(std::vector<std::string> humanNames, int botCount, unsigned seed)
             tables_ = std::move(tables);
         }
 
+        std::vector<std::string> seatNames;
+        for (int i = 0; i < game.numSeats(); ++i) seatNames.push_back(game.player(i).name());
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            seatNames_ = seatNames;
+        }
+
+        // 플랍/턴/리버/쇼다운 직전에 멈추고 "다음 단계로"를 기다린다.
+        game.setStageHook([this, &snapshots](Stage stage) {
+            finishAction();  // 마지막 행동을 다 보여 준다
+            if (stage == Stage::HandEnd) return;
+            auto tables = snapshots();
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                tables_ = std::move(tables);
+            }
+            waitAt(stage == Stage::Flop    ? Waiting::Flop
+                   : stage == Stage::Turn  ? Waiting::Turn
+                   : stage == Stage::River ? Waiting::River
+                                           : Waiting::Showdown);
+        });
+
         // 게임에서 일이 생길 때마다 로그를 남기고 화면 정보를 갱신한다.
         game.setLogger([this, &snapshots](const std::string& line) {
             auto tables = snapshots();
@@ -710,8 +931,20 @@ void Room::run(std::vector<std::string> humanNames, int botCount, unsigned seed)
             if (line.rfind("=====", 0) == 0) {  // 새 판 시작: 지난 판의 공개 카드를 지운다
                 revealed_.clear();
                 handOver_ = false;
+                skip_ = false;
+                lastAction_.reset();
+                actingSeat_ = -1;
+                actionPhase_.clear();
             }
             tables_ = std::move(tables);
+            // 지금 행동 중인 사람의 행동 줄이면 말풍선으로 공개한다.
+            if (actingSeat_ >= 0 && actingSeat_ < static_cast<int>(seatNames_.size())) {
+                const std::string prefix = seatNames_[actingSeat_] + ": ";
+                if (line.rfind(prefix, 0) == 0 && line.find("반환") == std::string::npos) {
+                    lastAction_ = ActionNote{++actionSeq_, actingSeat_, line.substr(prefix.size())};
+                    actionPhase_ = "revealed";
+                }
+            }
             addLog(line);
         });
 
@@ -724,6 +957,7 @@ void Room::run(std::vector<std::string> humanNames, int botCount, unsigned seed)
             return false;
         };
 
+        std::vector<int> previousRanks;  // 칩 순위 변동(▲▼) 계산용
         while (!game.isOver() && someoneCanPlay()) {
             const HandSummary hand = game.playHand();
             auto tables = snapshots();
@@ -739,11 +973,9 @@ void Room::run(std::vector<std::string> humanNames, int botCount, unsigned seed)
                     }
                 }
             }
-            std::vector<std::string> names;
-            for (int i = 0; i < game.numSeats(); ++i) names.push_back(game.player(i).name());
-            publishReview(hand, names, humans);
+            publishReview(hand, seatNames, humans, previousRanks);
             if (game.isOver() || !someoneCanPlay()) break;
-            pause(options_.nextHandDelay);
+            waitAt(Waiting::NextHand);
         }
 
         std::lock_guard<std::mutex> lock(mutex_);

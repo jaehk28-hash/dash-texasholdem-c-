@@ -359,13 +359,57 @@
   #notice { color: var(--gold-light); font-size: 14px; min-height: 20px; text-align: center; }
   #log { height: 180px; overflow-y: auto; font-size: 12px; line-height: 1.6; color: var(--muted); overflow-wrap: anywhere; }
 
+  /* 진행 버튼, 행동 기록, 족보 한 줄, 말풍선 */
+  #gatebar { position: fixed; z-index: 20; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; gap: 6px; align-items: center;
+    padding: 8px 8px calc(8px + env(safe-area-inset-bottom)); background: linear-gradient(transparent, rgba(4, 5, 5, .94) 22%); }
+  #gatebar button { width: min(100%, 520px); }
+  #nextStep { min-height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.3; }
+  #nextStep b { font-size: 20px; } #nextStep small { font-size: 13px; font-weight: 700; }
+  body:has(#screen-game:not([hidden]) #gatebar:not([hidden])) { padding-bottom: 140px; }
+  #myHandLine { text-align: center; font-size: 15px; font-weight: 700; color: #bff5d8; padding: 6px 8px; border: 1px solid rgba(127, 240, 181, .4); border-radius: 8px; }
+  #actionsPanel h3 { font-size: 14px; margin-bottom: 4px; }
+  #actions { height: 92px; overflow-y: auto; font-size: 13px; line-height: 1.55; }
+  #actions .sep { color: var(--muted); font-size: 12px; }
+  @media (min-width: 1180px) {  /* 넓은 화면에서는 오른쪽에 따로 */
+    #actionsPanel { position: fixed; right: 12px; top: 74px; width: 190px; }
+    #actions { height: 420px; }
+  }
+  .settings-row { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 4px 18px; }
+  .settings-row label { justify-content: center; font-size: 14px; color: var(--muted); }
+  #screen-game .settings-row select { width: auto; min-height: 44px; font: inherit; }
+  .bubble { position: absolute; z-index: 6; left: 50%; top: 72px; transform: translateX(-50%); padding: 4px 9px; border-radius: 12px; white-space: nowrap;
+    font-size: 13px; font-weight: 800; background: var(--ivory); color: #17150f; border: 2px solid #8d8468; box-shadow: 0 4px 10px rgba(0, 0, 0, .7); }
+  .bubble.fold { background: #44474a; color: #fff; border-color: #8b8f92; }
+  .bubble.call { background: #17714b; color: #fff; border-color: #6fd0a4; }
+  .bubble.raise { background: #e8cf85; border-color: #8f6f22; }
+  .bubble.allin { background: #8f2231; color: #ffe9b0; border-color: var(--gold); }
+  .bubble.thinking { background: rgba(8, 12, 11, .95); color: #bff5d8; border-color: #7ff0b5; }
+  .seat.me .bubble { top: -6px; }
+  .bubble.pop { animation: pop .3s ease-out var(--d) backwards; }
+  .bubble.thinking { animation: breathe 1.2s ease-in-out infinite; }
+  @keyframes pop { from { opacity: 0; transform: translateX(-50%) scale(.6); } }
+  @keyframes breathe { 50% { opacity: .55; } }
+  @media (prefers-reduced-motion: reduce) { .bubble.pop, .bubble.thinking { animation: none; } }
+
+  /* 이번 판 결과 */
+  #result { display: flex; flex-direction: column; gap: 6px; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; border-color: var(--gold); }
+  #resultBody { display: flex; flex-direction: column; gap: 4px; }
+  #result h4 { margin-top: 6px; color: var(--gold-light); font-size: 14px; }
+  .rk { display: grid; grid-template-columns: 62px minmax(0, 1fr) auto; gap: 2px 8px; align-items: center; padding: 5px 0; border-top: 1px solid var(--line); }
+  .rk-place { font-weight: 800; color: var(--gold-light); }
+  .rk-delta { font-weight: 800; text-align: right; font-variant-numeric: tabular-nums; }
+  .rk-delta.plus { color: #8ff0b9; } .rk-delta.minus { color: #ff9aa5; }
+  .rk-sub { grid-column: 2 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+  .rk.out { opacity: .65; }
+  #result .rv-cards .card, .rk .card { flex-basis: 27px; height: 38px; }
+
   /* 지금 상황, 핸드 리뷰 */
   #now { font-size: 14px; line-height: 1.55; display: flex; flex-direction: column; gap: 4px; }
   #now h3 { font-size: 15px; margin: 0; }
   #now .round, .rv-muted { color: var(--muted); font-size: 12.5px; }
   #now .turn { color: #bff5d8; font-weight: 700; }
   #now .note { color: var(--gold-light); }
-  #review { font-size: 14px; line-height: 1.55; overflow-wrap: anywhere; }
+  #review { font-size: 14px; line-height: 1.55; border-top: 1px solid var(--line); }
   #review > summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; gap: 8px; font-family: var(--serif); font-size: 17px; color: var(--gold-light); }
   #review > summary::before { content: "▸"; }
   #review[open] > summary::before { content: "▾"; }
@@ -551,6 +595,8 @@
         </select></label>
         <label>승률 힌트 <input type="checkbox" id="useHint" checked>
           <small class="help">내 패로 이길 확률을 화면에 보여줘요.</small></label>
+        <label>진행 속도 <select id="pace"><option value="slow">느리게(5초)</option><option value="normal">보통(3초)</option><option value="fast">빠르게(1초)</option></select>
+          <small class="help">봇 한 명이 행동하는 데 걸리는 시간이에요. 게임 중에도 바꿀 수 있어요.</small></label>
       </div>
     </details>
     <button class="primary big" id="startSetup"></button>
@@ -594,6 +640,15 @@
       </div>
     </div>
 
+    <div class="panel" id="result" hidden>
+      <h3 id="resultTitle"></h3>
+      <div id="resultBody"></div>
+      <details id="review">
+        <summary id="reviewTitle"></summary>
+        <div id="reviewBody"></div>
+      </details>
+    </div>
+    <div id="myHandLine" role="status" hidden></div>
     <div id="notice"></div>
 
     <div class="panel">
@@ -611,17 +666,22 @@
       </div>
     </div>
 
+    <div class="panel" id="actionsPanel"><h3>행동 기록</h3><div id="actions" tabindex="0"></div></div>
     <div class="panel" id="now" aria-live="polite"></div>
     <div class="panel hint" id="hint"></div>
-    <details class="panel" id="review" open hidden>
-      <summary id="reviewTitle"></summary>
-      <div id="reviewBody"></div>
-    </details>
     <div class="panel"><div id="log"></div></div>
-    <label id="skipRow"><input type="checkbox" id="skipFx"> 연출 건너뛰기</label>
+    <div class="settings-row">
+      <label>진행 속도 <select id="paceLive"><option value="slow">느리게(5초)</option><option value="normal">보통(3초)</option><option value="fast">빠르게(1초)</option></select></label>
+      <label id="skipRow"><input type="checkbox" id="skipFx"> 연출 건너뛰기</label>
+    </div>
     <div class="row">
       <button class="primary" id="restart" hidden>다시 하기</button>
       <button class="leave">나가기</button>
+    </div>
+    <!-- 화면 아래에 고정되는 진행 버튼 -->
+    <div id="gatebar" hidden>
+      <button type="button" class="primary" id="nextStep" hidden><b></b><small></small></button>
+      <button type="button" id="skipHand" hidden>남은 진행 빠르게 보기(건너뛰기)</button>
     </div>
   </section>
 </div>
@@ -767,12 +827,14 @@ function renderGame() {
   if (state.players.length) renderSeats(state.players);
 
   let notice = "진행 중...";
+  const actor = state.players[state.actingSeat];
   if (state.phase === "over") notice = state.message;
-  else if (state.handOver) notice = "판 종료! 잠시 후 다음 판이 시작됩니다.";
+  else if (state.waiting) {
+    notice = !state.waiting.canContinue ? "방장이 다음으로 넘기기를 기다리는 중..."
+      : state.handOver ? "판 종료! 결과를 확인하고 아래 버튼을 눌러 주세요." : "아래 버튼을 누르면 다음 단계로 넘어갑니다.";
+  } else if (state.handOver) notice = "판 종료!";
   else if (state.myTurn) notice = "내 차례입니다.";
-  else if (state.turnSeat >= 0 && state.players[state.turnSeat]) {
-    notice = state.players[state.turnSeat].name + " 님의 차례입니다.";
-  }
+  else if (actor && !actor.isMe) notice = actor.name + " 님 차례";
   if (state.phase === "playing" && state.turnSeat >= 0 && state.settings.turnSeconds) {
     notice += " (" + state.secondsLeft + "초)";
   }
@@ -874,7 +936,7 @@ document.querySelectorAll(".back").forEach((b) => { b.onclick = () => goMenu("ho
 $("startSetup").onclick = () => {
   const body = {
     chips: Number($("chips").value), sb: Number($("sb").value), bb: Number($("bb").value),
-    bots: Number($("bots").value), hint: $("useHint").checked,
+    bots: Number($("bots").value), hint: $("useHint").checked, pace: $("pace").value,
   };
   if (![body.chips, body.sb, body.bb].every(Number.isInteger)) {
     $("error").textContent = "칩과 블라인드는 정수로 입력하세요.";
@@ -932,10 +994,10 @@ $("potBet").onclick = () => {
   $("slider").value = value;
 };
 
-// 1초마다 상태를 확인한다. (이전 요청이 끝난 뒤 다음 요청을 예약)
+// 0.4초마다 상태를 확인한다. (이전 요청이 끝난 뒤 다음 요청을 예약)
 async function poll() {
   if (!sending) await refresh();
-  setTimeout(poll, 1000);
+  setTimeout(poll, 400);  // 말풍선을 놓치지 않게 자주 확인한다
 }
 $("hostName").value = $("joinName").value = recall("nickname") || "";
 showingRules = !recall("rulesSeen");  // 처음 들어온 사람에게는 규칙부터
@@ -962,7 +1024,18 @@ const TEXTS = {
   },
   roundLine: "{street} · 내 자리: {position} · 최소 베팅 단위 {bb}(빅 블라인드)",
   over: "게임이 끝났어요.",
-  handOver: "이번 판이 끝났어요. 잠시 후 다음 판이 시작돼요. 핸드 리뷰에서 결과를 확인해 보세요.",
+  handOver: "이번 판이 끝났어요. 결과를 확인한 뒤 아래 '다음 판 시작'을 누르면 계속돼요.",
+  waitingStage: "이번 베팅이 끝났어요. 아래 '다음 단계로'를 눌러야 다음 카드가 열려요(스페이스나 Enter도 돼요).",
+  gate: { next: "다음 단계로 ▶", nextHand: "다음 판 시작 ▶", host: "방장이 누르기를 기다리는 중",
+    flop: "플랍 카드 3장 열기", turn: "턴 카드 열기", river: "리버 카드 열기", showdown: "카드 공개하기" },
+  myHand: "내 족보: {name} · 강한 정도 {stars} {level}",
+  levels: ["약해요", "보통 이하예요", "괜찮아요", "강해요", "아주 강해요", "최강급이에요"],
+  boardOnly: " (공통 카드만으로 된 패라 모두가 같이 써요)",
+  result: {
+    title: "이번 판 결과 (제 {hand} 판)", ranking: "이번 판 순위", standings: "현재 칩 순위", place: "{place}위",
+    tie: "무승부", same: "공동", folded: "폴드", out: "탈락", hidden: "카드 비공개 (모두 폴드해서 보여 주지 않아요)",
+    potsLine: "팟이 여러 개예요: {pots}",
+  },
   notIn: "칩이 없어 이번 판에는 참여하지 않아요.",
   folded: "폴드(이번 판 포기)했어요. 다음 판까지 구경만 해요. 이미 낸 칩은 돌려받지 못해요.",
   meAllIn: "올인(가진 칩 전부 걸기)했어요. 더 할 행동은 없고 남은 카드는 자동으로 깔려요. 각 상대에게서는 내가 낸 만큼까지만 받을 수 있어요.",
@@ -986,8 +1059,7 @@ const TEXTS = {
   sidePot: "{names:이/가} 올인했어요. 올인한 사람은 자기가 낸 만큼까지만 받을 수 있고, 그보다 더 거는 칩은 사이드 팟(올인한 사람은 못 받는 별도의 팟)이 돼요.",
   potOdds: "팟 오즈(낼 돈과 받을 돈의 비율): 콜 {call:이면/면} 콜한 뒤의 팟 {total} 중 {call:을/를} 내는 셈이라, 이길 확률이 약 {need}% 이상이면 본전이에요. 지금 내 승률은 약 {equity}%예요(상대 카드를 무작위로 가정).",
 
-  reviewTitle: "핸드 리뷰 (제 {hand} 판)",
-  reviewPast: "지난 판 리뷰 (제 {hand} 판)",
+  reviewTitle: "왜 이렇게 됐는지 펼쳐 보기 (핸드 리뷰)",
   potName: (i) => (i === 0 ? "메인 팟" : "사이드 팟 " + i + "번"),
   headline: "승자: {winners}, {pot} {amount} 획득 ({handName})",
   noShowdown: "다른 모두가 폴드해서 쇼다운(카드 공개 승부) 없이 {name:이/가} 이겼어요. (팟 {amount} 획득)",
@@ -1073,6 +1145,7 @@ function fill(template, values) {
     }
     if (state.phase === "over") return out.concat([[TEXTS.over]]);
     if (state.handOver) return out.concat([[TEXTS.handOver]]);
+    if (state.waiting) return out.concat([[TEXTS.waitingStage, "turn"]]);
     if (!me.inHand) return out.concat([[TEXTS.notIn]]);
     if (me.folded) return out.concat([[TEXTS.folded]]);
 
@@ -1217,34 +1290,130 @@ function fill(template, values) {
     return out;
   }
 
-  let shownReview = "";
-  function renderReview() {
-    const box = $("review"), review = state.review;
-    box.hidden = !review;
-    if (!review) { shownReview = ""; return; }
-    const current = state.handOver || state.phase === "over";
-    $("reviewTitle").textContent = fill(current ? TEXTS.reviewTitle : TEXTS.reviewPast, { hand: review.handNumber });
-    // 판이 끝났을 때는 버튼 위로, 다음 판이 시작되면 힌트 아래로 옮긴다.
-    const controls = $("fold").closest(".panel");
-    if (current && box.nextElementSibling !== controls) {
-      controls.before(box);
-    } else if (!current && box.previousElementSibling !== $("hint")) {
-      const before = box.getBoundingClientRect();
-      $("hint").after(box);
-      // 리뷰를 읽고 있었다면 읽던 자리가 화면에서 움직이지 않게 한다.
-      if (before.top < innerHeight && before.bottom > 0) window.scrollBy(0, box.getBoundingClientRect().top - before.top);
+  // ---- 이번 판 결과 (순위는 서버가 계산한 값을 그대로 그린다) ----
+  function resultNodes(review) {
+    const T = TEXTS.result, name = (seat) => review.names[seat];
+    const signed = (n) => (n > 0 ? "+" : "") + num(n);
+    const out = [el("h4", "", T.ranking)];
+    for (const r of review.ranking) {
+      const row = el("div", "rk");
+      const place = r.folded ? T.folded : fill(T.place, { place: r.place });
+      row.append(el("span", "rk-place", place), el("span", "", name(r.seat) + (r.tie ? " · " + T.tie : "")),
+        el("span", "rk-delta" + (r.delta > 0 ? " plus" : r.delta < 0 ? " minus" : ""), signed(r.delta)));
+      if (!r.folded) {
+        const sub = el("div", "rk-sub");
+        if (r.cards.length) sub.append(cards(r.cards), el("span", "", r.handName));
+        else sub.append(el("span", "", T.hidden));
+        row.append(sub);
+      }
+      out.push(row);
     }
-    const key = state.code + JSON.stringify(review);
-    if (key === shownReview) return;
-    shownReview = key;
+    if (review.pots.length > 1) {
+      out.push(line(fill(T.potsLine, { pots: review.pots.map((pot, i) => TEXTS.potName(i) + " " + num(pot.amount) + " → "
+        + pot.winners.map((w) => name(w.seat)).join(", ")).join(" / ") })));
+    }
+    out.push(el("h4", "", T.standings));
+    for (const s of review.standings) {
+      const row = el("div", "rk" + (s.out ? " out" : ""));
+      const place = s.out ? T.out : (s.tie ? T.same + " " : "") + fill(T.place, { place: s.rank });
+      const moved = !s.change ? "-" : (s.change > 0 ? "▲" : "▼") + Math.abs(s.change);
+      row.append(el("span", "rk-place", place), el("span", "", name(s.seat) + " · " + num(s.chips)),
+        el("span", "rk-delta" + (s.change > 0 ? " plus" : s.change < 0 ? " minus" : ""), moved));
+      out.push(row);
+    }
+    return out;
+  }
+
+  let shownResult = "", shownHand = "";
+  function renderResult() {
+    const review = state.review;
+    const show = !!review && review.handNumber === state.handNumber && (state.handOver || state.phase === "over");
+    $("result").hidden = !show;
+    if (!show) { shownResult = ""; return; }
+    const hand = state.code + ":" + review.handNumber;
+    if (hand !== shownHand) { shownHand = hand; $("review").open = false; }  // 새 결과는 접힌 상태로
+    const key = hand + JSON.stringify(review);
+    if (key === shownResult) return;
+    shownResult = key;
+    $("resultTitle").textContent = fill(TEXTS.result.title, { hand: review.handNumber });
+    $("resultBody").replaceChildren(...resultNodes(review));
+    $("reviewTitle").textContent = TEXTS.reviewTitle;
     $("reviewBody").replaceChildren(...reviewNodes(review));
   }
+
+  // ---- 진행 버튼, 지금 족보, 행동 기록 ----
+  function renderFlow() {
+    const wait = state.phase === "playing" ? state.waiting : null;
+    const next = $("nextStep"), skip = $("skipHand");
+    next.hidden = !wait;
+    if (wait) {
+      const last = wait.next === "nextHand";
+      next.disabled = !wait.canContinue || sending;
+      next.querySelector("b").textContent = last ? TEXTS.gate.nextHand : TEXTS.gate.next;
+      next.querySelector("small").textContent = !wait.canContinue ? TEXTS.gate.host : last ? "" : TEXTS.gate[wait.next];
+    }
+    skip.hidden = !state.canSkip;
+    $("gatebar").hidden = next.hidden && skip.hidden;
+
+    const me = state.players.find((p) => p.isMe), hand = state.myHand;
+    $("myHandLine").hidden = !(hand && me && !me.folded && !state.handOver);
+    if (hand) {
+      $("myHandLine").textContent = fill(TEXTS.myHand, { name: hand.name, stars: "★".repeat(hand.level) + "☆".repeat(6 - hand.level),
+        level: TEXTS.levels[hand.level - 1] }) + (hand.boardOnly ? TEXTS.boardOnly : "");
+    }
+
+    const rows = [];
+    for (const text of state.log) {
+      if (text.startsWith("=====") || text.startsWith("[")) rows.push([text.replace(/=/g, "").trim(), "sep"]);
+      else {
+        const m = text.match(/^(.+?): ((?:폴드|체크|시간 초과|콜 \d|벳 \d|레이즈 \d|스몰 블라인드|빅 블라인드).*)$/);
+        if (m) rows.push([m[1] + " " + m[2], ""]);
+      }
+    }
+    const box = $("actions"), key = JSON.stringify(rows);
+    if (box.dataset.key !== key) {
+      box.dataset.key = key;
+      box.replaceChildren(...rows.map(([text, cls]) => el("div", cls, text)));
+      box.scrollTop = box.scrollHeight;
+    }
+
+    const live = $("paceLive");
+    if (document.activeElement !== live) live.value = state.pace;
+    live.disabled = !state.isHost;
+  }
+
+  const proceed = () => {
+    if (state && state.waiting && state.waiting.canContinue) post("/api/continue", { gateId: state.waiting.gateId });
+  };
+  $("nextStep").onclick = proceed;
+  $("skipHand").onclick = () => post("/api/skip");
+  // 스페이스 또는 Enter = 다음 단계로. 입력칸이나 다른 버튼을 쓰는 중에는 끼어들지 않는다.
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== " " && e.key !== "Enter") return;
+    if ($("screen-game").hidden || $("gatebar").hidden || $("nextStep").hidden) return;
+    if (e.repeat) { e.preventDefault(); return; }  // 누르고 있어도 한 번만
+    if (e.target.closest("input, select, textarea, summary") || e.target.closest("button:not(:disabled)")) return;
+    e.preventDefault();
+    proceed();
+  });
+
+  // 진행 속도: 브라우저에 기억해 두고, 게임 중에 바꾸면 서버에 알린다.
+  $("pace").value = recall("pace") || "slow";
+  $("pace").onchange = () => remember("pace", $("pace").value);
+  $("paceLive").onchange = () => {
+    const pace = $("paceLive").value;
+    remember("pace", pace);
+    $("pace").value = pace;
+    $("paceLive").blur();
+    post("/api/pace", { pace });
+  };
 
   // 기존 화면 갱신(renderHint)이 힌트 칸을 새로 그릴 때마다 함께 갱신한다.
   new MutationObserver(() => {
     if (!state || !state.players) return;
     renderNow();
-    renderReview();
+    renderResult();
+    renderFlow();
   }).observe($("hint"), { childList: true });
 })();
 </script>
@@ -1587,6 +1756,7 @@ const FX = (() => {
     const mine = state.myTurn && !off();
     table.classList.toggle("myturn", mine);
     table.classList.toggle("tense", tense && !off());
+    if (!state.myTurn) layer.querySelectorAll(".fx-turn").forEach((n) => n.remove());  // 지난 안내는 바로 지운다
     if (mine && !first && state.turnId !== turnShown) myTurnBanner();
     if (state.myTurn) turnShown = state.turnId;
   }
@@ -1691,6 +1861,19 @@ const FX = (() => {
         if (p.inHand && !p.folded) seat.querySelector(".cards").append(hands);
       }
       if (p.chips > 0) seat.append(pile(p.chips, bb, 2, "own"));
+      // 한 번에 한 명: 지금 행동 중인 좌석을 강조하고 "생각 중" 또는 공개된 행동을 말풍선으로
+      if (i === state.actingSeat) {
+        seat.classList.add("turn");
+        const act = state.lastAction;
+        if (state.actionPhase === "thinking") seat.append(el("div", "bubble thinking", "생각 중..."));
+        else if (state.actionPhase === "revealed" && act && act.seat === i) {
+          const kind = act.text.includes("올인") ? "allin" : act.text === "폴드" ? "fold" : /^(벳|레이즈)/.test(act.text) ? "raise" : "call";
+          const bubble = el("div", "bubble " + kind, act.text);
+          if (memo.bubble !== act.seq) { memo.bubble = act.seq; memo.bubbleAt = now; }
+          if (!FX.off() && now - memo.bubbleAt < 300) animate(bubble, "pop", memo.bubbleAt - now);
+          seat.append(bubble);
+        }
+      }
       if (p.bet > 0) {
         const bet = pile(p.bet, bb, 3, "bet");
         seat.append(bet);

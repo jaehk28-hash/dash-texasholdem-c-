@@ -108,7 +108,64 @@ std::string handName(HandScore score) {
     return categoryNameKo(categoryOf(score));
 }
 
-HandReview buildHandReview(const HandSummary& hand, const std::vector<std::string>& names) {
+std::string describeHand(HandScore score) {
+    auto text = [](int r) -> std::string {
+        if (r == 14) return "A";
+        if (r == 13) return "K";
+        if (r == 12) return "Q";
+        if (r == 11) return "J";
+        return std::to_string(r);
+    };
+    const std::string name = handName(score);
+    const std::string first = text(rankAt(score, 0)), second = text(rankAt(score, 1));
+    switch (categoryOf(score)) {
+        case HandCategory::TwoPair:
+        case HandCategory::FullHouse: return name + " " + first + "·" + second;
+        case HandCategory::Straight: return name + " (" + first + "까지)";
+        case HandCategory::StraightFlush:
+            return rankAt(score, 0) == 14 ? name : name + " (" + first + "까지)";
+        case HandCategory::Flush: return name + " (" + first + " 높음)";
+        default: return name + " " + first;
+    }
+}
+
+int strengthLevel(HandScore score) {
+    switch (categoryOf(score)) {
+        case HandCategory::HighCard: return 1;
+        case HandCategory::OnePair: return 2;
+        case HandCategory::TwoPair: return 3;
+        case HandCategory::ThreeOfAKind: return 4;
+        case HandCategory::Straight:
+        case HandCategory::Flush: return 5;
+        default: return 6;
+    }
+}
+
+std::vector<StandingRow> buildStandings(const std::vector<int>& chips, const std::vector<int>& previousRanks) {
+    std::vector<StandingRow> rows;
+    for (std::size_t i = 0; i < chips.size(); ++i) {
+        StandingRow row;
+        row.seat = static_cast<int>(i);
+        row.chips = chips[i];
+        row.out = chips[i] <= 0;
+        // 순위 = 나보다 칩이 많은 사람 수 + 1 (같으면 같은 순위)
+        row.rank = 1;
+        int same = 0;
+        for (int other : chips) {
+            if (other > chips[i]) ++row.rank;
+            if (other == chips[i]) ++same;
+        }
+        row.tie = same > 1;
+        if (i < previousRanks.size()) row.change = previousRanks[i] - row.rank;
+        rows.push_back(row);
+    }
+    std::stable_sort(rows.begin(), rows.end(),
+                     [](const StandingRow& a, const StandingRow& b) { return a.chips > b.chips; });
+    return rows;
+}
+
+HandReview buildHandReview(const HandSummary& hand, const std::vector<std::string>& names,
+                           const std::vector<int>& previousRanks) {
     HandReview r;
     r.handNumber = hand.handNumber;
     r.showdown = hand.showdown;
@@ -127,6 +184,7 @@ HandReview buildHandReview(const HandSummary& hand, const std::vector<std::strin
             e.best = bestFive(e.hole, hand.board);
             e.score = evaluate5(e.best.data());
             e.name = handName(e.score);
+            e.detail = describeHand(e.score);
             for (int k = 0; k < madeCards(categoryOf(e.score)); ++k) e.key[k] = true;
             r.entries.push_back(e);
         }
@@ -194,6 +252,39 @@ HandReview buildHandReview(const HandSummary& hand, const std::vector<std::strin
         }
         r.pots.push_back(pot);
     }
+
+    // ---- 이번 판 순위: 쇼다운 참여자(강한 순) -> 폴드한 사람 ----
+    auto delta = [&hand](int seat) { return hand.endChips[seat] - hand.startChips[seat]; };
+    for (const ReviewEntry& e : r.entries) {
+        HandRankRow row;
+        row.seat = e.seat;
+        row.place = e.place;
+        for (const ReviewEntry& other : r.entries) {
+            if (other.seat != e.seat && other.place == e.place) row.tie = true;
+        }
+        row.handName = e.detail;
+        row.cards = e.hole;
+        row.delta = delta(e.seat);
+        r.ranking.push_back(row);
+    }
+    if (!r.showdown) {  // 모두 폴드: 남은 한 사람이 1등. 카드는 공개하지 않는다
+        for (int i = 0; i < seats; ++i) {
+            if (!hand.dealtIn[i] || hand.folded[i]) continue;
+            HandRankRow row;
+            row.seat = i;
+            row.place = 1;
+            row.delta = delta(i);
+            r.ranking.push_back(row);
+        }
+    }
+    for (int seat : r.folded) {
+        HandRankRow row;
+        row.seat = seat;
+        row.folded = true;
+        row.delta = delta(seat);
+        r.ranking.push_back(row);
+    }
+    r.standings = buildStandings(hand.endChips, previousRanks);
     return r;
 }
 

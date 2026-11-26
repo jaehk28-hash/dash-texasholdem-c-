@@ -209,6 +209,161 @@ void testNamesAndBestFive() {
     CHECK(handName(evaluate5(royal.data())) == "로열 플러시");
 }
 
+void testRankingAndStandings() {
+    // 좌석 1이 폴드, 좌석 0이 스트레이트로 좌석 2를 이긴다.
+    const Result r = play({{{"9h", "8h"}, {"Ac", "Ad"}, {"Ks", "Qs"}}, "7c 6d 5s Kd Qh",
+                           {{}, {Action::fold()}, {}}, {}});
+    const auto& rank = r.review.ranking;
+    CHECK(rank.size() == 3);
+    CHECK(rank[0].seat == 0 && rank[0].place == 1 && !rank[0].tie && rank[0].delta > 0);
+    CHECK(rank[0].handName == "스트레이트 (9까지)" && rank[0].cards);
+    CHECK(rank[1].seat == 2 && rank[1].place == 2 && rank[1].handName == "투 페어 K·Q" && rank[1].delta < 0);
+    CHECK(rank[2].seat == 1 && rank[2].folded && rank[2].place == 0 && !rank[2].cards && rank[2].handName.empty());
+    // 폴드한 사람의 카드는 순위표를 포함한 어디에도 없다.
+    const std::string json = reviewToJson(r.review, nullptr);
+    CHECK(json.find("\"Ac\"") == std::string::npos && json.find("\"Ad\"") == std::string::npos);
+    CHECK(r.review.standings.size() == 3 && r.review.standings[0].seat == 0);
+    CHECK(!r.review.standings[0].change);  // 첫 판은 비교할 이전 순위가 없다
+}
+
+void testTieRanking() {
+    const Result r = play({{{"Ac", "7h"}, {"Ad", "7s"}}, "As Ks 9h 4d 2c", {}, {}});
+    CHECK(r.review.ranking.size() == 2);
+    CHECK(r.review.ranking[0].place == 1 && r.review.ranking[1].place == 1);
+    CHECK(r.review.ranking[0].tie && r.review.ranking[1].tie);
+    CHECK(r.review.standings[0].rank == 1 && r.review.standings[1].rank == 1 && r.review.standings[0].tie);
+}
+
+void testSidePotRankingAndElimination() {
+    const Result r = play({{{"As", "Ac"}, {"Ks", "Kc"}, {"Qs", "Qc"}, {"Js", "Jc"}}, "2h 7s 9c 4h 3s",
+                           {{Action::allIn()}, {Action::allIn()}, {Action::allIn()}, {Action::allIn()}},
+                           {100, 300, 600, 1000}});
+    CHECK(r.review.ranking.size() == 4);
+    for (int i = 0; i < 4; ++i) CHECK(r.review.ranking[i].seat == i && r.review.ranking[i].place == i + 1);
+    // 메인 팟 400, 사이드 팟 600, 600. 좌석 3은 돌려받은 400만 남는다.
+    CHECK(r.review.ranking[0].delta == 300 && r.review.ranking[1].delta == 300);
+    CHECK(r.review.ranking[2].delta == 0 && r.review.ranking[3].delta == -600);
+    const auto& s = r.review.standings;  // 600, 600, 400, 400
+    CHECK(s[0].chips == 600 && s[0].rank == 1 && s[0].tie && s[2].rank == 3);
+}
+
+void testStandingsChange() {
+    // 이전 순위: 좌석0=1위, 좌석1=2위, 좌석2=3위, 좌석3=4위
+    const auto rows = buildStandings({0, 500, 900, 0}, {1, 2, 3, 4});
+    CHECK(rows[0].seat == 2 && rows[0].rank == 1 && rows[0].change == 2);
+    CHECK(rows[1].seat == 1 && rows[1].rank == 2 && rows[1].change == 0);
+    CHECK(rows[2].seat == 0 && rows[2].out && rows[2].rank == 3 && rows[2].change == -2);
+    CHECK(rows[3].seat == 3 && rows[3].out && rows[3].tie && rows[3].change == 1);
+}
+
+// 단계마다 멈추고, 방장이 눌러야 넘어간다. 다음 판도 눌러야 시작한다.
+void testGates() {
+    WebOptions options;
+    options.seed = 5u;
+    options.hintTrials = 20;
+    options.aiAction = std::chrono::milliseconds(0);
+    Room room(options, [] { RoomSettings s; s.bots = 0; s.turnSeconds = 60; return s; }(), "000000", false, 5);
+    std::string error;
+    CHECK(room.join("a", "철수", error) && room.join("b", "영희", error) && room.start("a", error));
+    auto until = [&](auto done) {
+        for (int i = 0; i < 2500; ++i) {
+            if (done()) return true;
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
+        return false;
+    };
+    // 프리플랍: 둘 다 콜/체크
+    auto playRound = [&] {
+        until([&] {
+            for (const char* who : {"a", "b"}) {
+                const RoomView v = *room.view(who);
+                if (v.myTurn) room.submit(who, v.table.state.toCall > 0 ? "call" : "check", {}, v.turnId, error);
+            }
+            return room.view("a")->waiting != Waiting::None;
+        });
+    };
+    const Waiting expected[] = {Waiting::Flop, Waiting::Turn, Waiting::River, Waiting::Showdown};
+    const std::size_t boards[] = {0, 3, 4, 5};
+    for (int i = 0; i < 4; ++i) {
+        playRound();
+        const RoomView v = *room.view("a");
+        CHECK(v.waiting == expected[i] && v.canContinue && !room.view("b")->canContinue);
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        CHECK(room.view("a")->table.state.board.size() == boards[i]);  // 누르기 전에는 그대로
+        CHECK(!room.proceed("b", v.gateId, error));       // 방장이 아님
+        CHECK(!room.proceed("a", v.gateId + 1, error));   // 다른 지점 번호
+        CHECK(room.proceed("a", v.gateId, error));
+        CHECK(!room.proceed("a", v.gateId, error));       // 두 번 눌러도 한 단계만
+    }
+    CHECK(until([&] { return room.view("a")->waiting == Waiting::NextHand; }));
+    const RoomView end = *room.view("a");
+    CHECK(end.handOver && end.review && end.review->ranking.size() == 2);
+    std::this_thread::sleep_for(std::chrono::milliseconds(30));
+    CHECK(room.view("a")->table.state.handNumber == 1);
+    CHECK(room.proceed("a", end.gateId, error));
+    CHECK(until([&] { return room.view("a")->table.state.handNumber == 2; }));
+}
+
+// 내가 폴드한 뒤에만 건너뛸 수 있고, 건너뛰면 단계는 자동이지만 다음 판은 기다린다.
+void testSkip() {
+    WebOptions options;
+    options.seed = 11u;
+    options.hintTrials = 20;
+    options.aiAction = std::chrono::milliseconds(0);
+    Room room(options, [] { RoomSettings s; s.bots = 3; return s; }(), "000000", true, 11);
+    std::string error;
+    CHECK(room.join("a", "나", error) && room.start("a", error));
+    bool skipped = false, reachedEnd = false;
+    for (int i = 0; i < 3000 && !reachedEnd; ++i) {
+        const RoomView v = *room.view("a");
+        if (v.myTurn) {
+            CHECK(!v.canSkip && !room.skipHand("a", error));
+            room.submit("a", v.table.state.toCall > 0 ? "fold" : "check", {}, v.turnId, error);
+        } else if (v.canSkip && !skipped) {
+            skipped = room.skipHand("a", error);
+        } else if (v.waiting == Waiting::NextHand) {
+            reachedEnd = true;
+        } else if (v.waiting != Waiting::None && !skipped) {
+            room.proceed("a", v.gateId, error);
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    CHECK(reachedEnd);
+    CHECK(room.view("a")->waiting == Waiting::NextHand);
+}
+
+// 진행 속도: 봇 행동은 "생각 중" -> "공개" 순서로 하나씩, 정해진 시간만큼 걸린다.
+void testPacing() {
+    WebOptions options;
+    options.seed = 7u;
+    options.hintTrials = 20;
+    options.aiAction = std::chrono::milliseconds(200);
+    Room room(options, [] { RoomSettings s; s.bots = 3; return s; }(), "000000", true, 7);
+    std::string error;
+    CHECK(room.join("a", "나", error) && room.start("a", error));
+    int seq = 0, thinking = 0;
+    std::vector<std::chrono::steady_clock::time_point> revealed;
+    for (int i = 0; i < 1500 && revealed.size() < 3; ++i) {
+        const RoomView v = *room.view("a");
+        if (v.actionPhase == "thinking") ++thinking;
+        if (v.lastAction && v.lastAction->seq != seq && v.lastAction->seat != v.table.state.mySeat) {
+            seq = v.lastAction->seq;
+            CHECK(v.actionPhase == "revealed" && v.actingSeat == v.lastAction->seat);
+            revealed.push_back(std::chrono::steady_clock::now());
+        }
+        if (v.myTurn) room.submit("a", v.table.state.toCall > 0 ? "call" : "check", {}, v.turnId, error);
+        if (v.waiting != Waiting::None) room.proceed("a", v.gateId, error);
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    CHECK(thinking > 0 && revealed.size() == 3);
+    // 연속한 봇 행동 사이에는 최소한 한 사람 몫의 시간이 있다 (조회 간격만큼의 오차 허용)
+    for (std::size_t i = 1; i < revealed.size(); ++i) CHECK(revealed[i] - revealed[i - 1] >= std::chrono::milliseconds(180));
+    Pace pace;
+    CHECK(parsePace("fast", pace) && pace == Pace::Fast && !parsePace("turbo", pace));
+    CHECK(room.setPace("a", Pace::Fast, error) && room.view("a")->pace == Pace::Fast);
+    CHECK(!room.setPace("x", Pace::Slow, error));
+}
+
 // 봇끼리 많은 판을 두어도 리뷰 금액과 족보가 항상 게임 결과와 맞아야 한다.
 void testRandomHands() {
     for (unsigned seed = 1; seed <= 40; ++seed) {
@@ -235,7 +390,8 @@ void testRoomReview() {
     WebOptions options;
     options.seed = 3u;
     options.hintTrials = 50;
-    options.botDelay = std::chrono::milliseconds(0);
+    options.aiAction = std::chrono::milliseconds(0);
+    options.autoContinue = true;
     options.nextHandDelay = std::chrono::seconds(60);
     RoomSettings settings;
     settings.bots = 2;
@@ -274,6 +430,13 @@ int main() {
     testFoldedCardsHiddenAtShowdown();
     testFlowReversal();
     testNamesAndBestFive();
+    testRankingAndStandings();
+    testTieRanking();
+    testSidePotRankingAndElimination();
+    testStandingsChange();
+    testGates();
+    testSkip();
+    testPacing();
     testRandomHands();
     testRoomReview();
     std::printf("%d개 검사 중 %d개 실패\n", g_checks, g_failures);

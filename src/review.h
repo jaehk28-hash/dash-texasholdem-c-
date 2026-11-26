@@ -36,6 +36,36 @@ std::array<Card, 5> bestFive(const std::array<Card, 2>& hole, const std::vector<
 // 족보 이름. A 하이 스트레이트 플러시는 "로열 플러시"로 부른다.
 std::string handName(HandScore score);
 
+// "원 페어 A", "투 페어 K·9"처럼 숫자까지 붙인 족보 설명
+std::string describeHand(HandScore score);
+
+// 족보의 대략적인 세기: 1(하이 카드) ~ 6(풀 하우스 이상)
+int strengthLevel(HandScore score);
+
+// "이번 판 순위"의 한 줄. 폴드한 사람은 순위가 없고(place 0) 카드도 담지 않는다.
+struct HandRankRow {
+    int seat = 0;
+    int place = 0;
+    bool folded = false;
+    bool tie = false;                          // 같은 순위가 또 있다 (무승부)
+    std::string handName;                      // 쇼다운에 참여했을 때만
+    std::optional<std::array<Card, 2>> cards;  // 쇼다운에 참여했을 때만
+    int delta = 0;                             // 이번 판의 칩 증감
+};
+
+// "현재 칩 순위"의 한 줄
+struct StandingRow {
+    int seat = 0;
+    int rank = 0;
+    bool tie = false;
+    int chips = 0;
+    std::optional<int> change;  // 이전 판보다 올라간 칸 수 (내려가면 음수). 첫 판은 빈 값
+    bool out = false;           // 칩이 0 (탈락)
+};
+
+// 칩이 많은 순서. previousRanks는 좌석별 이전 순위 (없으면 빈 목록)
+std::vector<StandingRow> buildStandings(const std::vector<int>& chips, const std::vector<int>& previousRanks);
+
 // 쇼다운에 참여한 한 사람
 struct ReviewEntry {
     int seat = 0;
@@ -44,7 +74,8 @@ struct ReviewEntry {
     std::array<Card, 5> best;
     std::array<bool, 5> key{};  // 승부에 쓰인 카드 (족보를 이루는 카드 + 승부를 가른 카드)
     HandScore score = 0;
-    std::string name;  // 족보 이름
+    std::string name;    // 족보 이름
+    std::string detail;  // 숫자까지 붙인 설명 ("투 페어 K·9")
     // 바로 아래 순위와의 비교 (마지막 순위에는 없다)
     std::optional<HandCompare> versusNext;
     int nextSeat = -1;
@@ -74,9 +105,12 @@ struct HandReview {
     std::vector<ReviewEntry> entries;  // 강한 순. 쇼다운이 없으면 비어 있다
     std::vector<int> folded;           // 카드를 받았지만 폴드한 좌석
     std::vector<ReviewPot> pots;       // [0]이 메인 팟
+    std::vector<HandRankRow> ranking;  // 이번 판 순위 (카드를 받은 사람 전원)
+    std::vector<StandingRow> standings;  // 현재 칩 순위 (테이블 전원)
 };
 
-HandReview buildHandReview(const HandSummary& hand, const std::vector<std::string>& names);
+HandReview buildHandReview(const HandSummary& hand, const std::vector<std::string>& names,
+                           const std::vector<int>& previousRanks = {});
 
 // ---- 보는 사람 자신의 흐름 ("플랍에서는 앞섰는데...") ----
 struct StreetStanding {

@@ -18,7 +18,8 @@ static WebOptions fastOptions(unsigned seed = 1) {
     WebOptions o;
     o.seed = seed;
     o.hintTrials = 50;
-    o.botDelay = 0ms;
+    o.aiAction = 0ms;
+    o.autoContinue = true;
     o.nextHandDelay = 30ms;
     return o;
 }

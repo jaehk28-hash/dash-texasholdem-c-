@@ -426,11 +426,14 @@ HandSummary Game::playHand() {
     const int counts[3] = {3, 1, 1};
     const char* labels[3] = {"플랍", "턴", "리버"};
     for (int i = 0; i < 3 && live; ++i) {
+        const Stage stages[3] = {Stage::Flop, Stage::Turn, Stage::River};
+        if (stageHook_) stageHook_(stages[i]);
         dealBoard(counts[i], labels[i]);
         live = bettingRound(next(button_), streets[i]);
     }
 
     // 9) 쇼다운 / 팟 분배 / 검증
+    if (stageHook_) stageHook_(liveCount() > 1 ? Stage::Showdown : Stage::HandEnd);
     finishHand(summary);
     summary.handNumber = handNumber_;
     summary.button = button_;

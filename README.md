@@ -108,7 +108,11 @@ PORT=9000 ./build/holdem --web
 
 - `--chips`, `--sb`, `--bb`는 설정 화면의 기본값이 되고, `--no-hint`는 모든 방의 힌트를 끕니다.
 - 방은 동시에 최대 20개이고(혼자 하기 포함), 30분 동안 입력(시작, 입장, 행동)이 없으면 정리됩니다. 서버를 끄면 모두 사라집니다.
-- 봇은 0.5초 간격으로 행동하고, 판이 끝나면 5초 뒤 다음 판이 자동으로 시작됩니다.
+- 봇은 한 명씩 "생각 중" → 행동 공개 순서로 움직입니다. 진행 속도는 느리게(5초, 기본), 보통(3초), 빠르게(1초) 중에서 고르며 게임 중에도 바꿀 수 있습니다.
+  - 속도 값은 `src/web_session.h`의 `AI_ACTION_MS` 하나로 바꿉니다 (보통은 3/5, 빠르게는 1/5).
+- 플랍, 턴, 리버, 쇼다운, 다음 판은 **방장이 "다음" 버튼(스페이스/Enter)을 눌러야** 넘어갑니다.
+- 모두 폴드했거나 올인한 뒤에는 "남은 진행 빠르게 보기"로 이번 판의 남은 단계를 자동 진행할 수 있습니다.
+- 판이 끝나면 이번 판 순위, 현재 칩 순위(변동 표시), 핸드 리뷰를 보여 줍니다.
 - 남의 홀 카드는 쇼다운에서 폴드하지 않은 사람 것만 서버가 보냅니다.
 - `--seed N`을 주면 만든 방 순서대로 N, N+1, N+2 … 시드를 씁니다. 시드를 아는 사람은 카드를 미리 알 수 있습니다.
 - 화면 파일은 `web/index.html`입니다. 서버를 시작할 때 한 번 읽으므로, 고친 뒤에는 다시 실행하세요.
@@ -122,6 +126,9 @@ PORT=9000 ./build/holdem --web
 | `POST /api/room/join` | `code, name`. 없는 코드를 1분에 10번 넣으면 429 |
 | `POST /api/room/start` | 방장만. 시작 또는 다시 하기 |
 | `POST /api/room/leave` | 방 나가기 |
+| `POST /api/continue` | 방장만. 기다리는 단계 넘기기. 선택: `gateId` |
+| `POST /api/skip` | 방장만. 더 행동할 사람이 없을 때 이번 판 빠르게 진행 |
+| `POST /api/pace` | 방장만. `pace`: `slow`, `normal`, `fast` (`/api/new`, `/api/room/create`에서도 선택) |
 | `GET /api/state` | 내 시점의 상태. 방이 없으면 `{"hasGame":false, ...}` |
 | `POST /api/action` | `{"action":"fold\|check\|call\|raise\|allin","amount":N,"turnId":T}`. `amount`는 `raise`의 이번 라운드 **총액**, `turnId`는 선택 |
 
@@ -130,7 +137,13 @@ PORT=9000 ./build/holdem --web
 | 필드 | 내용 |
 |---|---|
 | `actingSeat` | 지금 결정 중인 좌석 (봇 포함, 없으면 -1) |
-| `review` | 마지막으로 끝난 판의 리뷰. 아직 없으면 `null`, 다음 판 중에도 유지 |
+| `actionPhase`, `lastAction` | `thinking`/`revealed`, 방금 공개된 행동 `{seq,seat,text}` |
+| `waiting` | `null` 또는 `{next: flop\|turn\|river\|showdown\|nextHand, gateId, canContinue}` |
+| `canSkip`, `skipping`, `pace` | 건너뛰기 가능/진행 중, 현재 속도 |
+| `myHand` | 플랍 이후 내 족보 `{name,level(1~6),boardOnly}` |
+| `review.ranking[]` | 이번 판 순위: `seat, place, folded, tie, handName, cards, delta` (폴드는 카드 없음) |
+| `review.standings[]` | 현재 칩 순위: `seat, rank, tie, chips, change, out` |
+| `review` | 마지막으로 끝난 판의 리뷰. 아직 없으면 `null` (화면은 판이 끝났을 때만 보여 줌) |
 | `review.handNumber, showdown, board, names` | 판 번호, 쇼다운 여부, 공용 카드, 좌석별 이름 |
 | `review.entries[]` | 쇼다운 참여자(강한 순): `seat, place, hole, best, key, category, handName, nextSeat, versusNext` |
 | `review.pots[]` | `amount, winners[{seat,amount}], eligible, cappedBy, loserSeat, oddChip, compare` |

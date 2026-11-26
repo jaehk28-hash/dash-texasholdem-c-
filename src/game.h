@@ -50,6 +50,10 @@ struct TableSnapshot {
     bool holeDealt = false;  // 이번 판의 홀 카드를 이미 나눠 줬는가 (false면 myHole은 의미 없음)
 };
 
+// 다음에 일어날 단계. 화면이 "다음 단계로"를 기다릴 때 쓴다.
+//  HandEnd는 모두 폴드해서 쇼다운 없이 판이 끝나기 직전이다.
+enum class Stage { Flop, Turn, River, Showdown, HandEnd };
+
 // 테이블 전체를 관리하고 한 판씩 진행하는 클래스.
 class Game {
 public:
@@ -75,6 +79,10 @@ public:
 
     // 진행 중 사건을 한 줄씩 받는 콜백 (화면 출력용). 기록은 HandSummary.history에도 남는다.
     void setLogger(std::function<void(const std::string&)> logger) { logger_ = std::move(logger); }
+
+    // 플랍/턴/리버를 깔기 직전, 쇼다운(또는 판 마무리) 직전에 불린다.
+    // 이 함수가 돌아올 때까지 게임은 기다린다. 게임 결과에는 영향이 없다.
+    void setStageHook(std::function<void(Stage)> hook) { stageHook_ = std::move(hook); }
 
     // ---- 테스트/벤치마크용 보조 기능 ----
     void setChips(int seat, int chips) { seats_[seat].chips = chips; }
@@ -120,6 +128,7 @@ private:
     std::vector<Seat> seats_;
     std::mt19937 rng_;
     std::function<void(const std::string&)> logger_;
+    std::function<void(Stage)> stageHook_;
 
     Deck deck_;
     std::vector<Card> board_;
