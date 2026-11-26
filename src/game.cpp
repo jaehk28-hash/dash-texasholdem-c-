@@ -443,13 +443,14 @@ HandSummary Game::playHand() {
         summary.holes.push_back(s.hole);
         summary.dealtIn.push_back(s.inHand);
         summary.folded.push_back(s.folded);
+        summary.contributed.push_back(s.contributed);
     }
     history_ = nullptr;
     return summary;
 }
 
 // 쇼다운(또는 폴드 승리) 처리와 팟 분배
-void Game::finishHand(HandSummary& /*summary*/) {
+void Game::finishHand(HandSummary& summary) {
     const int n = numSeats();
 
     std::vector<PotEntry> entries;
@@ -476,6 +477,7 @@ void Game::finishHand(HandSummary& /*summary*/) {
     // 팟마다 따로 나눠 준다 (홀수 칩 규칙이 팟마다 적용되도록)
     for (std::size_t k = 0; k < pots.size(); ++k) {
         std::vector<int> won = distributePots({pots[k]}, scores, button_, n);
+        summary.pots.push_back({pots[k].amount, pots[k].eligible, won});  // 리뷰용 기록
         const std::string potName = (k == 0) ? "메인 팟" : "사이드 팟 " + std::to_string(k);
         for (int i = 0; i < n; ++i) {
             if (won[i] > 0) {

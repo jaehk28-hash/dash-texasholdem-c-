@@ -25,6 +25,7 @@
 #include <vector>
 
 #include "game.h"
+#include "review.h"
 
 constexpr int kSeats = 6;  // 한 테이블의 최대 인원 (사람 + 봇)
 
@@ -81,6 +82,10 @@ struct RoomView {
     std::optional<double> equity;
     int opponents = 0;
     bool handOver = false;
+    int actingSeat = -1;  // 지금 결정 중인 좌석 (봇 포함. turnSeat은 사람만)
+    // 마지막으로 끝난 판의 리뷰. 다음 판이 진행되는 동안에도 남는다.
+    std::shared_ptr<const HandReview> review;
+    std::optional<ReviewFlow> reviewFlow;  // 보는 사람 자신의 흐름 (쇼다운에 참여했을 때)
     std::string message;
     std::deque<std::string> log;
 };
@@ -89,6 +94,9 @@ struct RoomView {
 // 지금 상황에서 허용되지 않으면 false와 함께 error에 안내 문구를 채운다.
 bool buildWebAction(const std::string& name, std::optional<long long> amount, const GameState& state,
                     Action& out, std::string& error);
+
+// 리뷰를 JSON 객체로 바꾼다. flow는 없으면 nullptr.
+std::string reviewToJson(const HandReview& review, const ReviewFlow* flow);
 
 // RoomView를 GET /api/state 응답 JSON으로 바꾼다.
 std::string viewToJson(const RoomView& view);
@@ -138,6 +146,9 @@ private:
     void run(std::vector<std::string> humanNames, int botCount, unsigned seed);  // 게임 스레드
     Action waitForAction(int seat, const GameState& state);
     void pause(std::chrono::milliseconds time);  // stop()이 오면 즉시 깨어나는 잠
+    void setActing(int seat);
+    // 끝난 판의 리뷰를 공개하고, 힌트가 켜져 있으면 승률 흐름을 이어서 계산한다.
+    void publishReview(const HandSummary& hand, const std::vector<std::string>& names, int humans);
     bool seatLeft(int seat) const;               // mutex_를 잡은 상태에서
 
     const WebOptions options_;
@@ -157,6 +168,9 @@ private:
     std::vector<TableSnapshot> tables_;  // 좌석별 시점의 테이블 (사람 좌석만 사용)
     std::vector<std::optional<std::array<Card, 2>>> revealed_;
     bool handOver_ = false;
+    int actingSeat_ = -1;
+    std::shared_ptr<const HandReview> review_;
+    std::vector<std::optional<ReviewFlow>> flows_;  // 좌석별 (사람 좌석만)
     std::deque<std::string> log_;
 
     int turnSeat_ = -1;  // 입력을 기다리는 좌석

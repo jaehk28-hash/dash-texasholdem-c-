@@ -122,8 +122,11 @@ public:
     PacedPlayer(Room& room, std::unique_ptr<Player> bot) : room_(room), bot_(std::move(bot)) {}
     std::string name() const override { return bot_->name(); }
     Action decide(const GameState& state) override {
+        room_.setActing(state.mySeat);
         room_.pause(room_.options_.botDelay);
-        return bot_->decide(state);
+        const Action action = bot_->decide(state);
+        room_.setActing(-1);
+        return action;
     }
 
 private:
@@ -175,6 +178,82 @@ bool buildWebAction(const std::string& name, std::optional<long long> amount, co
 // ---------------------------------------------------------------------------
 // JSON 만들기
 // ---------------------------------------------------------------------------
+namespace {
+
+std::string cardListJson(const Card* cards, std::size_t count) {
+    std::string j = "[";
+    for (std::size_t i = 0; i < count; ++i) j += (i ? "," : "") + jsonString(cardToString(cards[i]));
+    return j + "]";
+}
+
+std::string intListJson(const std::vector<int>& values) {
+    std::string j = "[";
+    for (std::size_t i = 0; i < values.size(); ++i) j += (i ? "," : "") + std::to_string(values[i]);
+    return j + "]";
+}
+
+std::string compareJson(const std::optional<HandCompare>& c) {
+    if (!c) return "null";
+    const char* type = c->type == HandCompare::Type::Category ? "category"
+                       : c->type == HandCompare::Type::Rank   ? "rank"
+                                                              : "tie";
+    return std::string("{\"type\":\"") + type + "\",\"role\":" + jsonString(c->role) +
+           ",\"winRank\":" + std::to_string(c->winRank) +
+           ",\"loseRank\":" + std::to_string(c->loseRank) + ",\"shared\":" + intListJson(c->shared) +
+           ",\"boardPlays\":" + boolJson(c->boardPlays) + "}";
+}
+
+}  // namespace
+
+std::string reviewToJson(const HandReview& r, const ReviewFlow* flow) {
+    std::string j = "{\"handNumber\":" + std::to_string(r.handNumber);
+    j += std::string(",\"showdown\":") + boolJson(r.showdown);
+    j += ",\"board\":" + cardListJson(r.board.data(), r.board.size());
+    j += ",\"names\":[";
+    for (std::size_t i = 0; i < r.names.size(); ++i) j += (i ? "," : "") + jsonString(r.names[i]);
+    j += "],\"entries\":[";
+    for (std::size_t i = 0; i < r.entries.size(); ++i) {
+        const ReviewEntry& e = r.entries[i];
+        j += i ? "," : "";
+        j += "{\"seat\":" + std::to_string(e.seat) + ",\"place\":" + std::to_string(e.place);
+        j += ",\"hole\":" + cardListJson(e.hole.data(), e.hole.size());
+        j += ",\"best\":" + cardListJson(e.best.data(), e.best.size());
+        j += ",\"key\":[";
+        for (std::size_t k = 0; k < e.key.size(); ++k) j += std::string(k ? "," : "") + boolJson(e.key[k]);
+        j += "],\"category\":" + std::to_string(static_cast<int>(categoryOf(e.score)));
+        j += ",\"handName\":" + jsonString(e.name);
+        j += ",\"nextSeat\":" + std::to_string(e.nextSeat);
+        j += ",\"versusNext\":" + compareJson(e.versusNext) + "}";
+    }
+    j += "],\"folded\":" + intListJson(r.folded);
+    j += ",\"pots\":[";
+    for (std::size_t i = 0; i < r.pots.size(); ++i) {
+        const ReviewPot& p = r.pots[i];
+        j += i ? "," : "";
+        j += "{\"amount\":" + std::to_string(p.amount) + ",\"winners\":[";
+        for (std::size_t w = 0; w < p.winners.size(); ++w) {
+            j += w ? "," : "";
+            j += "{\"seat\":" + std::to_string(p.winners[w].seat) +
+                 ",\"amount\":" + std::to_string(p.winners[w].amount) + "}";
+        }
+        j += "],\"eligible\":" + intListJson(p.eligible);
+        j += ",\"cappedBy\":" + intListJson(p.cappedBy);
+        j += ",\"loserSeat\":" + std::to_string(p.loserSeat);
+        j += std::string(",\"oddChip\":") + boolJson(p.oddChip);
+        j += ",\"compare\":" + compareJson(p.compare) + "}";
+    }
+    j += "],\"me\":";
+    if (!flow) return j + "null}";
+    j += std::string("{\"won\":") + boolJson(flow->won) + ",\"streets\":[";
+    for (std::size_t i = 0; i < flow->streets.size(); ++i) {
+        const StreetStanding& s = flow->streets[i];
+        j += i ? "," : "";
+        j += "{\"street\":" + jsonString(s.street) + ",\"status\":" + jsonString(s.status);
+        j += ",\"equity\":" + (s.equity ? std::to_string(*s.equity) : std::string("null")) + "}";
+    }
+    return j + "]}}";
+}
+
 std::string viewToJson(const RoomView& v) {
     const GameState& s = v.table.state;
     const int seats = static_cast<int>(s.players.size());
@@ -207,6 +286,7 @@ std::string viewToJson(const RoomView& v) {
     j += ",\"pot\":" + std::to_string(v.handOver || v.phase == RoomPhase::Over ? 0 : s.pot);
     j += std::string(",\"myTurn\":") + boolJson(v.myTurn);
     j += ",\"turnSeat\":" + std::to_string(v.turnSeat);
+    j += ",\"actingSeat\":" + std::to_string(v.actingSeat);
     j += ",\"turnId\":" + std::to_string(v.turnId);
     j += ",\"secondsLeft\":" + std::to_string(v.secondsLeft);
     j += std::string(",\"handOver\":") + boolJson(v.handOver);
@@ -280,7 +360,12 @@ std::string viewToJson(const RoomView& v) {
         j += (first ? "" : ",") + jsonString(line);
         first = false;
     }
-    j += "]}";
+    j += "]";
+
+    // 지난 판 리뷰 (카드 목록이 들어 있으므로 현재 판 정보와 섞이지 않게 맨 뒤에 둔다)
+    j += ",\"review\":";
+    j += v.review ? reviewToJson(*v.review, v.reviewFlow ? &*v.reviewFlow : nullptr) : "null";
+    j += "}";
     return j;
 }
 
@@ -410,6 +495,9 @@ bool Room::start(const std::string& token, std::string& error) {
         pending_.reset();
         tables_.clear();
         revealed_.clear();
+        review_.reset();
+        flows_.clear();
+        actingSeat_ = -1;
         log_.clear();
         seed = nextSeed_++;
     }
@@ -465,6 +553,9 @@ std::optional<RoomView> Room::view(const std::string& token) const {
     }
     v.revealed = revealed_;
     v.handOver = handOver_;
+    v.actingSeat = actingSeat_;
+    v.review = review_;
+    if (me->seat >= 0 && me->seat < static_cast<int>(flows_.size())) v.reviewFlow = flows_[me->seat];
     v.log = log_;
     v.turnId = turnId_;
     v.turnSeat = turnSeat_;
@@ -529,6 +620,7 @@ Action Room::waitForAction(int seat, const GameState& state) {
     equity_ = equity;
     pending_.reset();
     turnSeat_ = seat;
+    actingSeat_ = seat;
     ++turnId_;
     deadline_ = std::chrono::steady_clock::now() + std::chrono::seconds(settings_.turnSeconds);
 
@@ -539,6 +631,7 @@ Action Room::waitForAction(int seat, const GameState& state) {
     else cv_.wait(lock, ready);
 
     turnSeat_ = -1;
+    actingSeat_ = -1;
     if (stopping_) throw StopRequested{};
     if (timedOut) addLog(state.players[seat].name + ": 시간 초과");
     const Action action = pending_ ? *pending_ : automatic;
@@ -549,6 +642,40 @@ Action Room::waitForAction(int seat, const GameState& state) {
 void Room::pause(std::chrono::milliseconds time) {
     std::unique_lock<std::mutex> lock(mutex_);
     if (cv_.wait_for(lock, time, [this] { return stopping_; })) throw StopRequested{};
+}
+
+void Room::setActing(int seat) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    actingSeat_ = seat;
+}
+
+void Room::publishReview(const HandSummary& hand, const std::vector<std::string>& names, int humans) {
+    auto review = std::make_shared<const HandReview>(buildHandReview(hand, names));
+    std::vector<std::optional<ReviewFlow>> flows;
+    for (int seat = 0; seat < humans; ++seat) flows.push_back(buildReviewFlow(*review, seat));
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        review_ = review;
+        flows_ = flows;
+    }
+    if (!options_.showHint || !settings_.hint) return;
+
+    // 승률 계산은 시간이 걸릴 수 있으므로 리뷰를 먼저 공개한 뒤, mutex 밖에서 계산해 채운다.
+    for (int seat = 0; seat < humans; ++seat) {
+        if (!flows[seat]) continue;
+        const int opponents = static_cast<int>(review->entries.size()) - 1;
+        if (opponents < 1) continue;
+        for (const ReviewEntry& e : review->entries) {
+            if (e.seat != seat) continue;
+            for (std::size_t i = 0; i < flows[seat]->streets.size(); ++i) {
+                const std::vector<Card> board(review->board.begin(), review->board.begin() + 3 + i);
+                flows[seat]->streets[i].equity =
+                    estimateEquity(e.hole, board, opponents, options_.hintTrials, hintRng_);
+            }
+        }
+        std::lock_guard<std::mutex> lock(mutex_);
+        flows_[seat] = flows[seat];
+    }
 }
 
 void Room::run(std::vector<std::string> humanNames, int botCount, unsigned seed) {
@@ -612,6 +739,9 @@ void Room::run(std::vector<std::string> humanNames, int botCount, unsigned seed)
                     }
                 }
             }
+            std::vector<std::string> names;
+            for (int i = 0; i < game.numSeats(); ++i) names.push_back(game.player(i).name());
+            publishReview(hand, names, humans);
             if (game.isOver() || !someoneCanPlay()) break;
             pause(options_.nextHandDelay);
         }

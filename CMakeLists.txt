@@ -14,6 +14,7 @@ add_library(holdem_core
   src/card.cpp
   src/evaluator.cpp
   src/pot.cpp
+  src/review.cpp
   src/game.cpp
   src/equity.cpp
   src/bots.cpp
@@ -59,3 +60,8 @@ add_holdem_test(test_game)
 add_executable(test_web tests/test_web.cpp)
 target_link_libraries(test_web holdem_web)
 add_test(NAME test_web COMMAND test_web)
+
+# 리뷰 테스트는 JSON까지 확인하므로 holdem_web에 연결한다
+add_executable(test_review tests/test_review.cpp)
+target_link_libraries(test_review holdem_web)
+add_test(NAME test_review COMMAND test_review)

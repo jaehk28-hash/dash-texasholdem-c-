@@ -359,6 +359,26 @@
   #notice { color: var(--gold-light); font-size: 14px; min-height: 20px; text-align: center; }
   #log { height: 180px; overflow-y: auto; font-size: 12px; line-height: 1.6; color: var(--muted); overflow-wrap: anywhere; }
 
+  /* 지금 상황, 핸드 리뷰 */
+  #now { font-size: 14px; line-height: 1.55; display: flex; flex-direction: column; gap: 4px; }
+  #now h3 { font-size: 15px; margin: 0; }
+  #now .round, .rv-muted { color: var(--muted); font-size: 12.5px; }
+  #now .turn { color: #bff5d8; font-weight: 700; }
+  #now .note { color: var(--gold-light); }
+  #review { font-size: 14px; line-height: 1.55; overflow-wrap: anywhere; }
+  #review > summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; gap: 8px; font-family: var(--serif); font-size: 17px; color: var(--gold-light); }
+  #review > summary::before { content: "▸"; }
+  #review[open] > summary::before { content: "▾"; }
+  #reviewBody { display: flex; flex-direction: column; gap: 5px; }
+  #review h4 { margin-top: 8px; color: var(--gold-light); font-size: 14px; }
+  .rv-head { font-weight: 700; font-size: 15px; }
+  .rv-entry { border-top: 1px solid var(--line); padding-top: 6px; }
+  .rv-name { font-weight: 700; }
+  .rv-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 4px 0; }
+  .rv-cards { display: inline-flex; gap: 3px; }
+  .rv-cards .card { flex-basis: 27px; height: 38px; }
+  .rv-cards .card.rv-key { border: 2px solid var(--gold); box-shadow: 0 0 7px var(--gold-light); transform: translateY(-3px); }
+
   /* 메뉴, 설정, 대기실 화면 */
   [hidden] { display: none !important; }
   .screen { display: flex; flex-direction: column; gap: 10px; }
@@ -591,7 +611,12 @@
       </div>
     </div>
 
+    <div class="panel" id="now" aria-live="polite"></div>
     <div class="panel hint" id="hint"></div>
+    <details class="panel" id="review" open hidden>
+      <summary id="reviewTitle"></summary>
+      <div id="reviewBody"></div>
+    </details>
     <div class="panel"><div id="log"></div></div>
     <label id="skipRow"><input type="checkbox" id="skipFx"> 연출 건너뛰기</label>
     <div class="row">
@@ -916,6 +941,312 @@ $("hostName").value = $("joinName").value = recall("nickname") || "";
 showingRules = !recall("rulesSeen");  // 처음 들어온 사람에게는 규칙부터
 render();
 poll();
+</script>
+
+<script>
+"use strict";
+// ============================================================================
+// 상황 안내와 핸드 리뷰의 문구는 모두 여기(TEXTS)에 있다. 말투나 설명을 고칠 때는 이 객체만 보면 된다.
+// {이름} 같은 자리는 값으로 바뀌고, {이름:이/가}는 값 뒤에 받침에 맞는 조사를 붙인다.
+// ============================================================================
+const TEXTS = {
+  nowTitle: "지금 상황",
+  streets: { 0: "프리플랍(카드 받고 첫 베팅)", 3: "플랍(공통 카드 3장)", 4: "턴(4번째 카드)", 5: "리버(마지막 카드)" },
+  positions: {
+    "BTN": "BTN(딜러 버튼. 플랍부터 마지막에 행동해서 유리한 자리)",
+    "SB": "SB(스몰 블라인드. 블라인드, 즉 의무로 거는 칩을 먼저 내는 자리)",
+    "BB": "BB(빅 블라인드. 큰 의무 베팅을 내는 자리)",
+    "BTN/SB": "BTN/SB(둘이 할 때 딜러 버튼이 작은 의무 베팅도 내는 자리)",
+    "UTG": "UTG(블라인드 다음, 첫 베팅에서 가장 먼저 행동하는 자리)",
+    "MP": "MP(가운데 자리)", "HJ": "HJ(딜러 버튼 두 칸 앞자리)", "CO": "CO(딜러 버튼 바로 앞자리)",
+  },
+  roundLine: "{street} · 내 자리: {position} · 최소 베팅 단위 {bb}(빅 블라인드)",
+  over: "게임이 끝났어요.",
+  handOver: "이번 판이 끝났어요. 잠시 후 다음 판이 시작돼요. 핸드 리뷰에서 결과를 확인해 보세요.",
+  notIn: "칩이 없어 이번 판에는 참여하지 않아요.",
+  folded: "폴드(이번 판 포기)했어요. 다음 판까지 구경만 해요. 이미 낸 칩은 돌려받지 못해요.",
+  meAllIn: "올인(가진 칩 전부 걸기)했어요. 더 할 행동은 없고 남은 카드는 자동으로 깔려요. 각 상대에게서는 내가 낸 만큼까지만 받을 수 있어요.",
+  otherTurn: "지금은 {name}의 차례예요. 내 차례에만 행동할 수 있어요.",
+  waiting: "다음 차례를 기다리는 중이에요. 내 차례에만 행동할 수 있어요.",
+  myTurn: "내 차례예요.",
+  noCheckBlind: "빅 블라인드(큰 의무 베팅) {bet:이/가} 걸려 있어서 체크(칩을 안 내고 넘기기)할 수 없어요.",
+  noCheck: "앞사람이 {bet:을/를} 베팅해서 체크(칩을 안 내고 넘기기)할 수 없어요.",
+  choicesRaise: "콜({call:을/를} 맞춤), 레이즈(더 올리기), 폴드(포기) 중에서 골라야 해요.",
+  choicesNoRaise: "콜({call:을/를} 맞춤)이나 폴드(포기) 중에서 골라야 해요.",
+  noCall: "낼 칩이 더 없어서 콜(맞추기)이 필요 없어요. 체크하거나 레이즈할 수 있어요.",
+  noCallNoRaise: "낼 칩이 더 없어서 콜(맞추기)이 필요 없어요. 체크하면 돼요.",
+  foldOk: "폴드는 낼 칩이 있는 내 차례에 언제든 할 수 있어요. 이미 낸 칩은 돌려받지 못하고, 이 판이 끝날 때까지 다시 참여할 수 없어요.",
+  foldOff: "폴드 버튼이 꺼진 이유: 체크하면 칩을 더 안 내고 계속할 수 있어서 포기할 필요가 없어요.",
+  raiseRange: "{verb:은/는} 이번 라운드 총액 {min} ~ {max}(올인)까지 가능해요. 직전에 올린 폭 이상 올려야 해요.",
+  raiseAllInOnly: "칩이 최소 금액보다 적어서, 올리려면 올인(총액 {max})만 가능해요.",
+  noRaiseShort: "칩이 부족해서 레이즈할 수 없어요. 콜하면 가진 칩을 모두 거는 올인이 돼요.",
+  noRaiseAllIn: "상대가 모두 올인해서 더 올릴 수 없어요.",
+  noRaiseClosed: "내가 행동한 뒤에 최소 레이즈 폭보다 작은 올인만 나와서 다시 올릴 수는 없어요.",
+  onlyAllInOpponents: "남은 상대가 모두 올인했어요. 더 베팅할 상대가 없어서 남은 공통 카드가 자동으로 깔리고 승부해요.",
+  sidePot: "{names:이/가} 올인했어요. 올인한 사람은 자기가 낸 만큼까지만 받을 수 있고, 그보다 더 거는 칩은 사이드 팟(올인한 사람은 못 받는 별도의 팟)이 돼요.",
+  potOdds: "팟 오즈(낼 돈과 받을 돈의 비율): 콜 {call:이면/면} 콜한 뒤의 팟 {total} 중 {call:을/를} 내는 셈이라, 이길 확률이 약 {need}% 이상이면 본전이에요. 지금 내 승률은 약 {equity}%예요(상대 카드를 무작위로 가정).",
+
+  reviewTitle: "핸드 리뷰 (제 {hand} 판)",
+  reviewPast: "지난 판 리뷰 (제 {hand} 판)",
+  potName: (i) => (i === 0 ? "메인 팟" : "사이드 팟 " + i + "번"),
+  headline: "승자: {winners}, {pot} {amount} 획득 ({handName})",
+  noShowdown: "다른 모두가 폴드해서 쇼다운(카드 공개 승부) 없이 {name:이/가} 이겼어요. (팟 {amount} 획득)",
+  whyTitle: "왜 이겼나",
+  rankTitle: "누가 누구보다 강했나",
+  place: "{place}위",
+  hole: "손패",
+  best: "최종 5장",
+  keyLegend: "금색 테두리 = 승부에 쓰인 카드",
+  foldedList: "폴드: {names} (카드는 공개되지 않음)",
+  potTitle: "팟 정산",
+  potLine: "{pot} {amount} → {winners}",
+  capped: "{names:이/가} 올인해서 그 사람이 받을 수 있는 한도가 정해졌고, 그보다 더 건 칩이 {pot:이/가} 됐어요.",
+  uncontested: "받을 자격이 있는 사람이 {name}뿐이라 비교 없이 가져갔어요.",
+  oddChip: "똑같이 나눠지지 않는 칩은 딜러 버튼 왼쪽에서 가까운 승자에게 갔어요.",
+  // 승부 이유. A = 이긴 사람, B = 진 사람, x = 이긴 쪽 숫자, y = 진 쪽 숫자
+  why: {
+    category: "{strong:이/가} {weak}보다 강해요. {A:이/가} {B:을/를} 이겼어요.",
+    pair: "둘 다 {hand}지만 페어 숫자가 {x} 대 {y}라서 {x} 페어인 {A:이/가} 이겼어요.",
+    highPair: "둘 다 {hand}지만 높은 페어가 {x} 대 {y}라서 {x} 페어 쪽인 {A:이/가} 이겼어요.",
+    lowPair: "둘 다 {hand}이고 높은 페어({s0})까지 같아서, 낮은 페어 {x} 대 {y}로 {A:이/가} 이겼어요.",
+    trips: "둘 다 {hand}지만 같은 숫자 3장이 {x} 대 {y}라서 {A:이/가} 이겼어요.",
+    fullPair: "둘 다 {hand}이고 3장({s0})까지 같아서, 나머지 페어 {x} 대 {y}로 {A:이/가} 이겼어요.",
+    quads: "둘 다 {hand}지만 같은 숫자 4장이 {x} 대 {y}라서 {A:이/가} 이겼어요.",
+    straight: "둘 다 {hand}지만 가장 높은 카드가 {x} 대 {y}라서 {A:이/가} 이겼어요.",
+    flushCard: "둘 다 {hand}라서 높은 카드부터 차례로 비교했고, {x} 대 {y}에서 {A:이/가} 이겼어요.",
+    highCard: "둘 다 {hand}라서 높은 카드부터 차례로 비교했고, {x} 대 {y}에서 {A:이/가} 이겼어요.",
+    kicker: "둘 다 {shared:인데/인데}, 남은 카드(키커, 승부를 가르는 나머지 한 장)가 {x} 대 {y}라서 {A:이/가} 이겼어요.",
+    boardTie: "공통 카드 5장이 가장 강한 패라 {names}의 5장이 같아서 팟을 똑같이 나눠 가졌어요.",
+    tie: "{names}의 5장이 숫자까지 같아서 팟을 똑같이 나눠 가졌어요.",
+  },
+  shared: {
+    OnePair: "{s0} 페어", TwoPair: "{s0} 페어와 {s1} 페어", ThreeOfAKind: "{s0} 트리플", FourOfAKind: "{s0} 포카드",
+  },
+  flowTitle: "내 패의 흐름",
+  streetNames: { flop: "플랍", turn: "턴", river: "리버" },
+  status: { ahead: "앞섬", tied: "동률", behind: "뒤짐" },
+  equity: "승률 약 {equity}%(상대 카드 무작위 가정)",
+  comment: {
+    lostOnRiver: "턴까지는 내 패가 가장 강했는데 상대가 마지막 카드(리버)로 역전했어요.",
+    lostOnTurn: "플랍에서는 내 패가 가장 강했는데 상대가 턴에서 역전했어요.",
+    lostBehind: "플랍부터 상대 패가 더 강했어요.",
+    lostOther: "끝까지 접전이었지만 상대 패가 더 강했어요.",
+    wonComeback: "뒤지고 있다가 마지막 카드(리버)에서 역전했어요!",
+    wonAhead: "앞선 패를 끝까지 지켰어요.",
+    wonOther: "이번 판의 팟을 가져왔어요.",
+  },
+};
+
+// 받침에 따라 조사를 고른다. 판단할 수 없는 글자(영문 이름 등)면 "이(가)"처럼 둘 다 보여 준다.
+function josa(word, withBatchim, without) {
+  if (word === "나" && without === "가") return "내가";
+  // "벳(첫 베팅)"처럼 괄호 설명이 붙으면 괄호 앞 낱말로 판단한다.
+  const last = String(word).replace(/\([^)]*\)\s*$/, "").trim().slice(-1);
+  const code = last.charCodeAt(0);
+  if (code >= 0xac00 && code <= 0xd7a3) return word + ((code - 0xac00) % 28 ? withBatchim : without);
+  if (/[0-9]/.test(last)) return word + ("013678".includes(last) ? withBatchim : without);
+  if (/[AJQK]/.test(last) && String(word).length === 1) return word + without;
+  return word + withBatchim + "(" + without + ")";
+}
+
+function fill(template, values) {
+  return template.replace(/\{(\w+)(?::([^/}]*)\/([^}]*))?\}/g, (_, key, a, b) => {
+    const value = values && values[key] !== undefined ? String(values[key]) : "";
+    return a === undefined ? value : josa(value, a, b);
+  });
+}
+
+(() => {
+  const num = (n) => Number(n).toLocaleString();
+  const rankText = (r) => ({ 11: "J", 12: "Q", 13: "K", 14: "A" })[r] || String(r);
+  const CATEGORY_KEYS = ["HighCard", "OnePair", "TwoPair", "ThreeOfAKind", "Straight", "Flush", "FullHouse", "FourOfAKind", "StraightFlush"];
+  const line = (text, cls) => el("div", cls || "", text);
+
+  // ---- 지금 상황 ----
+  function situation() {
+    const me = state.players.find((p) => p.isMe);
+    const out = [];
+    if (!me) return out;
+    if (me.inHand) {
+      out.push([fill(TEXTS.roundLine, { street: TEXTS.streets[state.board.length] || "", position: TEXTS.positions[me.position] || me.position,
+        bb: num(state.settings.bb) }), "round"]);
+    }
+    if (state.phase === "over") return out.concat([[TEXTS.over]]);
+    if (state.handOver) return out.concat([[TEXTS.handOver]]);
+    if (!me.inHand) return out.concat([[TEXTS.notIn]]);
+    if (me.folded) return out.concat([[TEXTS.folded]]);
+
+    const others = state.players.filter((p) => !p.isMe && p.inHand && !p.folded);
+    const allIn = others.filter((p) => p.allIn);
+    const potNote = () => {
+      if (!allIn.length) return;
+      if (allIn.length === others.length) out.push([TEXTS.onlyAllInOpponents, "note"]);
+      else out.push([fill(TEXTS.sidePot, { names: allIn.map((p) => p.name).join(", ") }), "note"]);
+    };
+    if (me.allIn) return out.concat([[TEXTS.meAllIn]]);
+
+    const a = state.myTurn ? state.actions : null;
+    if (!a) {
+      const actor = state.players[state.actingSeat];
+      out.push([actor && !actor.isMe ? fill(TEXTS.otherTurn, { name: actor.name }) : TEXTS.waiting, "turn"]);
+      potNote();
+      return out;
+    }
+    out.push([TEXTS.myTurn, "turn"]);
+    if (!a.check) {
+      const blind = state.board.length === 0 && a.currentBet === state.settings.bb;
+      out.push([fill(blind ? TEXTS.noCheckBlind : TEXTS.noCheck, { bet: num(a.currentBet) }) + " "
+        + fill(a.raise ? TEXTS.choicesRaise : TEXTS.choicesNoRaise, { call: num(a.callAmount) })]);
+    }
+    if (!a.call) out.push([a.raise ? TEXTS.noCall : TEXTS.noCallNoRaise]);
+    out.push([a.fold ? TEXTS.foldOk : TEXTS.foldOff]);
+    if (a.raise) {
+      out.push([a.minRaiseTo >= a.maxRaiseTo ? fill(TEXTS.raiseAllInOnly, { max: num(a.maxRaiseTo) })
+        : fill(TEXTS.raiseRange, { verb: a.currentBet === 0 ? "벳(첫 베팅)" : "레이즈", min: num(a.minRaiseTo), max: num(a.maxRaiseTo) })]);
+    } else if (a.call && me.chips <= a.callAmount) {
+      out.push([TEXTS.noRaiseShort]);
+    } else {
+      out.push([others.length && allIn.length === others.length ? TEXTS.noRaiseAllIn : TEXTS.noRaiseClosed]);
+    }
+    potNote();
+    // state.hint는 승률 힌트를 켠 게임의 내 차례에만 온다.
+    if (state.hint && a.call) {
+      out.push([fill(TEXTS.potOdds, { call: num(a.callAmount), total: num(state.pot + a.callAmount),
+        need: Math.round(state.hint.potOdds * 100), equity: Math.round(state.hint.equity * 100) }), "note"]);
+    }
+    return out;
+  }
+
+  let shownNow = "";
+  function renderNow() {
+    const rows = situation();
+    const key = JSON.stringify(rows);
+    if (key === shownNow) return;  // 같으면 다시 그리지 않는다
+    shownNow = key;
+    $("now").replaceChildren(el("h3", "", TEXTS.nowTitle), ...rows.map(([text, cls]) => line(text, cls)));
+  }
+
+  // ---- 핸드 리뷰 (서버가 계산한 결과를 그리기만 한다) ----
+  function why(compare, review, winnerSeat, loserSeat, tiedSeats) {
+    const entry = (seat) => review.entries.find((e) => e.seat === seat);
+    const win = entry(winnerSeat);
+    if (compare.type === "tie") {
+      const names = tiedSeats.map((s) => review.names[s]).join(", ");
+      return fill(compare.boardPlays ? TEXTS.why.boardTie : TEXTS.why.tie, { names });
+    }
+    const lose = entry(loserSeat);
+    const shared = {};
+    compare.shared.forEach((r, i) => { shared["s" + i] = rankText(r); });
+    const values = Object.assign({ A: review.names[winnerSeat], B: review.names[loserSeat], hand: win.handName,
+      strong: win.handName, weak: lose.handName, x: rankText(compare.winRank), y: rankText(compare.loseRank) }, shared);
+    if (compare.type === "category") return fill(TEXTS.why.category, values);
+    // 키커에서 갈렸을 때는 "K 페어와 6 페어"처럼 같았던 부분을 말해 준다.
+    const sharedText = TEXTS.shared[CATEGORY_KEYS[win.category]];
+    values.shared = sharedText ? fill(sharedText, shared) : win.handName;
+    return fill(TEXTS.why[compare.role] || TEXTS.why.highCard, values);
+  }
+
+  function cards(codes, keys) {
+    const box = el("span", "rv-cards");
+    codes.forEach((code, i) => {
+      const node = cardNode(code);
+      if (keys && keys[i]) node.classList.add("rv-key");
+      box.append(node);
+    });
+    return box;
+  }
+
+  function reviewNodes(review) {
+    const name = (seat) => review.names[seat];
+    const entry = (seat) => review.entries.find((e) => e.seat === seat);
+    const winners = (pot) => pot.winners.map((w) => name(w.seat) + (pot.winners.length > 1 ? " " + num(w.amount) : "")).join(", ");
+    const out = [];
+
+    if (!review.showdown) {
+      for (const pot of review.pots) {
+        for (const w of pot.winners) out.push(line(fill(TEXTS.noShowdown, { name: name(w.seat), amount: num(w.amount) }), "rv-head"));
+      }
+    } else {
+      review.pots.forEach((pot, i) => {
+        out.push(line(fill(TEXTS.headline, { winners: winners(pot), pot: TEXTS.potName(i), amount: num(pot.amount),
+          handName: entry(pot.winners[0].seat).handName }), "rv-head"));
+      });
+      const reasons = new Set();
+      for (const pot of review.pots) {
+        if (!pot.compare) continue;
+        const tied = pot.winners.map((w) => w.seat);
+        if (tied.length > 1) reasons.add(why({ type: "tie", boardPlays: pot.compare.boardPlays }, review, tied[0], -1, tied));
+        if (pot.loserSeat >= 0) reasons.add(why(pot.compare, review, tied[0], pot.loserSeat, tied));
+      }
+      if (reasons.size) out.push(el("h4", "", TEXTS.whyTitle), ...[...reasons].map((r) => line(r)));
+
+      out.push(el("h4", "", TEXTS.rankTitle), line(TEXTS.keyLegend, "rv-muted"));
+      for (const e of review.entries) {
+        const row = el("div", "rv-entry");
+        row.append(line(fill(TEXTS.place, { place: e.place }) + " " + name(e.seat) + " · " + e.handName, "rv-name"));
+        const shown = el("div", "rv-row");
+        shown.append(el("span", "rv-muted", TEXTS.hole), cards(e.hole), el("span", "rv-muted", TEXTS.best), cards(e.best, e.key));
+        row.append(shown);
+        if (e.versusNext) row.append(line(why(e.versusNext, review, e.seat, e.nextSeat, [e.seat, e.nextSeat]), "rv-muted"));
+        out.push(row);
+      }
+    }
+    if (review.folded.length) out.push(line(fill(TEXTS.foldedList, { names: review.folded.map(name).join(", ") }), "rv-muted"));
+
+    out.push(el("h4", "", TEXTS.potTitle));
+    review.pots.forEach((pot, i) => {
+      out.push(line(fill(TEXTS.potLine, { pot: TEXTS.potName(i), amount: num(pot.amount),
+        winners: pot.winners.map((w) => name(w.seat) + " " + num(w.amount)).join(", ") })));
+      if (pot.cappedBy.length) out.push(line(fill(TEXTS.capped, { names: pot.cappedBy.map(name).join(", "), pot: TEXTS.potName(i) }), "rv-muted"));
+      if (review.showdown && pot.eligible.length === 1) out.push(line(fill(TEXTS.uncontested, { name: name(pot.eligible[0]) }), "rv-muted"));
+      if (pot.oddChip) out.push(line(TEXTS.oddChip, "rv-muted"));
+    });
+
+    if (review.me) {
+      out.push(el("h4", "", TEXTS.flowTitle));
+      const [flop, turn, river] = review.me.streets.map((s) => s.status);
+      let key;
+      if (review.me.won) key = turn === "behind" && river !== "behind" ? "wonComeback" : turn === "ahead" ? "wonAhead" : "wonOther";
+      else key = turn === "ahead" ? "lostOnRiver" : flop === "ahead" ? "lostOnTurn" : flop === "behind" && turn === "behind" ? "lostBehind" : "lostOther";
+      out.push(line(TEXTS.comment[key]));
+      for (const s of review.me.streets) {
+        out.push(line(TEXTS.streetNames[s.street] + ": " + TEXTS.status[s.status]
+          + (s.equity === null ? "" : " · " + fill(TEXTS.equity, { equity: Math.round(s.equity * 100) })), "rv-muted"));
+      }
+    }
+    return out;
+  }
+
+  let shownReview = "";
+  function renderReview() {
+    const box = $("review"), review = state.review;
+    box.hidden = !review;
+    if (!review) { shownReview = ""; return; }
+    const current = state.handOver || state.phase === "over";
+    $("reviewTitle").textContent = fill(current ? TEXTS.reviewTitle : TEXTS.reviewPast, { hand: review.handNumber });
+    // 판이 끝났을 때는 버튼 위로, 다음 판이 시작되면 힌트 아래로 옮긴다.
+    const controls = $("fold").closest(".panel");
+    if (current && box.nextElementSibling !== controls) {
+      controls.before(box);
+    } else if (!current && box.previousElementSibling !== $("hint")) {
+      const before = box.getBoundingClientRect();
+      $("hint").after(box);
+      // 리뷰를 읽고 있었다면 읽던 자리가 화면에서 움직이지 않게 한다.
+      if (before.top < innerHeight && before.bottom > 0) window.scrollBy(0, box.getBoundingClientRect().top - before.top);
+    }
+    const key = state.code + JSON.stringify(review);
+    if (key === shownReview) return;
+    shownReview = key;
+    $("reviewBody").replaceChildren(...reviewNodes(review));
+  }
+
+  // 기존 화면 갱신(renderHint)이 힌트 칸을 새로 그릴 때마다 함께 갱신한다.
+  new MutationObserver(() => {
+    if (!state || !state.players) return;
+    renderNow();
+    renderReview();
+  }).observe($("hint"), { childList: true });
+})();
 </script>
 
 <script>

@@ -19,7 +19,7 @@ CMake가 없을 때는 컴파일러로 바로 빌드할 수 있습니다 (macOS/
 
 ```bash
 mkdir -p build
-CORE=(src/card.cpp src/evaluator.cpp src/pot.cpp src/game.cpp src/equity.cpp src/bots.cpp src/human_player.cpp)
+CORE=(src/card.cpp src/evaluator.cpp src/pot.cpp src/review.cpp src/game.cpp src/equity.cpp src/bots.cpp src/human_player.cpp)
 WEB=(src/web_json.cpp src/web_session.cpp src/web_server.cpp)
 WEBFLAGS=(-isystem third_party -pthread -DHOLDEM_WEB_DIR="\"$PWD/web\"")
 c++ -std=c++17 -O2 -Wall -Wextra -Isrc "${WEBFLAGS[@]}" "${CORE[@]}" "${WEB[@]}" src/main.cpp -o build/holdem
@@ -28,6 +28,7 @@ for t in evaluator pot game; do
   c++ -std=c++17 -O2 -Wall -Wextra -Isrc "${CORE[@]}" tests/test_$t.cpp -o build/test_$t && ./build/test_$t
 done
 c++ -std=c++17 -O2 -Wall -Wextra -Isrc "${WEBFLAGS[@]}" "${CORE[@]}" "${WEB[@]}" tests/test_web.cpp -o build/test_web && ./build/test_web
+c++ -std=c++17 -O2 -Wall -Wextra -Isrc "${WEBFLAGS[@]}" "${CORE[@]}" "${WEB[@]}" tests/test_review.cpp -o build/test_review && ./build/test_review
 ```
 
 모든 빌드는 `-Wall -Wextra`로 경고 없이 컴파일됩니다.
@@ -124,6 +125,21 @@ PORT=9000 ./build/holdem --web
 | `GET /api/state` | 내 시점의 상태. 방이 없으면 `{"hasGame":false, ...}` |
 | `POST /api/action` | `{"action":"fold\|check\|call\|raise\|allin","amount":N,"turnId":T}`. `amount`는 `raise`의 이번 라운드 **총액**, `turnId`는 선택 |
 
+`GET /api/state`의 안내/리뷰용 필드:
+
+| 필드 | 내용 |
+|---|---|
+| `actingSeat` | 지금 결정 중인 좌석 (봇 포함, 없으면 -1) |
+| `review` | 마지막으로 끝난 판의 리뷰. 아직 없으면 `null`, 다음 판 중에도 유지 |
+| `review.handNumber, showdown, board, names` | 판 번호, 쇼다운 여부, 공용 카드, 좌석별 이름 |
+| `review.entries[]` | 쇼다운 참여자(강한 순): `seat, place, hole, best, key, category, handName, nextSeat, versusNext` |
+| `review.pots[]` | `amount, winners[{seat,amount}], eligible, cappedBy, loserSeat, oddChip, compare` |
+| `review.folded` | 폴드한 좌석 (카드는 보내지 않음) |
+| `review.me` | 내가 쇼다운에 참여했을 때: `won, streets[{street,status,equity}]` |
+
+`compare`/`versusNext`는 `type`(category, rank, tie), `role`, `winRank`, `loseRank`, `shared`, `boardPlays`입니다.
+안내와 리뷰의 문구는 `web/index.html`의 `TEXTS` 객체에 모여 있습니다.
+
 잘못된 요청은 400, 방 20개가 모두 차면 503으로 응답합니다. 접속자는 쿠키 `sid`로 구분합니다.
 
 ## 서버 배포 (Ubuntu 22.04)
@@ -200,10 +216,11 @@ src/
   human_player.*  콘솔 입력/출력, 힌트         main.cpp      실행 파일
   web_json.*      작은 JSON 도구               web_session.* 게임 방과 게임 스레드
   web_server.*    HTTP 서버와 API
+  review.*        판이 끝난 뒤의 핸드 리뷰 데이터
   bench.cpp       성능/정확도 측정 프로그램 (docs/bench.md 생성)
 web/index.html    웹 화면 (HTML+CSS+JS 한 파일)
 third_party/      httplib.h (cpp-httplib v0.67.0, MIT 라이선스)
-tests/            test_evaluator / test_pot / test_game / test_web (CHECK 방식)
+tests/            test_evaluator / test_pot / test_game / test_web / test_review (CHECK 방식)
 docs/bench.md     측정 결과 전체
 ```
 

@@ -18,6 +18,13 @@ struct GameConfig {
     int bigBlind = 100;
 };
 
+// 팟 하나의 실제 지급 결과
+struct PotResult {
+    int amount = 0;             // 팟 크기
+    std::vector<int> eligible;  // 받을 자격이 있던 좌석
+    std::vector<int> won;       // 좌석별로 이 팟에서 받은 칩 (크기 = 좌석 수)
+};
+
 // 한 판이 끝난 뒤 돌려주는 결과 요약
 struct HandSummary {
     int handNumber = 0;
@@ -31,6 +38,8 @@ struct HandSummary {
     std::vector<std::array<Card, 2>> holes;  // 좌석별 홀 카드 (참여한 좌석만 유효)
     std::vector<bool> dealtIn;           // 이번 판에 카드를 받은 좌석
     std::vector<bool> folded;            // 이번 판에 폴드한 좌석 (쇼다운에서 누구 카드를 공개할지 판단)
+    std::vector<int> contributed;        // 좌석별로 이번 판에 낸 칩 (돌려받은 베팅은 뺀 값)
+    std::vector<PotResult> pots;         // 팟별 지급 결과. [0]이 메인 팟
     std::vector<std::string> history;    // 행동 기록 (핸드 히스토리)
 };
 
