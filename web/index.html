@@ -277,10 +277,8 @@
   .card.flip::after { content: ""; position: absolute; inset: -1px; border-radius: inherit; opacity: 0; animation: cover .45s linear var(--d) backwards; }
   @keyframes flip { from { transform: perspective(500px) rotateY(180deg); } }
   @keyframes cover { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
-  .bet.push { animation: push .4s cubic-bezier(.2, .8, .3, 1.2) var(--d) backwards; }
-  @keyframes push { from { transform: translate(var(--px), var(--py)); opacity: .3; } }
   @media (prefers-reduced-motion: reduce) {
-    .card.deal, .card.flip, .card.flip::after, .bet.push { animation: none; }
+    .card.deal, .card.flip, .card.flip::after { animation: none; }
   }
   /* 아주 좁은 화면(320px) */
   @media (max-width: 340px) {
@@ -288,7 +286,42 @@
     .status { font-size: 9.5px; letter-spacing: -.04em; }
     .mid { top: 266px; }
     .seat.me { top: 380px; }
+    .fx > .fx-turn { top: 378px; }
   }
+  /* ---- 연출 층: 전부 터치를 통과시키고 transform, opacity만 움직인다 ---- */
+  .fx { position: absolute; inset: 0; z-index: 6; overflow: hidden; pointer-events: none; }
+  .fx > * { position: absolute; left: 0; top: 0; pointer-events: none; }
+  .fx-chip { --chip: #b02a3b; --edge: #f3ecd9; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%; background: var(--chip);
+             border: 3px dashed var(--edge); box-shadow: 0 0 0 1px var(--chip), 0 3px 5px rgba(0, 0, 0, .7); }
+  .fx-chip.green { --chip: #1d8a5b; } .fx-chip.blue { --chip: #2d5aa8; } .fx-chip.black { --chip: #26262b; --edge: #e8cf85; }
+  .fx-card { width: 23px; height: 33px; margin: -16px 0 0 -11px; border-radius: 4px; border: 2px solid var(--ivory); background: var(--wine); }
+  /* 손: 손끝이 (0, 0)에 오도록 놓고 위(-y)를 향한다 */
+  .fx-hand { width: 66px; height: 190px; margin: -26px 0 0 -33px; transform-origin: 33px 26px; filter: drop-shadow(0 6px 6px rgba(0, 0, 0, .7)); }
+  .fx-hand.opp { --skin: #8a674f; --skin-shade: #6d5040; }
+  .fx > .fx-spot { inset: 0; background: radial-gradient(circle at var(--x) var(--y), rgba(255, 240, 200, .18) 0 40px, rgba(0, 0, 0, .78) 105px); opacity: 0; }
+  .fx > .fx-big { left: 0; right: 0; top: 190px; text-align: center; font-family: var(--serif); font-size: 52px; font-weight: 800; letter-spacing: .08em;
+            color: #fff1f1; text-shadow: 0 0 4px #fff, 0 0 14px #ff2038, 0 0 34px #ff2038, 0 4px 0 #4a0910; white-space: nowrap; opacity: 0; }
+  .fx > .fx-turn { left: 50%; top: 366px; padding: 5px 16px; border-radius: 20px; background: rgba(5, 20, 12, .92); border: 1px solid #7ff0b5; color: #eafff4;
+             font-weight: 800; font-size: 15px; white-space: nowrap; opacity: 0; }
+  .fx > .fx-gold { width: 190px; height: 190px; margin: -95px 0 0 -95px; border-radius: 50%; opacity: 0;
+             background: radial-gradient(circle, rgba(255, 232, 150, .85), rgba(232, 190, 80, .35) 40%, transparent 68%); }
+  .fx > .fx-gray { inset: 0; background: #808080; mix-blend-mode: saturation; opacity: 0; }
+  .fx > .fx-gray + .fx-gray { display: none; }
+  /* 내 차례: 가장자리를 살짝 어둡게, 카드를 조금 올린다 */
+  .shade, .heart { position: absolute; inset: 0; pointer-events: none; opacity: 0; }
+  .shade { background: radial-gradient(ellipse 80% 60% at 50% 62%, transparent 40%, rgba(0, 0, 0, .8)); transition: opacity .3s; }
+  .table.myturn .shade { opacity: .75; }
+  .table.myturn .seat.me > .cards, .table.myturn .hands, .table.myturn .thumbs { transform: translateY(-9px); }
+  /* 큰 베팅 뒤: 가장자리가 심장 박동처럼 맥동 */
+  .heart { z-index: 5; background: radial-gradient(ellipse 80% 70% at 50% 50%, transparent 45%, rgba(40, 0, 6, .95)); }
+  .table.tense .heart { animation: heart 1.5s ease-in-out infinite; }
+  @keyframes heart { 0%, 40%, 100% { opacity: .35; } 10% { opacity: .85; } 20% { opacity: .5; } 28% { opacity: .75; } }
+  .potpile.bump { animation: bump .3s ease-out .35s; }
+  @keyframes bump { 40% { transform: scale(1.35); } }
+  #skipRow { justify-content: center; min-height: 44px; font-size: 14px; color: var(--muted); cursor: pointer; }
+  #screen-game #skipRow { flex-wrap: nowrap; border: 0; }
+  @media (prefers-reduced-motion: reduce) { .table.tense .heart, .potpile.bump { animation: none; } }
+
   @media (min-width: 600px) {
     .table { --seat-w: 132px; height: 548px; }
     .table::before { inset: 34px 0 40px; }
@@ -560,6 +593,7 @@
 
     <div class="panel hint" id="hint"></div>
     <div class="panel"><div id="log"></div></div>
+    <label id="skipRow"><input type="checkbox" id="skipFx"> 연출 건너뛰기</label>
     <div class="row">
       <button class="primary" id="restart" hidden>다시 하기</button>
       <button class="leave">나가기</button>
@@ -972,13 +1006,280 @@ for (const id of ["chips", "sb", "bb", "bots", "useHint"]) {
   $(id).addEventListener("input", () => { markPreset(""); checkSetup(); });
 }
 
+// ---- 겉모습 전용: 칩 이동과 긴장감 연출 ----
+// 서버의 행동 기록(state.log)에서 새로 생긴 줄을 읽어 연출한다. 게임 진행은 기다리지 않고, 버튼도 막지 않는다.
+const FX = (() => {
+  const table = $("table");
+  const still = window.matchMedia("(prefers-reduced-motion: reduce)");
+  // "연출 건너뛰기": localStorage가 막혀 있으면 이 변수에만 남는다.
+  let skip = recall("skipFx") === "1";
+  const off = () => skip || still.matches || document.hidden;
+
+  const shade = el("div", "shade"), heart = el("div", "heart"), layer = el("div", "fx");
+  layer.setAttribute("aria-hidden", "true");
+  table.prepend(shade);
+  table.append(heart, layer);
+
+  let timers = [];
+  let prevLog = null, prevKey = "", turnShown = -1;
+  let pot = 0, bets = {}, tense = false;  // 기록을 따라 계산한 이번 판의 팟, 라운드 베팅, 긴장 상태
+
+  // 남은 연출을 즉시 끝낸다.
+  function clear() {
+    timers.forEach(clearTimeout);
+    timers = [];
+    layer.replaceChildren();
+    table.getAnimations().forEach((a) => a.cancel());
+  }
+  const later = (ms, run) => timers.push(setTimeout(run, ms));
+
+  // 연출 층에 요소를 하나 올리고, 끝나면 지운다.
+  function play(node, frames, options) {
+    layer.append(node);
+    const animation = node.animate(frames, Object.assign({ fill: "both", easing: "ease-in-out" }, options));
+    animation.onfinish = () => node.remove();
+    return node;
+  }
+  const move = (p, extra) => "translate(" + p[0] + "px, " + p[1] + "px)" + (extra || "");
+  function middle(node) {
+    const r = node.getBoundingClientRect(), t = table.getBoundingClientRect();
+    return [r.left + r.width / 2 - t.left, r.top + r.height / 2 - t.top];
+  }
+
+  // 화면의 위치들. 좌석은 1초마다 새로 만들어지므로 쓸 때마다 다시 찾는다.
+  const seatAt = (i) => table.querySelectorAll(":scope > .seat")[i];
+  const potPoint = () => middle($("pot"));
+  function stackPoint(i) { const s = seatAt(i); return s && middle(s.querySelector(".own") || s.querySelector(".name")); }
+  function betPoint(i) {
+    const s = seatAt(i);
+    if (!s) return null;
+    const bet = s.querySelector(".bet");
+    if (bet) return middle(bet);
+    const a = stackPoint(i), b = potPoint();
+    return [a[0] + (b[0] - a[0]) * 0.45, a[1] + (b[1] - a[1]) * 0.45];
+  }
+
+  const CHIPS = ["red", "green", "black", "blue"];
+  function betChips(i, wait) {
+    const from = stackPoint(i), to = betPoint(i);
+    if (!from || !to) return;
+    for (let n = 0; n < 3; n++) {
+      play(el("span", "fx-chip " + CHIPS[n]), [
+        { transform: move(from), opacity: 0 },
+        { transform: move(from), opacity: 1, offset: 0.05 },
+        { transform: move([to[0] + (n - 1) * 5, to[1] - n * 3]), opacity: 1, offset: 0.85 },
+        { transform: move([to[0] + (n - 1) * 5, to[1] - n * 3]), opacity: 0 },
+      ], { duration: 450, delay: wait + n * 70 });
+    }
+    const pile = table.querySelector(".potpile");
+    pile.classList.remove("bump");
+    void pile.offsetWidth;  // 같은 애니메이션을 다시 시작하게 한다
+    pile.classList.add("bump");
+  }
+
+  function foldCards(i) {
+    const s = seatAt(i);
+    if (!s) return;
+    const from = middle(s.querySelector(".cards")), center = potPoint();
+    const to = [from[0] + (center[0] - from[0]) * 0.75, from[1] + (center[1] - from[1]) * 0.75];
+    for (const side of [-1, 1]) {
+      play(el("div", "fx-card"), [
+        { transform: move([from[0] + side * 13, from[1]]), opacity: 1 },
+        { transform: move([to[0] + side * 6, to[1]], " rotate(" + side * 40 + "deg) scale(.8)"), opacity: 0 },
+      ], { duration: 550 });
+    }
+  }
+
+  function flashBig(i, allIn) {
+    const s = seatAt(i);
+    if (!s) return;
+    const at = middle(s.querySelector(".name"));
+    const spot = el("div", "fx-spot");
+    spot.style.setProperty("--x", at[0] + "px");
+    spot.style.setProperty("--y", at[1] + "px");
+    play(spot, [{ opacity: 0 }, { opacity: 1, offset: 0.2 }, { opacity: 1, offset: 0.7 }, { opacity: 0 }], { duration: 1300 });
+    play(el("div", "fx-big", allIn ? "ALL IN" : "BIG BET"), [
+      { opacity: 0, transform: "scale(1.8)" }, { opacity: 1, transform: "scale(1)", offset: 0.2 },
+      { opacity: 1, transform: "scale(1.04)", offset: 0.75 }, { opacity: 0, transform: "scale(1.1)" },
+    ], { duration: 1300 });
+  }
+
+  function myTurnBanner() {
+    play(el("div", "fx-turn", "내 차례입니다"), [
+      { opacity: 0, transform: "translate(-50%, 10px)" }, { opacity: 1, transform: "translate(-50%, 0)", offset: 0.15 },
+      { opacity: 1, transform: "translate(-50%, 0)", offset: 0.8 }, { opacity: 0, transform: "translate(-50%, -6px)" },
+    ], { duration: 1500 });
+  }
+
+  // 손 그림: 위를 향한 손과 소매 (정해진 문자열만 넣는다)
+  const HAND = '<svg viewBox="0 0 66 190" width="66" height="190"><path fill="var(--sleeve)" d="M12 84h42l8 106H4z"/><path fill="#eee6d4" d="M13 76h40v12H13z"/>'
+    + '<path fill="var(--skin)" stroke="var(--skin-shade)" stroke-width="1.5" d="M16 78 10 56 2 42q-1-8 6-5l11 13-3-34q4-9 9 0l4 27 1-35q5-8 9 0l1 35 6-28q7-7 9 2l-4 33 7-17q8-5 7 5l-8 28-6 16z"/></svg>';
+  function hand(className) {
+    const node = el("div", "fx-hand " + className);
+    node.innerHTML = HAND;
+    return node;
+  }
+
+  // 팟 가져가기: 이긴 사람 쪽에서 손이 들어와 칩을 쓸어 간다. 전체 0.95초.
+  function sweep(winners) {
+    layer.querySelectorAll(".waiting").forEach((n) => n.remove());
+    const from = potPoint();
+    const timing = { duration: 950 };
+    winners.forEach(({ seat, isMe }, w) => {
+      const to = stackPoint(seat);
+      if (!to) return;
+      const home = isMe ? [table.clientWidth / 2, table.clientHeight - 60] : middle(seatAt(seat).querySelector(".name"));
+      // 나눠 가질 때는 팟을 옆으로 갈라서 잡는다
+      const grab = [from[0] + (w - (winners.length - 1) / 2) * 34, from[1]];
+      const path = (start, mid, end, rotate) => [
+        { transform: move(start, rotate), opacity: 0 },
+        { transform: move(start, rotate), opacity: 1, offset: 0.05 },
+        { transform: move(mid, rotate), opacity: 1, offset: 0.4 },
+        { transform: move(end, rotate), opacity: 1, offset: 0.9 },
+        { transform: move(end, rotate), opacity: 0 },
+      ];
+      if (isMe) {
+        // 두 손이 아래에서 올라와 칩 더미를 양옆에서 끌어모은다
+        for (const side of [-1, 1]) {
+          const bottom = table.clientHeight + 40;
+          play(hand("mine"), path([grab[0] + side * 90, bottom], [grab[0] + side * 24, grab[1] - 10],
+            [home[0] + side * 22, home[1]], " rotate(" + -side * 24 + "deg)" + (side > 0 ? " scaleX(-1)" : "")), timing);
+        }
+      } else {
+        const angle = Math.atan2(grab[1] - home[1], grab[0] - home[0]) * 180 / Math.PI + 90;
+        play(hand("opp"), path(home, [grab[0], grab[1] + 4], home, " rotate(" + angle + "deg)"), timing);
+      }
+      const count = winners.length > 1 ? 5 : 8;
+      for (let n = 0; n < count; n++) {
+        const jitter = [(n % 4 - 1.5) * 9, (n % 3 - 1) * 7];
+        const start = [grab[0] + jitter[0], grab[1] + jitter[1]];
+        const end = isMe ? [home[0] + jitter[0], home[1] + 20 + jitter[1]] : [to[0] + jitter[0] / 2, to[1] + jitter[1] / 2];
+        play(el("span", "fx-chip " + CHIPS[n % 4]), [
+          { transform: move(start), opacity: 1 }, { transform: move(start), opacity: 1, offset: 0.4 },
+          { transform: move(end), opacity: 1, offset: 0.9 }, { transform: move(end), opacity: 0 },
+        ], timing);
+      }
+    });
+  }
+
+  function gold(point, duration) {
+    const node = el("div", "fx-gold");
+    play(node, [
+      { opacity: 0, transform: move(point, " scale(.4)") }, { opacity: 1, transform: move(point, " scale(1)"), offset: 0.3 },
+      { opacity: 0, transform: move(point, " scale(1.4)") },
+    ], { duration });
+  }
+
+  // 새로 생긴 기록 줄: 앞부분이 직전 기록의 끝부분과 겹치는 만큼을 뺀다.
+  function newLines(log) {
+    if (prevLog === null) return log;
+    for (let k = Math.min(prevLog.length, log.length); k > 0; k--) {
+      if (prevLog.slice(-k).every((line, i) => line === log[i])) return log.slice(k);
+    }
+    return log;
+  }
+
+  // reveal: 쇼다운이면 { flipAt: 카드가 뒤집힐 때까지 남은 ms }, 아니면 null
+  function update(reveal) {
+    const key = state.code + ":" + state.handNumber;
+    const first = prevLog === null || prevKey.split(":")[0] !== state.code;  // 처음 보는 게임은 조용히 따라잡는다
+    let lines = first ? state.log : newLines(state.log);
+    if (key !== prevKey) { clear(); tense = false; }
+    prevKey = key;
+    prevLog = state.log.slice();
+
+    const header = lines.map((l) => l.startsWith("=====")).lastIndexOf(true);
+    if (header >= 0) { clear(); pot = 0; bets = {}; tense = false; lines = lines.slice(header + 1); }
+
+    const quiet = first || off();
+    const wins = {};
+    let wait = 0;
+    for (const line of lines) {
+      if (line.startsWith("[")) { bets = {}; continue; }
+      const cut = line.indexOf(": ");
+      const name = line.slice(0, cut), text = line.slice(cut + 2);
+      const i = state.players.findIndex((p) => p.name === name);
+      if (cut < 0 || i < 0) continue;
+      let m;
+      if (text === "폴드") {
+        if (!quiet) foldCards(i);
+      } else if ((m = text.match(/^콜 받지 못한 베팅 (\d+) 반환/))) {
+        pot -= Number(m[1]);
+        bets[name] -= Number(m[1]);
+      } else if ((m = text.match(/에서 (\d+) 획득/))) {
+        wins[i] = true;
+      } else if ((m = text.match(/^(스몰 블라인드|빅 블라인드|콜|벳|레이즈) (\d+)( \(올인\))?/))) {
+        const kind = m[1], amount = Number(m[2]), allIn = !!m[3];
+        const before = bets[name] || 0;
+        const added = kind === "벳" || kind === "레이즈" ? amount - before : amount;
+        const big = allIn || ((kind === "벳" || kind === "레이즈") && added >= pot * 0.75);
+        bets[name] = before + added;
+        pot += added;
+        const opponent = !state.players[i].isMe;
+        if (big && opponent) tense = true;
+        if (!quiet) {
+          betChips(i, wait);
+          wait += 90;
+          if (big && opponent) flashBig(i, allIn);
+        }
+      }
+    }
+
+    const winners = Object.keys(wins).map((i) => ({ seat: Number(i), isMe: state.players[i].isMe }));
+    if (winners.length) tense = false;
+    if (winners.length && !quiet) {
+      const flipAt = reveal ? reveal.flipAt : 0;
+      const payAt = reveal ? flipAt + 450 : 250;
+      // 가져가기 전까지 가운데에 칩을 남겨 둔다
+      const center = potPoint();
+      for (let n = 0; n < 8; n++) {
+        const node = el("span", "fx-chip waiting " + CHIPS[n % 4]);
+        node.style.transform = move([center[0] + (n % 4 - 1.5) * 9, center[1] + (n % 3 - 1) * 7]);
+        layer.append(node);
+      }
+      if (reveal) {
+        // 멈칫하며 살짝 확대하고, 뒤집히는 순간 금빛
+        table.animate([{ transform: "scale(1)" }, { transform: "scale(1.03)", offset: 0.45 }, { transform: "scale(1.03)", offset: 0.75 }, { transform: "scale(1)" }],
+          { duration: flipAt + 700, easing: "ease-in-out" });
+        later(flipAt + 150, () => gold(middle($("board")), 600));
+      }
+      later(payAt, () => {
+        sweep(winners);
+        winners.forEach((w) => { const p = stackPoint(w.seat); if (p) gold(p, 950); });
+        const me = state.players.find((p) => p.isMe);
+        if (reveal && me && me.inHand && !me.folded && !winners.some((w) => w.isMe)) {
+          play(el("div", "fx-gray"), [{ opacity: 0 }, { opacity: 1, offset: 0.2 }, { opacity: 1, offset: 0.7 }, { opacity: 0 }], { duration: 1400 });
+        }
+      });
+    }
+
+    const mine = state.myTurn && !off();
+    table.classList.toggle("myturn", mine);
+    table.classList.toggle("tense", tense && !off());
+    if (mine && !first && state.turnId !== turnShown) myTurnBanner();
+    if (state.myTurn) turnShown = state.turnId;
+  }
+
+  $("skipFx").checked = skip;
+  $("skipFx").onchange = () => {
+    skip = $("skipFx").checked;
+    remember("skipFx", skip ? "1" : "0");
+    if (skip) {
+      clear();
+      table.classList.remove("myturn", "tense");
+      table.querySelectorAll(".deal, .flip").forEach((n) => n.classList.remove("deal", "flip"));
+    }
+  };
+
+  return { off, update };
+})();
+
 // ---- 겉모습 전용: 1인칭 테이블 장식 ----
 // renderSeats가 1초마다 좌석을 새로 만들기 때문에, 그때마다 장식을 다시 붙인다.
 // 애니메이션은 "시작한 시각"을 기억해 두고 음수 지연으로 이어서 재생한다 (처음부터 반복되지 않게).
 (() => {
   const table = $("table");
   const TRAITS = { "타이트": "신중함", "루즈": "자주 참여", "공격형": "세게 베팅", "콜링스테이션": "잘 안 접음", "확률계산": "확률대로" };
-  const still = window.matchMedia("(prefers-reduced-motion: reduce)");
   let memo = { key: "" };
 
   // 손 그림 (모두 정해진 문자열이라 innerHTML을 써도 안전하다)
@@ -1032,7 +1333,7 @@ for (const id of ["chips", "sb", "bb", "bots", "useHint"]) {
     const now = performance.now();
     const bb = state.settings.bb;
     const key = state.code + ":" + state.handNumber;
-    if (memo.key !== key) memo = { key, dealt: now, board: [], shown: {}, pushed: {}, bets: [], top: 0 };
+    if (memo.key !== key) memo = { key, dealt: now, board: [], shown: {} };
 
     potPile.replaceChildren(...pile(state.pot, bb, 4, "").children);
     potPile.className = "potpile pile";
@@ -1061,22 +1362,11 @@ for (const id of ["chips", "sb", "bb", "bots", "useHint"]) {
       if (p.chips > 0) seat.append(pile(p.chips, bb, 2, "own"));
       if (p.bet > 0) {
         const bet = pile(p.bet, bb, 3, "bet");
-        // 레이즈: 지금까지의 최고 베팅보다 커졌을 때 앞으로 밀어 내는 연출
-        if (memo.top > 0 && p.bet > memo.top && p.bet > (memo.bets[i] || 0)) memo.pushed[i] = now;
-        if (!still.matches && now - memo.pushed[i] < 400) {
-          const [px, py] = [[0, 30], [-30, 0], [-26, -22], [0, -30], [26, -22], [30, 0]][slot];
-          bet.style.setProperty("--px", px + "px");
-          bet.style.setProperty("--py", py + "px");
-          animate(bet, "push", memo.pushed[i] - now);
-        }
         seat.append(bet);
       }
     });
-    memo.bets = state.players.map((p) => p.bet);
-    memo.top = Math.max(0, ...memo.bets);
-
     // 딜링: 딜러 버튼 자리에서 각 카드가 날아온다
-    if (!still.matches && dealer && !state.handOver) {
+    if (!FX.off() && dealer && !state.handOver) {
       const from = center(dealer);
       const cards = seats.flatMap((s) => [...s.querySelectorAll(".card")]);
       const targets = cards.map(center);
@@ -1089,21 +1379,35 @@ for (const id of ["chips", "sb", "bb", "bots", "useHint"]) {
       });
     }
 
+    // 쇼다운: 리버(또는 상대 카드)를 뒤집기 전에 0.8초 멈칫한다
+    const showdown = state.handOver && state.players.some((p) => !p.isMe && p.cards.length);
+    const pause = showdown && memo.revealAt === undefined && !FX.off() ? 800 : 0;
+
     // 공용 카드는 한 장씩 뒤집힌다
     let fresh = 0;
+    let riverNow = false;
     [...$("board").children].forEach((card, i) => {
-      if (memo.board[i] === undefined) memo.board[i] = now + 220 * fresh++;
-      if (!still.matches && now - memo.board[i] < 450) animate(card, "flip", memo.board[i] - now);
+      if (memo.board[i] === undefined) {
+        memo.board[i] = now + 220 * fresh++ + (i === 4 ? pause : 0);
+        if (i === 4) riverNow = true;
+      }
+      if (!FX.off() && now - memo.board[i] < 450) animate(card, "flip", memo.board[i] - now);
     });
-    // 쇼다운: 상대 카드가 뒤집혀 공개된다
+    let reveal = null;
+    if (showdown && memo.revealAt === undefined) {
+      memo.revealAt = riverNow ? memo.board[4] : now + pause;
+      reveal = { flipAt: Math.max(0, memo.revealAt - now) };
+    }
+    // 상대 카드가 뒤집혀 공개된다
     seats.forEach((seat, i) => {
       const p = state.players[i];
       if (!p || p.isMe || !p.cards.length) return;
-      if (memo.shown[i] === undefined) memo.shown[i] = now;
-      if (!still.matches && now - memo.shown[i] < 450) {
+      if (memo.shown[i] === undefined) memo.shown[i] = showdown ? memo.revealAt : now;
+      if (!FX.off() && now - memo.shown[i] < 450) {
         seat.querySelectorAll(".card").forEach((card) => animate(card, "flip", memo.shown[i] - now));
       }
     });
+    FX.update(reveal);
   }
 
   // 좌석, 공용 카드, 팟이 다시 그려질 때 실행 (우리가 좌석 안에 붙이는 것은 감시하지 않는다)
