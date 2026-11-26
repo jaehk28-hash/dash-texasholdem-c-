@@ -42,9 +42,6 @@
   h1 { font-size: 20px; white-space: nowrap; }
   #info { font-size: 13px; color: var(--muted); text-align: center; min-width: 0; }
   #showRules { white-space: nowrap; }
-  /* 시작 화면에서는 큰 제목이 따로 있으므로 머리글 제목을 숨긴다 */
-  .wrap:has(#screen-home:not([hidden])) header h1 { visibility: hidden; }
-
   /* 버튼: 기본은 검은 바탕 + 금색 테두리 */
   button { font: inherit; font-weight: 600; border: 1px solid var(--gold); border-radius: 8px; padding: 10px 12px; min-height: 44px; cursor: pointer;
            background: linear-gradient(#17191a, #0a0b0b); color: var(--gold-light); box-shadow: 0 2px 6px rgba(0, 0, 0, .5);
@@ -62,20 +59,79 @@
   #allin { background: linear-gradient(#962a39, var(--wine) 55%, #561520); border: 2px solid var(--gold); color: #f6df9c; font-weight: 800; font-size: 17px; letter-spacing: .08em; }
   #allin:not(:disabled) { box-shadow: 0 0 14px rgba(190, 50, 70, .65), inset 0 0 0 1px rgba(232, 207, 133, .35); }
 
-  /* 시작 화면 장식: 큰 제목과 칩 더미 */
-  .hero { text-align: center; padding: 18px 0 14px; }
-  .screen .hero-title { font-family: var(--serif); font-size: clamp(42px, 13vw, 68px); font-weight: 700; line-height: 1.15; color: var(--gold-light);
-                text-shadow: 0 2px 0 #5c4718, 0 0 28px rgba(201, 162, 75, .35); }
-  .hero-rule { width: 160px; height: 1px; margin: 10px auto 22px; background: linear-gradient(90deg, transparent, var(--gold), transparent); }
-  .chip-pile { display: flex; justify-content: center; align-items: flex-end; padding-left: 14px; }
-  .deco-chip { position: relative; width: 58px; height: 58px; margin-left: -14px; border-radius: 50%; flex: none;
-               background: repeating-conic-gradient(var(--c) 0 32deg, var(--ivory) 32deg 45deg);
-               box-shadow: 0 6px 10px rgba(0, 0, 0, .65), inset 0 0 0 1px rgba(0, 0, 0, .4); }
-  .deco-chip::after { content: ""; position: absolute; inset: 9px; border-radius: 50%; background: var(--c); border: 2px dashed rgba(243, 236, 217, .75); }
-  .deco-chip:nth-child(even) { transform: translateY(-12px); }
-  .deco-chip.red { --c: #9d2433; } .deco-chip.black { --c: #151515; } .deco-chip.green { --c: #16704a; }
-  .deco-chip.blue { --c: #234b8f; } .deco-chip.white { --c: #d8d2c2; }
-  .deco-chip.white::after { border-color: #5a5548; }
+  /* ===== 시작 화면: 빈티지 네온 간판 ===== */
+  html:has(#screen-home:not([hidden])) { background:
+      radial-gradient(circle at 13% 9%, rgba(235, 238, 255, 0.8) 0 1.2px, transparent 2.0px),
+      radial-gradient(circle at 71% 4%, rgba(235, 238, 255, 0.5) 0 1px, transparent 1.8px),
+      radial-gradient(circle at 37% 21%, rgba(235, 238, 255, 0.55) 0 1px, transparent 1.8px),
+      radial-gradient(circle at 88% 17%, rgba(235, 238, 255, 0.75) 0 1.3px, transparent 2.1px),
+      radial-gradient(circle at 6% 38%, rgba(235, 238, 255, 0.45) 0 1px, transparent 1.8px),
+      radial-gradient(circle at 58% 33%, rgba(235, 238, 255, 0.35) 0 0.9px, transparent 1.7000000000000002px),
+      radial-gradient(circle at 94% 46%, rgba(235, 238, 255, 0.5) 0 1px, transparent 1.8px),
+      radial-gradient(circle at 24% 56%, rgba(235, 238, 255, 0.3) 0 0.9px, transparent 1.7000000000000002px),
+      radial-gradient(circle at 79% 63%, rgba(235, 238, 255, 0.3) 0 1px, transparent 1.8px),
+      radial-gradient(circle at 47% 12%, rgba(235, 238, 255, 0.4) 0 0.8px, transparent 1.6px),
+      radial-gradient(ellipse 80% 22% at 25% 62%, rgba(190, 180, 200, .07), transparent 70%),
+      radial-gradient(ellipse 70% 18% at 80% 78%, rgba(210, 180, 160, .07), transparent 70%),
+      linear-gradient(#05061a 0%, #0a0a1f 40%, #160f14 70%, #1f130b 100%) #1f130b;
+    background-attachment: fixed; }
+  .wrap:has(#screen-home:not([hidden])) header h1 { display: none; }
+  /* 머리글의 작은 네온 간판: 규칙, 처음으로 */
+  #homeBack { display: none; white-space: nowrap; }
+  .wrap:has(#screen-home:not([hidden]) #stepFriends:not([hidden])) #homeBack { display: block; }
+  .wrap:has(#screen-home:not([hidden])) header button { background: #0c0a18; border: 2px solid #ffd98a; color: #fff6dc; border-radius: 10px;
+    text-shadow: 0 0 6px #ffb52e; box-shadow: 0 0 8px rgba(255, 181, 46, .7), inset 0 0 8px rgba(255, 181, 46, .45); }
+
+  .marquee-font, .neon-title { font-family: "Rockwell", "Bodoni 72", "Noto Serif KR", Georgia, serif; font-weight: 800; }
+  /* 마키 간판 */
+  .marquee { position: relative; margin-top: 6px; padding: 26px 22px; text-align: center; border-radius: 26px; border: 3px solid #e8cf85;
+    background: radial-gradient(ellipse at 50% 45%, #b3222f, #7d101c 60%, #4a0910);
+    box-shadow: 0 0 24px rgba(255, 70, 60, .45), inset 0 0 30px rgba(255, 120, 90, .5), 0 12px 28px rgba(0, 0, 0, .7); }
+  .screen .marquee-title { font-size: clamp(30px, 10vw, 62px); line-height: 1.08; color: #fff4d6; letter-spacing: .02em;
+    text-shadow: 0 0 3px #fff, 0 0 10px #ffc552, 0 0 24px #ff8a2a, 0 3px 0 #4a0910; }
+  .marquee-title > span { display: inline-block; margin: 0 .12em; white-space: nowrap; }
+  .marquee-sub { margin-top: 6px; font-size: clamp(12px, 3.6vw, 18px); letter-spacing: .32em; padding-left: .32em; color: #fff0c9;
+    text-shadow: 0 0 8px rgba(255, 190, 80, .9); }
+  .bulbs { position: absolute; display: flex; justify-content: space-between; pointer-events: none; }
+  .bulbs.top, .bulbs.bottom { left: 18px; right: 18px; }
+  .bulbs.left, .bulbs.right { top: 22px; bottom: 22px; flex-direction: column; }
+  .bulbs.top { top: 5px; } .bulbs.bottom { bottom: 5px; } .bulbs.left { left: 5px; } .bulbs.right { right: 5px; }
+  .bulb { width: 8px; height: 8px; border-radius: 50%; background: #fff3cc; box-shadow: 0 0 6px 2px rgba(255, 213, 120, .85);
+    animation: chase 1.2s steps(1) infinite; }
+  @keyframes chase { 0% { opacity: 1; } 34% { opacity: .25; } }
+  .star { position: absolute; width: 16px; height: 16px; fill: #ffe7a3; filter: drop-shadow(0 0 4px #ffb52e); }
+  .star.tl { top: 17px; left: 17px; } .star.tr { top: 17px; right: 17px; }
+  .star.bl { bottom: 17px; left: 17px; } .star.br { bottom: 17px; right: 17px; }
+
+  /* 기둥과 매달린 네온 패널 */
+  #screen-home { gap: 0; }
+  .pole { position: relative; padding: 30px 0 40px; min-height: calc(100vh - 250px); }
+  .pole::before { content: ""; position: absolute; top: 0; bottom: 0; left: calc(50% - 9px); width: 18px;
+    background: linear-gradient(90deg, #17120f, #6b5a4a 45%, #2a211b 70%, #0e0b09); }
+  .sign-stack { position: relative; display: flex; flex-direction: column; align-items: center; gap: 26px; }
+  #screen-home .neon { --glow: #19e6ff; --tint: #c9fbff; width: min(100%, 440px); min-height: 112px; padding: 14px 12px; border-radius: 18px;
+    display: flex; align-items: center; justify-content: center; gap: 14px; background: #0a0d1c; border: 3px solid var(--tint); color: #fff;
+    box-shadow: 0 0 6px var(--glow), 0 0 22px var(--glow), inset 0 0 8px var(--glow), inset 0 0 24px color-mix(in srgb, var(--glow) 45%, transparent),
+                0 12px 22px rgba(0, 0, 0, .6);
+    transition: transform .15s; }
+  #screen-home .neon.pink { --glow: #ff2d78; --tint: #ffd0e0; background: #170812; }
+  #screen-home .neon:hover { transform: scale(1.03); }
+  #screen-home .neon:active { transform: scale(.98); }
+  .neon svg { width: 46px; height: 46px; flex: none; fill: none; stroke: var(--tint); stroke-width: 2.2; stroke-linecap: round;
+    stroke-linejoin: round; filter: drop-shadow(0 0 3px var(--glow)) drop-shadow(0 0 8px var(--glow)); }
+  .neon-text { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .neon-title { font-size: clamp(22px, 7vw, 34px); letter-spacing: .05em; line-height: 1.1;
+    text-shadow: 0 0 2px #fff, 0 0 7px var(--glow), 0 0 14px var(--glow), 0 0 30px var(--glow); }
+  .neon-sub { font-size: 15px; font-weight: 700; color: var(--tint); text-shadow: 0 0 6px color-mix(in srgb, var(--glow) 70%, transparent); }
+
+  /* 가끔 깜빡이는 글자 */
+  .flicker { animation: flicker 7s linear infinite; }
+  .flicker.late { animation-delay: -3.4s; animation-duration: 9s; }
+  @keyframes flicker { 0%, 91%, 93%, 95%, 100% { opacity: 1; } 92% { opacity: .35; } 94% { opacity: .55; } }
+  @media (prefers-reduced-motion: reduce) {
+    .bulb, .flicker { animation: none; opacity: 1; }
+    #screen-home .neon:hover, #screen-home .neon:active { transform: none; }
+  }
 
   /* 6인 테이블: 3열 격자에 좌석을 시계 방향으로 배치. 타원 펠트는 뒤에 따로 그린다 */
   .table { position: relative; isolation: isolate; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 8px; padding: 16px;
@@ -180,6 +236,7 @@
 <div class="wrap">
   <header>
     <h1>♠ 홀덤 연습</h1>
+    <button type="button" id="homeBack">← 처음으로</button>
     <span id="info"></span>
     <button id="showRules">규칙</button>
   </header>
@@ -235,15 +292,42 @@
 
   <!-- 2) 메뉴 -->
   <section class="screen" id="screen-home" hidden>
-    <!-- 장식: 큰 제목과 칩 더미 -->
-    <div class="hero">
-      <h2 class="hero-title">홀덤 연습</h2>
-      <div class="hero-rule"></div>
-      <div class="chip-pile" aria-hidden="true"><span class="deco-chip red"></span><span class="deco-chip black"></span><span class="deco-chip green"></span><span class="deco-chip blue"></span><span class="deco-chip white"></span><span class="deco-chip black"></span><span class="deco-chip red"></span></div>
+    <!-- 마키 간판 -->
+    <div class="marquee">
+        <div class="bulbs top" aria-hidden="true"><span class="bulb" style="animation-delay:-1.2s"></span><span class="bulb" style="animation-delay:-0.8s"></span><span class="bulb" style="animation-delay:-0.4s"></span><span class="bulb" style="animation-delay:-1.2s"></span><span class="bulb" style="animation-delay:-0.8s"></span><span class="bulb" style="animation-delay:-0.4s"></span><span class="bulb" style="animation-delay:-1.2s"></span><span class="bulb" style="animation-delay:-0.8s"></span><span class="bulb" style="animation-delay:-0.4s"></span><span class="bulb" style="animation-delay:-1.2s"></span><span class="bulb" style="animation-delay:-0.8s"></span><span class="bulb" style="animation-delay:-0.4s"></span><span class="bulb" style="animation-delay:-1.2s"></span></div>
+        <div class="bulbs right" aria-hidden="true"><span class="bulb" style="animation-delay:-0.8s"></span><span class="bulb" style="animation-delay:-0.4s"></span><span class="bulb" style="animation-delay:-1.2s"></span><span class="bulb" style="animation-delay:-0.8s"></span><span class="bulb" style="animation-delay:-0.4s"></span></div>
+        <div class="bulbs bottom" aria-hidden="true"><span class="bulb" style="animation-delay:-1.2s"></span><span class="bulb" style="animation-delay:-0.4s"></span><span class="bulb" style="animation-delay:-0.8s"></span><span class="bulb" style="animation-delay:-1.2s"></span><span class="bulb" style="animation-delay:-0.4s"></span><span class="bulb" style="animation-delay:-0.8s"></span><span class="bulb" style="animation-delay:-1.2s"></span><span class="bulb" style="animation-delay:-0.4s"></span><span class="bulb" style="animation-delay:-0.8s"></span><span class="bulb" style="animation-delay:-1.2s"></span><span class="bulb" style="animation-delay:-0.4s"></span><span class="bulb" style="animation-delay:-0.8s"></span><span class="bulb" style="animation-delay:-1.2s"></span></div>
+        <div class="bulbs left" aria-hidden="true"><span class="bulb" style="animation-delay:-0.4s"></span><span class="bulb" style="animation-delay:-0.8s"></span><span class="bulb" style="animation-delay:-1.2s"></span><span class="bulb" style="animation-delay:-0.4s"></span><span class="bulb" style="animation-delay:-0.8s"></span></div>
+        <svg class="star tl" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1l2.9 7.6 8.1.4-6.3 5.1 2.1 7.9L12 17.5 5.2 22l2.1-7.9L1 9l8.1-.4z"/></svg>
+        <svg class="star tr" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1l2.9 7.6 8.1.4-6.3 5.1 2.1 7.9L12 17.5 5.2 22l2.1-7.9L1 9l8.1-.4z"/></svg>
+        <svg class="star bl" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1l2.9 7.6 8.1.4-6.3 5.1 2.1 7.9L12 17.5 5.2 22l2.1-7.9L1 9l8.1-.4z"/></svg>
+        <svg class="star br" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1l2.9 7.6 8.1.4-6.3 5.1 2.1 7.9L12 17.5 5.2 22l2.1-7.9L1 9l8.1-.4z"/></svg>
+        <h2 class="marquee-title marquee-font" aria-label="TEXAS HOLD'EM"><span>TE<span class="flicker">X</span>AS</span> <span>HOLD'EM</span></h2>
+        <div class="marquee-sub marquee-font">PRACTICE ROOM</div>
     </div>
-    <button class="primary big" id="goSolo">🤖 혼자 봇과 하기</button>
-    <button class="big" id="goCreate">🏠 친구와 하기: 방 만들기</button>
-    <button class="big" id="goJoin">🔑 코드로 방 들어가기</button>
+    <!-- 기둥에 매달린 네온 패널 -->
+    <div class="pole">
+      <div class="sign-stack" id="stepStart">
+          <button class="primary big neon" id="goSolo" aria-label="WITH AI, 혼자 봇과 하기">
+            <svg viewBox="0 0 48 48" aria-hidden="true"><rect x="7" y="11" width="21" height="29" rx="3" transform="rotate(-12 17 25)"/><rect x="20" y="8" width="21" height="29" rx="3" transform="rotate(10 30 22)"/><path d="M31 16c3 3.500 6 5 6 8a3 3 0 0 1-5 2l1 4h-5l1-4a3 3 0 0 1-5-2c0-3 4-4.500 7-8z"/></svg>
+            <span class="neon-text"><span class="neon-title">WITH <span class="flicker late">A</span>I</span><span class="neon-sub">혼자 봇과 하기</span></span>
+          </button>
+          <button type="button" class="neon pink" id="goFriends" aria-label="WITH FRIENDS, 친구와 하기">
+            <svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="19"/><circle cx="24" cy="24" r="10"/><path d="M24 5v9M24 34v9M5 24h9M34 24h9M10.600 10.600l6.300 6.300M31 31l6.400 6.400M37.400 10.600L31 17M17 31l-6.400 6.400"/></svg>
+            <span class="neon-text"><span class="neon-title">WITH FRIENDS</span><span class="neon-sub">친구와 하기</span></span>
+          </button>
+      </div>
+      <div class="sign-stack" id="stepFriends" hidden>
+          <button class="big neon" id="goCreate" aria-label="CREATE ROOM, 방 만들기">
+            <svg viewBox="0 0 48 48" aria-hidden="true"><rect x="9" y="7" width="30" height="34" rx="4"/><path d="M24 15v18M15 24h18"/></svg>
+            <span class="neon-text"><span class="neon-title">CR<span class="flicker">E</span>ATE ROOM</span><span class="neon-sub">방 만들기</span></span>
+          </button>
+          <button class="big neon pink" id="goJoin" aria-label="JOIN ROOM, 코드로 방 들어가기">
+            <svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="15" cy="24" r="9"/><path d="M24 24h19M36 24v8M43 24v6"/></svg>
+            <span class="neon-text"><span class="neon-title">JOIN ROOM</span><span class="neon-sub">코드로 방 들어가기</span></span>
+          </button>
+      </div>
+    </div>
   </section>
 
   <!-- 3) 게임 설정 (혼자 하기 / 방 만들기) -->
@@ -645,6 +729,15 @@ poll();
 
 <script>
 "use strict";
+// 시작 화면의 1단계(혼자/친구) <-> 2단계(방 만들기/들어가기) 전환. 서버 요청은 없다.
+function showHomeStep(friends) {
+  $("stepStart").hidden = friends;
+  $("stepFriends").hidden = !friends;
+  $("error").textContent = "";
+}
+$("goFriends").onclick = () => showHomeStep(true);
+$("homeBack").onclick = () => showHomeStep(false);
+
 // 겉모습 전용: 팟과 베팅액 크기(빅 블라인드의 몇 배인지)에 따라 칩 아이콘 색을 정한다.
 // 게임 로직은 건드리지 않고 data-chip 속성만 붙인다.
 (() => {
