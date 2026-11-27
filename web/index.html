@@ -421,18 +421,27 @@
   .head-buttons { display: flex; gap: 6px; flex: none; }
   .head-buttons button { white-space: nowrap; }
   button.link { background: none; border: 0; box-shadow: none; color: var(--gold-light); text-decoration: underline; text-underline-offset: 3px; }
-  #hands { width: min(480px, calc(100vw - 12px)); max-height: calc(100vh - 16px); max-height: calc(100dvh - 16px); margin: auto; padding: 0; overflow: hidden;
+  .modal { width: min(480px, calc(100vw - 12px)); max-height: calc(100vh - 16px); max-height: calc(100dvh - 16px); margin: auto; padding: 0; overflow: hidden;
     border: 1px solid var(--gold); border-radius: 14px; background: #0c100e; color: var(--ink); box-shadow: 0 20px 60px rgba(0, 0, 0, .85); }
-  #hands::backdrop { background: rgba(0, 0, 0, .72); }
-  #hands[open] { animation: fade .15s ease-out; }
-  #hands.closing { animation: fade .15s ease-in reverse forwards; }
+  .modal::backdrop { background: rgba(0, 0, 0, .72); }
+  .modal[open] { animation: fade .15s ease-out; }
+  .modal.closing { animation: fade .15s ease-in reverse forwards; }
   @keyframes fade { from { opacity: 0; } }
-  @media (prefers-reduced-motion: reduce) { #hands[open], #hands.closing { animation: none; } }
-  .hands-box { display: flex; flex-direction: column; max-height: inherit; }
-  .hands-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
-  .hands-head h2 { font-size: 20px; }
-  #closeHands { min-width: 44px; }
-  #handsBody { overflow-y: auto; overscroll-behavior: contain; padding: 8px; display: flex; flex-direction: column; gap: 8px; }
+  @media (prefers-reduced-motion: reduce) { .modal[open], .modal.closing { animation: none; } }
+  .modal-box { display: flex; flex-direction: column; max-height: inherit; }
+  .modal-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  .modal-head h2 { font-size: 20px; }
+  .modal-close { min-width: 44px; }
+  .modal-body { overflow-y: auto; overscroll-behavior: contain; padding: 8px; display: flex; flex-direction: column; gap: 8px; }
+  /* 만든 이야기 */
+  #showStory { display: none; }
+  .wrap:has(#screen-home:not([hidden])) #showStory { display: block; }  /* 시작 화면에서만 */
+  #story .modal-body { padding: 18px 18px 14px; gap: 18px; font-size: 18px; line-height: 1.8; word-break: keep-all; }
+  .story-point { font-family: var(--serif); font-size: 22px; font-weight: 700; color: var(--gold-light); text-align: center; line-height: 1.5; }
+  .story-by { font-size: 13px; color: #9a9a9a; text-align: center; line-height: 1.5; }
+  /* 링크는 글씨를 키우지 않고 누르는 영역만 넓힌다 */
+  .story-by a { color: #b4b4b4; text-underline-offset: 3px; display: inline-block; padding: 12px 2px; margin: -12px 0; }
+  .story-by a:hover, .story-by a:focus-visible { color: var(--gold-light); }
   .hands-note { font-size: 13px; color: var(--gold-light); text-align: center; line-height: 1.5; }
   .hr { border: 1px solid var(--line); border-radius: 10px; padding: 8px 6px; display: flex; flex-direction: column; gap: 5px; }
   .hr.mine { border: 2px solid #7ff0b5; background: rgba(127, 240, 181, .1); }
@@ -509,6 +518,10 @@
   #setupWarn:empty { display: none; }
 
   @media (max-width: 480px) {
+    header { gap: 4px; }
+    .head-buttons { gap: 4px; }
+    header button { padding: 8px 9px; font-size: 14px; }
+    .head-buttons button { min-width: 44px; }
     body { padding: 6px; }
     h1 { font-size: 17px; }
     #info { font-size: 12px; }
@@ -524,6 +537,7 @@
     <button type="button" id="homeBack">← 처음으로</button>
     <span id="info"></span>
     <div class="head-buttons">
+      <button type="button" id="showStory" aria-haspopup="dialog">이야기</button>
       <button type="button" id="showHands" aria-haspopup="dialog">족보</button>
       <button id="showRules">규칙</button>
     </div>
@@ -733,14 +747,31 @@
   </section>
 </div>
 
-<!-- 족보 패널: 열어도 게임 화면과 서버 통신은 그대로 돌아간다 -->
-<dialog id="hands" aria-labelledby="handsTitle">
-  <div class="hands-box">
-    <div class="hands-head">
+<!-- 모달 패널들 (족보, 만든 이야기). 열어도 게임 화면과 서버 통신은 그대로 돌아간다 -->
+<dialog class="modal" id="hands" aria-labelledby="handsTitle">
+  <div class="modal-box">
+    <div class="modal-head">
       <h2 id="handsTitle"></h2>
-      <button type="button" id="closeHands" aria-label="닫기">✕</button>
+      <button type="button" class="modal-close" aria-label="닫기">✕</button>
     </div>
-    <div id="handsBody"></div>
+    <div class="modal-body" id="handsBody"></div>
+  </div>
+</dialog>
+
+<dialog class="modal" id="story" aria-labelledby="storyTitle">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h2 id="storyTitle">만든 이야기</h2>
+      <button type="button" class="modal-close" aria-label="닫기">✕</button>
+    </div>
+    <div class="modal-body">
+      <p>홀덤은 재미있는 카드게임인데, 이름만 들으면 도박장 같은 분위기부터 떠올라서 처음 시작하기가 어렵게 느껴져요.</p>
+      <p>그래서 부담 없이 혼자서도, 친구들과도 온라인으로 즐길 수 있는 연습방을 만들어 봤어요.</p>
+      <p>칩은 모두 연습용이고 실제 돈은 오가지 않아요. 틀려도 괜찮아요.</p>
+      <p class="story-point">일단 해보면서 배우는 홀덤!</p>
+      <p class="story-by">Made by <a href="https://instagram.com/texas.holdem7" target="_blank" rel="noopener noreferrer">@texas.holdem7</a></p>
+      <button type="button" class="primary big modal-close">바로 시작하기</button>
+    </div>
   </div>
 </dialog>
 
@@ -1491,7 +1522,7 @@ function fill(template, values) {
   // 스페이스 또는 Enter = 다음 단계로. 입력칸이나 다른 버튼을 쓰는 중에는 끼어들지 않는다.
   document.addEventListener("keydown", (e) => {
     if (e.key !== " " && e.key !== "Enter") return;
-    if ($("screen-game").hidden || $("gatebar").hidden || $("nextStep").hidden || $("hands").open) return;
+    if ($("screen-game").hidden || $("gatebar").hidden || $("nextStep").hidden || document.querySelector("dialog[open]")) return;
     if (e.repeat) { e.preventDefault(); return; }  // 누르고 있어도 한 번만
     if (e.target.closest("input, select, textarea, summary") || e.target.closest("button:not(:disabled)")) return;
     e.preventDefault();
@@ -1555,29 +1586,32 @@ function fill(template, values) {
     }
   }
 
-  const dialog = $("hands");
+  // ---- 공용 모달: 여는 버튼들과 연결한다. 닫기는 .modal-close, 바깥 클릭, Esc ----
   const quick = window.matchMedia("(prefers-reduced-motion: reduce)");
-  function openHands() {
-    if (dialog.open) return;
-    dialog.classList.remove("closing");
-    markMyHand();
-    dialog.showModal();
-    $("handsBody").scrollTop = 0;
+  function setupModal(dialog, openers, beforeOpen) {
+    function open() {
+      if (dialog.open) return;
+      dialog.classList.remove("closing");
+      if (beforeOpen) beforeOpen();
+      dialog.showModal();
+      dialog.querySelector(".modal-body").scrollTop = 0;
+    }
+    function close() {
+      if (!dialog.open || dialog.classList.contains("closing")) return;
+      if (quick.matches || document.documentElement.classList.contains("reduce-fx")) { dialog.close(); return; }
+      dialog.classList.add("closing");
+      setTimeout(() => { dialog.close(); dialog.classList.remove("closing"); }, 140);
+    }
+    openers.forEach((button) => { button.onclick = open; });
+    dialog.querySelectorAll(".modal-close").forEach((button) => { button.onclick = close; });
+    dialog.addEventListener("cancel", (e) => { e.preventDefault(); close(); });  // Esc
+    // 바깥(어두운 부분) 클릭: 누른 곳과 뗀 곳이 모두 바깥일 때만 닫는다.
+    let downOutside = false;
+    dialog.addEventListener("pointerdown", (e) => { downOutside = e.target === dialog; });
+    dialog.addEventListener("click", (e) => { if (downOutside && e.target === dialog) close(); });
   }
-  function closeHands() {
-    if (!dialog.open || dialog.classList.contains("closing")) return;
-    if (quick.matches || document.documentElement.classList.contains("reduce-fx")) { dialog.close(); return; }
-    dialog.classList.add("closing");
-    setTimeout(() => { dialog.close(); dialog.classList.remove("closing"); }, 140);
-  }
-  $("showHands").onclick = openHands;
-  $("rulesToHands").onclick = openHands;
-  $("closeHands").onclick = closeHands;
-  dialog.addEventListener("cancel", (e) => { e.preventDefault(); closeHands(); });  // Esc
-  // 바깥(어두운 부분) 클릭: 누른 곳과 뗀 곳이 모두 바깥일 때만 닫는다.
-  let downOutside = false;
-  dialog.addEventListener("pointerdown", (e) => { downOutside = e.target === dialog; });
-  dialog.addEventListener("click", (e) => { if (downOutside && e.target === dialog) closeHands(); });
+  setupModal($("hands"), [$("showHands"), $("rulesToHands")], markMyHand);
+  setupModal($("story"), [$("showStory")]);
 
   // 기존 화면 갱신(renderHint)이 힌트 칸을 새로 그릴 때마다 함께 갱신한다.
   new MutationObserver(() => {
