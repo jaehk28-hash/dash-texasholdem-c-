@@ -324,7 +324,7 @@ void testStatsPage() {
 // 로고와 미리보기 그림이 올바른 형식으로 제공되는가
 void testAssets() {
     httplib::Server server;
-    CHECK(setupAssets(server, HOLDEM_WEB_DIR) == 5);
+    CHECK(setupAssets(server, HOLDEM_WEB_DIR) == 6);
     const int port = server.bind_to_any_port("127.0.0.1");
     std::thread thread([&] { server.listen_after_bind(); });
     server.wait_until_ready();
@@ -342,9 +342,20 @@ void testAssets() {
         CHECK(og && number(16) == 1200 && number(20) == 630);
         const auto logo = client.Get("/logo.svg");
         CHECK(logo && logo->status == 200 && logo->get_header_value("Content-Type") == "image/svg+xml");
+        // 파비콘은 로고와 같은 잔 symbol이어야 한다 (어긋나면 node tools/make-icons.mjs를 다시 실행)
+        auto symbolOf = [](const std::string& svg) {
+            const std::size_t from = svg.find("<symbol id=\"coupe\"");
+            const std::size_t to = svg.find("</symbol>");
+            return from == std::string::npos || to == std::string::npos ? std::string() : svg.substr(from, to - from);
+        };
+        const auto favicon = client.Get("/favicon.svg");
+        CHECK(logo && favicon && !symbolOf(logo->body).empty() && symbolOf(logo->body) == symbolOf(favicon->body));
         for (const char* path : {"/favicon.svg", "/favicon.ico", "/apple-touch-icon.png"}) {
             CHECK(client.Get(path)->status == 200);
         }
+        const auto font = client.Get("/fonts/coupe-brand.woff2");
+        CHECK(font && font->status == 200 && font->get_header_value("Content-Type") == "font/woff2");
+        CHECK(font && font->body.compare(0, 4, "wOF2") == 0);
         CHECK(client.Get("/index.html")->status == 404);
         CHECK(client.Get("/../README.md")->status != 200);
     }

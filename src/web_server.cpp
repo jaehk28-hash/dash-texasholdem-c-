@@ -419,7 +419,7 @@ std::size_t setupAssets(httplib::Server& server, const std::string& folder) {
     const std::pair<const char*, const char*> files[] = {
         {"logo.svg", "image/svg+xml"},      {"favicon.svg", "image/svg+xml"},
         {"favicon.ico", "image/x-icon"},    {"apple-touch-icon.png", "image/png"},
-        {"og-image.png", "image/png"},
+        {"og-image.png", "image/png"},    {"fonts/coupe-brand.woff2", "font/woff2"},
     };
     std::size_t count = 0;
     for (const auto& [name, type] : files) {

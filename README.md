@@ -49,7 +49,9 @@ cmake -S . -B build && cmake --build build -j2
 
 ## 그림 파일
 
-`web/`의 `logo.svg`, `favicon.svg`는 이 프로젝트를 위해 직접 그린 것이고, `favicon.ico`, `apple-touch-icon.png`, `og-image.png`(링크 미리보기)는 그 SVG를 렌더링해 만든 것입니다.
+쿠페 잔 그림은 `web/logo.svg`의 `<symbol id="coupe">` 하나뿐이고(직접 그린 것), 화면은 이 symbol을 가져다 씁니다.
+`favicon.svg`, `favicon.ico`, `apple-touch-icon.png`, `og-image.png`(링크 미리보기)는 `node tools/make-icons.mjs`로 만듭니다. 로고를 고치면 다시 실행해 주세요.
+영문 로고 글꼴 `web/fonts/coupe-brand.woff2`는 [Bodoni Moda](https://github.com/indestructible-type/Bodoni)(SIL Open Font License 1.1, `web/fonts/OFL.txt`)를 굵기 700으로 고정하고 영문, 숫자, 기호만 남긴 것입니다.
 링크 미리보기의 주소(`og:url`, `og:image`)는 `web/index.html`의 `<head>`에 적혀 있으니, 도메인이 바뀌면 함께 고쳐 주세요.
 
 ## 빌드
@@ -132,8 +134,8 @@ PORT=9000 ./build/holdem --web
 ./build/holdem --web --seed 42       # 재현용 (공개 서버에서는 쓰지 마세요)
 ```
 
-처음 접속하면 **규칙 설명**이 나오고, "바로 시작하기"를 누르면 혼자 하기 설정으로 갑니다 ("뒤로"를 누르면 메뉴). 규칙은 오른쪽 위 버튼으로 언제든 다시 볼 수 있습니다.
-첫 게임에서는 한 판의 흐름 안내가 한 번 뜨고, 게임 화면의 용어 옆 "?"를 누르면 뜻이 나옵니다.
+접속하거나 새로고침하면 항상 **시작 화면**이 나옵니다 (친구방에 들어가 있으면 그 방으로 다시 들어갑니다). 규칙, 족보, 이야기는 오른쪽 위 버튼으로 엽니다.
+게임 화면의 용어 옆 "?"를 누르면 뜻이 나옵니다.
 
 | 메뉴 | 내용 |
 |---|---|
