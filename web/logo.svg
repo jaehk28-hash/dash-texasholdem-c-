@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- 쿠페 잔과 스페이드: 이 프로젝트를 위해 직접 그린 도형 -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 120" width="100" height="120" role="img" aria-label="텍사스 홀덤 연습방 로고">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-13 -12 126 152" width="126" height="152" role="img" aria-label="Coupe Holdem 로고">
   <g fill="none" stroke-linecap="round" stroke-linejoin="round">
     <!-- 스페이드: 옅은 빛 + 선 -->
     <g transform="translate(50 35) rotate(-9)">
@@ -15,8 +15,7 @@
       <path d="M8 24C9.500 49 28 64 50 64S90.500 49 92 24" stroke-width="2.600"/>
       <ellipse cx="50" cy="24" rx="42" ry="4.500" stroke-width="2"/>
       <path d="M15 32C19.500 49 33 58 50 58S80.500 49 85 32" stroke-width="0.900" opacity="0.55"/>
-      <path d="M50 64V105" stroke-width="2.600"/>
-      <path d="M50 77L54 83L50 89L46 83Z" stroke-width="1.600" fill="#0c100e"/>
+      <path d="M50 64V102.500" stroke-width="2.200"/>
       <ellipse cx="50" cy="108" rx="25" ry="5.500" stroke-width="2.600"/>
       <path d="M34 107.500C41 104.500 59 104.500 66 107.500" stroke-width="0.900" opacity="0.55"/>
     </g>

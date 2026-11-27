@@ -1,8 +1,10 @@
-<p align="center"><img src="web/logo.svg" alt="텍사스 홀덤 연습방 로고" width="140"></p>
+<p align="center"><img src="web/logo.svg" alt="Coupe Holdem 로고" width="180"></p>
 
-<h1 align="center">텍사스 홀덤 연습방</h1>
+<h1 align="center">Coupe Holdem · 쿠페 홀덤</h1>
 
-<p align="center">도박장 분위기 없이, 부담 없이 배우는 텍사스 홀덤. <b>일단 해보면서 배우는 홀덤!</b></p>
+<p align="center">홀덤 연습방</p>
+
+<p align="center"><b>잔 한 모금처럼 가볍게 시작하는 카드게임</b><br>도박장 분위기 없이, 부담 없이 배우는 텍사스 홀덤. 일단 해보면서 배우는 홀덤!</p>
 
 <p align="center">라이브 데모: <a href="https://holdem.apps.khu-return.com">https://holdem.apps.khu-return.com</a></p>
 
@@ -41,7 +43,8 @@ cmake -S . -B build && cmake --build build -j2
 ## 만든 이유
 
 홀덤은 재미있는 카드게임인데, 이름만 들으면 도박장 같은 분위기부터 떠올라 처음 시작하기가 어렵게 느껴집니다.
-그래서 부담 없이 혼자서도, 친구들과도 온라인으로 즐길 수 있는 연습방을 만들었습니다.
+그래서 부담 없이 혼자서도, 친구들과도 온라인으로 즐길 수 있는 연습방 쿠페 홀덤을 만들었습니다.
+로고의 쿠페 잔과 스페이드에는 무거운 판돈 대신 한 잔의 여유처럼 즐기자는 뜻을 담았습니다.
 틀려도 괜찮습니다. 일단 해보면서 배우는 홀덤입니다.
 
 ## 그림 파일

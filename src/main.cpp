@@ -1,4 +1,4 @@
-// main.cpp - 6인 노리밋 텍사스 홀덤 연습 시뮬레이터 (사람 1명 + 봇 5명)
+// main.cpp - Coupe Holdem(쿠페 홀덤): 6인 노리밋 홀덤 연습 (사람 1명 + 봇 5명)
 // 기본은 콘솔 모드, --web을 주면 웹 모드로 실행한다.
 #include <cstdlib>
 #include <iostream>
@@ -173,7 +173,7 @@ int main(int argc, char** argv) {
     Game game(config, std::move(players), seed);
     game.setLogger([](const std::string& line) { std::cout << "  " << line << "\n"; });
 
-    std::cout << "6인 노리밋 텍사스 홀덤 연습  (시드 " << seed << (seedGiven ? ", 지정됨" : ", 무작위")
+    std::cout << "Coupe Holdem(쿠페 홀덤) - 6인 노리밋 홀덤 연습  (시드 " << seed << (seedGiven ? ", 지정됨" : ", 무작위")
               << ", 칩 " << config.startingChips << ", 블라인드 " << config.smallBlind << "/"
               << config.bigBlind << ")\n";
     std::cout << "상대: 타이트, 루즈, 공격형, 콜링스테이션, 확률계산\n";
