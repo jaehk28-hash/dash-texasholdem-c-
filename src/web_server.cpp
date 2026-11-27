@@ -23,6 +23,27 @@ void sendError(httplib::Response& res, int status, const std::string& message) {
     res.set_content("{\"error\":" + jsonString(message) + "}", kJson);
 }
 
+// 한도를 넘었을 때: {"error":"ROOMS_FULL","message":"..."} 와 429
+void sendLimit(httplib::Response& res, const std::string& code, const std::string& message) {
+    res.status = 429;
+    res.set_content("{\"error\":" + jsonString(code) + ",\"message\":" + jsonString(message) + "}", kJson);
+}
+
+// 브라우저가 보낸 식별값 (랜덤 ID의 해시). 모양이 이상하면 없는 것으로 본다.
+std::string clientId(const httplib::Request& req) {
+    const std::string id = req.get_header_value("X-Client-Id");
+    return Stats::validIdHash(id) ? id : "";
+}
+
+// 토큰 비교에 걸리는 시간으로 값을 짐작할 수 없게, 끝까지 비교한다.
+bool sameSecret(const std::string& given, const std::string& expected) {
+    unsigned char diff = given.size() == expected.size() ? 0 : 1;
+    for (std::size_t i = 0; i < expected.size(); ++i) {
+        diff |= static_cast<unsigned char>(expected[i] ^ (i < given.size() ? given[i] : 0));
+    }
+    return diff == 0;
+}
+
 // "Cookie: a=1; sid=abcd" 헤더에서 sid 값을 꺼낸다. 없으면 빈 문자열.
 std::string sessionToken(const httplib::Request& req) {
     const std::string cookies = req.get_header_value("Cookie");
@@ -149,10 +170,13 @@ void createRoom(const httplib::Request& req, httplib::Response& res, RoomManager
 
     rooms.cleanupIdle();  // 자리를 만들기 위해 오래된 방을 먼저 정리
     std::string error;
-    bool full = false;
-    const std::string token = rooms.create(sessionToken(req), name, settings, solo, error, full);
+    CreateFail fail = CreateFail::None;
+    const std::string token =
+        rooms.create(sessionToken(req), name, settings, solo, error, fail, clientId(req));
     if (token.empty()) {
-        sendError(res, full ? 503 : 400, error);
+        if (fail == CreateFail::RoomsFull) sendLimit(res, "ROOMS_FULL", error);
+        else if (fail == CreateFail::ClientFull) sendLimit(res, "CLIENT_ROOMS_FULL", error);
+        else sendError(res, 400, error);
         return;
     }
     setSessionCookie(res, token);
@@ -291,6 +315,27 @@ void setupRoutes(httplib::Server& server, RoomManager& rooms, const std::string&
         res.set_content("{\"ok\":true}", kJson);
     });
 
+    // 방문 집계: 브라우저가 처음 열릴 때 한 번 부른다. 저장하는 것은 ID의 해시뿐이다.
+    server.Post("/api/visit", [&rooms](const httplib::Request& req, httplib::Response& res) {
+        const auto& stats = rooms.options().stats;
+        if (stats) stats->visit(clientId(req));
+        res.set_content("{\"ok\":true}", kJson);
+    });
+
+    // 사용 통계 화면. STATS_TOKEN이 없거나 틀리면 없는 주소처럼 404.
+    server.Get("/stats", [&rooms](const httplib::Request& req, httplib::Response& res) {
+        const WebOptions& options = rooms.options();
+        if (options.statsToken.empty() || !options.stats ||
+            !sameSecret(req.get_param_value("token"), options.statsToken)) {
+            res.status = 404;
+            return;
+        }
+        res.set_header("X-Robots-Tag", "noindex, nofollow");
+        res.set_header("Cache-Control", "no-store");
+        res.set_header("Referrer-Policy", "no-referrer");
+        res.set_content(statsPageHtml(options.stats->summary()), "text/html; charset=utf-8");
+    });
+
     server.Post("/api/room/leave", [&rooms](const httplib::Request& req, httplib::Response& res) {
         rooms.leave(sessionToken(req));
         res.set_content("{\"ok\":true}", kJson);
@@ -303,11 +348,14 @@ void setupRoutes(httplib::Server& server, RoomManager& rooms, const std::string&
         std::optional<RoomView> view;
         if (room) view = room->view(token);
         if (!view) {  // 방이 없으면 설정 화면에 쓸 기본값을 알려 준다
+            const std::string closed = rooms.closedByIdle(token)
+                                           ? ",\"closed\":" + jsonString(ROOM_CLOSED_MESSAGE)
+                                           : "";
             const GameConfig& c = rooms.options().config;
             res.set_content("{\"hasGame\":false,\"defaults\":{\"chips\":" +
                                 std::to_string(c.startingChips) + ",\"sb\":" +
                                 std::to_string(c.smallBlind) + ",\"bb\":" +
-                                std::to_string(c.bigBlind) + "}}",
+                                std::to_string(c.bigBlind) + "}" + closed + "}",
                             kJson);
             return;
         }

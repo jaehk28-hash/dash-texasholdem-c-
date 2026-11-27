@@ -489,8 +489,8 @@ bool Room::join(const std::string& token, std::string name, std::string& error) 
         error = "이미 게임이 시작된 방입니다.";
         return false;
     }
-    if (static_cast<int>(members_.size()) >= kSeats) {
-        error = "방이 가득 찼습니다.";
+    if (static_cast<int>(members_.size()) >= std::min(options_.maxPlayers, kSeats)) {
+        error = "이 방은 인원이 가득 찼어요.";
         return false;
     }
     // 로그에서 구별해야 하므로 같은 이름과 봇 이름은 쓸 수 없다.
@@ -553,7 +553,7 @@ bool Room::start(const std::string& token, std::string& error) {
         }
         const int humans = static_cast<int>(std::count_if(
             members_.begin(), members_.end(), [](const Member& m) { return !m.left; }));
-        botCount = std::min(settings_.bots, kSeats - humans);
+        botCount = std::max(0, std::min(settings_.bots, std::min(options_.maxPlayers, kSeats) - humans));
         if (humans + botCount < 2) {
             error = "2명 이상이어야 합니다. 친구를 기다리거나 봇이 있는 방을 만드세요.";
             return false;
@@ -587,6 +587,7 @@ bool Room::start(const std::string& token, std::string& error) {
     // 끝난 게임의 스레드를 정리하고 새로 시작한다 (mutex_를 풀고 기다려야 한다).
     if (thread_.joinable()) thread_.join();
     thread_ = std::thread([this, names, botCount, seed] { run(names, botCount, seed); });
+    if (options_.stats) options_.stats->gameStarted(solo_, settings_.bots);
     return true;
 }
 
@@ -980,6 +981,7 @@ void Room::run(std::vector<std::string> humanNames, int botCount, unsigned seed)
         std::vector<int> previousRanks;  // 칩 순위 변동(▲▼) 계산용
         while (!game.isOver() && someoneCanPlay()) {
             const HandSummary hand = game.playHand();
+            if (options_.stats) options_.stats->handFinished();
             auto tables = snapshots();
             {
                 std::lock_guard<std::mutex> lock(mutex_);
@@ -1031,8 +1033,8 @@ void RoomManager::leaveLocked(const std::string& token, std::vector<std::shared_
 
 std::string RoomManager::create(const std::string& token, const std::string& name,
                                 const RoomSettings& settings, bool solo, std::string& error,
-                                bool& full, Clock::time_point now) {
-    full = false;
+                                CreateFail& fail, const std::string& clientId, Clock::time_point now) {
+    fail = CreateFail::Invalid;
     std::string nickname = name;
     // 옛 방을 떠나기 전에 입력부터 검사한다.
     if (!validateSettings(settings, solo, error) || !cleanNickname(nickname, error)) return "";
@@ -1041,17 +1043,28 @@ std::string RoomManager::create(const std::string& token, const std::string& nam
     std::lock_guard<std::mutex> lock(mutex_);
 
     // 내가 혼자 있는 방은 곧 없어지므로 자리 계산에서 뺀다.
-    std::size_t freed = 0;
+    std::string freedCode;
     const auto old = tokens_.find(token);
     if (old != tokens_.end()) {
         const auto others = std::count_if(tokens_.begin(), tokens_.end(),
                                           [&](const auto& t) { return t.second == old->second; });
-        if (others == 1) freed = 1;
+        if (others == 1) freedCode = old->second;
     }
-    if (rooms_.size() - freed >= kMaxRooms) {
-        error = "서버의 방이 가득 찼습니다. 잠시 후 다시 시도해 주세요.";
-        full = true;
+    if (rooms_.size() - (freedCode.empty() ? 0 : 1) >= static_cast<std::size_t>(options_.maxRooms)) {
+        error = "지금 방이 가득 찼어요. 잠시 뒤에 다시 시도해 주세요.";
+        fail = CreateFail::RoomsFull;
         return "";
+    }
+    if (!clientId.empty()) {
+        const auto mine = std::count_if(rooms_.begin(), rooms_.end(), [&](const auto& r) {
+            return r.second.creator == clientId && r.first != freedCode;
+        });
+        if (mine >= options_.maxRoomsPerClient) {
+            error = "한 브라우저에서 만들 수 있는 방은 " + std::to_string(options_.maxRoomsPerClient) +
+                    "개까지예요. 기존 방을 마친 뒤 다시 시도해 주세요.";
+            fail = CreateFail::ClientFull;
+            return "";
+        }
     }
 
     std::string code = makeCode();
@@ -1067,8 +1080,10 @@ std::string RoomManager::create(const std::string& token, const std::string& nam
 
     leaveLocked(key, removed);
     ++roomsCreated_;
-    rooms_[code] = Entry{std::move(room), now};
+    rooms_[code] = Entry{std::move(room), now, clientId};
     tokens_[key] = code;
+    closed_.erase(token);
+    fail = CreateFail::None;
     return key;
 }
 
@@ -1093,13 +1108,20 @@ std::string RoomManager::join(const std::string& token, const std::string& code,
     it->second.lastInput = now;
     leaveLocked(key, removed);  // 전에 있던 방에서는 나간다
     tokens_[key] = code;
+    closed_.erase(token);
     return key;
 }
 
 void RoomManager::leave(const std::string& token) {
     std::vector<std::shared_ptr<Room>> removed;
     std::lock_guard<std::mutex> lock(mutex_);
+    closed_.erase(token);
     leaveLocked(token, removed);
+}
+
+bool RoomManager::closedByIdle(const std::string& token) const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return closed_.count(token) > 0;
 }
 
 std::shared_ptr<Room> RoomManager::find(const std::string& token) const {
@@ -1122,13 +1144,23 @@ std::size_t RoomManager::cleanupIdle(Clock::time_point now) {
     std::vector<std::shared_ptr<Room>> removed;  // mutex를 푼 뒤에 없앤다
     {
         std::lock_guard<std::mutex> lock(mutex_);
+        // 닫힘 안내는 1시간 동안만 기억한다.
+        for (auto c = closed_.begin(); c != closed_.end();) {
+            c = now - c->second >= std::chrono::hours(1) ? closed_.erase(c) : std::next(c);
+        }
+        const std::chrono::minutes limit(options_.idleMinutes);
         for (auto it = rooms_.begin(); it != rooms_.end();) {
-            if (now - it->second.lastInput < kIdleLimit) {
+            if (now - it->second.lastInput < limit) {
                 ++it;
                 continue;
             }
             for (auto t = tokens_.begin(); t != tokens_.end();) {
-                t = t->second == it->first ? tokens_.erase(t) : std::next(t);
+                if (t->second != it->first) {
+                    ++t;
+                    continue;
+                }
+                closed_[t->first] = now;
+                t = tokens_.erase(t);
             }
             it->second.room->stop();
             removed.push_back(std::move(it->second.room));

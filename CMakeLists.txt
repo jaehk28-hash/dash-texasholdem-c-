@@ -29,6 +29,7 @@ add_library(holdem_web
   src/web_json.cpp
   src/web_session.cpp
   src/web_server.cpp
+  src/stats.cpp
 )
 # SYSTEM: 외부 헤더에서 나는 경고는 숨긴다
 target_include_directories(holdem_web SYSTEM PUBLIC third_party)
@@ -65,3 +66,7 @@ add_test(NAME test_web COMMAND test_web)
 add_executable(test_review tests/test_review.cpp)
 target_link_libraries(test_review holdem_web)
 add_test(NAME test_review COMMAND test_review)
+
+add_executable(test_server tests/test_server.cpp)
+target_link_libraries(test_server holdem_web)
+add_test(NAME test_server COMMAND test_server)

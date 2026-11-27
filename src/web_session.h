@@ -26,6 +26,7 @@
 
 #include "game.h"
 #include "review.h"
+#include "stats.h"
 
 constexpr int kSeats = 6;  // 한 테이블의 최대 인원 (사람 + 봇)
 
@@ -34,6 +35,13 @@ constexpr int kSeats = 6;  // 한 테이블의 최대 인원 (사람 + 봇)
 // "보통"은 이 값의 3/5(3초), "빠르게"는 1/5(1초)이 된다.
 constexpr int AI_ACTION_MS = 5000;
 constexpr int AI_SKIP_MS = 200;  // "남은 진행 빠르게 보기"를 눌렀을 때 봇 한 명의 시간
+
+// ===== 방 제한: 기본값. 서버를 켤 때 같은 이름의 환경변수로 바꿀 수 있다 =====
+constexpr int MAX_ROOMS = 20;              // 동시에 열려 있는 방 (혼자 하기 포함)
+constexpr int MAX_PLAYERS_PER_ROOM = 6;    // 방 하나의 최대 인원 (봇 포함, 2~6)
+constexpr int ROOM_IDLE_MINUTES = 30;      // 이 시간 동안 입력이 없으면 방을 지운다
+constexpr int MAX_ROOMS_PER_CLIENT = 2;    // 한 브라우저가 동시에 만들 수 있는 방
+constexpr const char* ROOM_CLOSED_MESSAGE = "오래 쓰지 않아 방이 닫혔어요";
 
 enum class Pace { Slow, Normal, Fast };
 bool parsePace(const std::string& text, Pace& out);  // "slow", "normal", "fast"
@@ -52,6 +60,12 @@ struct WebOptions {
     // 테스트용: true면 "다음" 입력을 기다리지 않는다. 다음 판은 nextHandDelay 뒤에 시작한다.
     bool autoContinue = false;
     std::chrono::milliseconds nextHandDelay{0};
+    int maxRooms = MAX_ROOMS;
+    int maxPlayers = MAX_PLAYERS_PER_ROOM;
+    int idleMinutes = ROOM_IDLE_MINUTES;
+    int maxRoomsPerClient = MAX_ROOMS_PER_CLIENT;
+    std::shared_ptr<Stats> stats;  // 없으면 통계를 세지 않는다
+    std::string statsToken;        // 비어 있으면 /stats는 404
 };
 
 // 방을 만들 때 고르는 설정
@@ -247,19 +261,22 @@ private:
     std::thread thread_;    // startMutex_로 보호
 };
 
+// 방을 만들지 못한 이유
+enum class CreateFail { None, Invalid, RoomsFull, ClientFull };
+
 // 토큰 -> 방. 모든 함수는 여러 스레드에서 동시에 불러도 안전하다.
 class RoomManager {
 public:
     using Clock = std::chrono::steady_clock;
-    static constexpr std::size_t kMaxRooms = 20;
-    static constexpr std::chrono::minutes kIdleLimit{30};
 
     explicit RoomManager(WebOptions options) : options_(std::move(options)) {}
 
     // 방을 만들고 들어간다. 성공하면 접속 토큰, 실패하면 빈 문자열.
-    // 이미 다른 방에 있던 토큰이면 그 방에서는 나간다. full은 "자리가 없어서" 실패했는지.
+    // 이미 다른 방에 있던 토큰이면 그 방에서는 나간다. 실패하면 fail에 이유를 담는다.
+    // clientId는 브라우저가 보낸 식별값. 비어 있으면 브라우저별 제한 없이 전체 한도만 적용한다.
     std::string create(const std::string& token, const std::string& name, const RoomSettings& settings,
-                       bool solo, std::string& error, bool& full, Clock::time_point now = Clock::now());
+                       bool solo, std::string& error, CreateFail& fail, const std::string& clientId = "",
+                       Clock::time_point now = Clock::now());
 
     // 코드로 방에 들어간다. 성공하면 접속 토큰. unknownCode는 "그런 방이 없어서" 실패했는지.
     std::string join(const std::string& token, const std::string& code, const std::string& name,
@@ -273,8 +290,11 @@ public:
     // "입력이 있었다"고 기록한다. 화면 갱신용 조회(GET)는 입력으로 치지 않는다.
     void touch(const std::string& token, Clock::time_point now = Clock::now());
 
-    // kIdleLimit 이상 입력이 없는 방을 지우고, 지운 개수를 돌려준다.
+    // idleMinutes 이상 입력이 없는 방을 지우고, 지운 개수를 돌려준다.
     std::size_t cleanupIdle(Clock::time_point now = Clock::now());
+
+    // 이 토큰이 있던 방이 오래 쓰지 않아 지워졌는가 (leave, 새 방 만들기/들어가기를 하면 잊는다)
+    bool closedByIdle(const std::string& token) const;
 
     std::size_t size() const;
     const WebOptions& options() const { return options_; }
@@ -283,6 +303,7 @@ private:
     struct Entry {
         std::shared_ptr<Room> room;
         Clock::time_point lastInput;
+        std::string creator;  // 만든 브라우저의 식별값 (메모리에만 둔다)
     };
 
     // mutex_를 잡은 상태에서 부른다. 방이 비면 removed로 옮긴다
@@ -293,5 +314,6 @@ private:
     mutable std::mutex mutex_;  // 아래 변수들을 보호한다
     std::map<std::string, Entry> rooms_;         // 방 코드 -> 방
     std::map<std::string, std::string> tokens_;  // 접속 토큰 -> 방 코드
+    std::map<std::string, Clock::time_point> closed_;  // 방이 닫혔다고 알려 줄 토큰
     unsigned roomsCreated_ = 0;
 };

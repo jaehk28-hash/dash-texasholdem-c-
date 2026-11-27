@@ -2,6 +2,7 @@
 // 기본은 콘솔 모드, --web을 주면 웹 모드로 실행한다.
 #include <cstdlib>
 #include <iostream>
+#include <memory>
 #include <random>
 #include <string>
 
@@ -138,6 +139,27 @@ int main(int argc, char** argv) {
         WebOptions options;
         options.config = config;
         options.showHint = human.showHint;
+        // 방 제한: 환경변수가 있으면 기본값 대신 쓴다.
+        const struct {
+            const char* name;
+            int* value;
+            int low, high;
+        } limits[] = {{"MAX_ROOMS", &options.maxRooms, 1, 1000},
+                      {"MAX_PLAYERS_PER_ROOM", &options.maxPlayers, 2, kSeats},
+                      {"ROOM_IDLE_MINUTES", &options.idleMinutes, 1, 24 * 60},
+                      {"MAX_ROOMS_PER_CLIENT", &options.maxRoomsPerClient, 1, 1000}};
+        for (const auto& limit : limits) {
+            const char* env = std::getenv(limit.name);
+            if (env == nullptr || *env == '\0') continue;
+            if (!parsePositive(env, *limit.value) || *limit.value < limit.low || *limit.value > limit.high) {
+                std::cerr << "환경변수 " << limit.name << "는 " << limit.low << "~" << limit.high
+                          << " 사이의 정수여야 합니다.\n";
+                return 1;
+            }
+        }
+        // 통계는 실행한 폴더의 data/stats.json에 쌓는다.
+        options.stats = std::make_shared<Stats>("data/stats.json");
+        if (const char* token = std::getenv("STATS_TOKEN")) options.statsToken = token;
         options.hintTrials = human.hintTrials;
         if (seedGiven) options.seed = seed;
         return runWebServer(port, options);

@@ -20,7 +20,7 @@ CMake가 없을 때는 컴파일러로 바로 빌드할 수 있습니다 (macOS/
 ```bash
 mkdir -p build
 CORE=(src/card.cpp src/evaluator.cpp src/pot.cpp src/review.cpp src/game.cpp src/equity.cpp src/bots.cpp src/human_player.cpp)
-WEB=(src/web_json.cpp src/web_session.cpp src/web_server.cpp)
+WEB=(src/web_json.cpp src/web_session.cpp src/web_server.cpp src/stats.cpp)
 WEBFLAGS=(-isystem third_party -pthread -DHOLDEM_WEB_DIR="\"$PWD/web\"")
 c++ -std=c++17 -O2 -Wall -Wextra -Isrc "${WEBFLAGS[@]}" "${CORE[@]}" "${WEB[@]}" src/main.cpp -o build/holdem
 c++ -std=c++17 -O2 -Wall -Wextra -Isrc "${CORE[@]}" src/bench.cpp -o build/holdem_bench
@@ -29,6 +29,7 @@ for t in evaluator pot game; do
 done
 c++ -std=c++17 -O2 -Wall -Wextra -Isrc "${WEBFLAGS[@]}" "${CORE[@]}" "${WEB[@]}" tests/test_web.cpp -o build/test_web && ./build/test_web
 c++ -std=c++17 -O2 -Wall -Wextra -Isrc "${WEBFLAGS[@]}" "${CORE[@]}" "${WEB[@]}" tests/test_review.cpp -o build/test_review && ./build/test_review
+c++ -std=c++17 -O2 -Wall -Wextra -Isrc "${WEBFLAGS[@]}" "${CORE[@]}" "${WEB[@]}" tests/test_server.cpp -o build/test_server && ./build/test_server
 ```
 
 모든 빌드는 `-Wall -Wextra`로 경고 없이 컴파일됩니다.
@@ -108,7 +109,7 @@ PORT=9000 ./build/holdem --web
 ### 공통
 
 - `--chips`, `--sb`, `--bb`는 설정 화면의 기본값이 되고, `--no-hint`는 모든 방의 힌트를 끕니다.
-- 방은 동시에 최대 20개이고(혼자 하기 포함), 30분 동안 입력(시작, 입장, 행동)이 없으면 정리됩니다. 서버를 끄면 모두 사라집니다.
+- 방은 개수와 인원에 제한이 있고, 오래 쓰지 않으면 정리됩니다 (아래 "방 제한"). 서버를 끄면 모두 사라집니다.
 - 봇은 한 명씩 "생각 중" → 행동 공개 순서로 움직입니다. 진행 속도는 느리게(5초, 기본), 보통(3초), 빠르게(1초) 중에서 고르며 게임 중에도 바꿀 수 있습니다.
   - 속도 값은 `src/web_session.h`의 `AI_ACTION_MS` 하나로 바꿉니다 (보통은 3/5, 빠르게는 1/5).
 - 플랍, 턴, 리버, 쇼다운, 다음 판은 **방장이 "다음" 버튼(스페이스/Enter)을 눌러야** 넘어갑니다.
@@ -156,7 +157,41 @@ PORT=9000 ./build/holdem --web
 `compare`/`versusNext`는 `type`(category, rank, tie), `role`, `winRank`, `loseRank`, `shared`, `boardPlays`입니다.
 안내와 리뷰의 문구는 `web/index.html`의 `TEXTS` 객체에 모여 있습니다.
 
-잘못된 요청은 400, 방 20개가 모두 차면 503으로 응답합니다. 접속자는 쿠키 `sid`로 구분합니다.
+잘못된 요청은 400, 방 한도를 넘으면 429와 `{"error":"ROOMS_FULL"|"CLIENT_ROOMS_FULL","message":"..."}`로 응답합니다. 접속자는 쿠키 `sid`로 구분합니다.
+`POST /api/visit`은 방문 1회를 알리며, 브라우저 식별값은 헤더 `X-Client-Id`(랜덤 ID의 해시)로 보냅니다. 방이 정리되면 `/api/state`에 `closed` 안내 문구가 담깁니다.
+
+## 방 제한
+
+서버를 켤 때 환경변수로 바꿀 수 있습니다. 기본값은 `src/web_session.h`에 있습니다.
+
+| 환경변수 | 기본 | 뜻 |
+|---|---|---|
+| `MAX_ROOMS` | 20 | 동시에 열려 있는 방 (혼자 봇과 하기 포함) |
+| `MAX_PLAYERS_PER_ROOM` | 6 | 방당 최대 인원, 봇 포함 (2~6) |
+| `ROOM_IDLE_MINUTES` | 30 | 이 시간 동안 입력(시작, 입장, 행동, 다음 누르기)이 없으면 삭제. 화면의 자동 조회는 세지 않음 |
+| `MAX_ROOMS_PER_CLIENT` | 2 | 한 브라우저가 동시에 만들 수 있는 방 |
+
+브라우저는 IP가 아니라 저장해 둔 랜덤 ID로 구분하므로, 같은 와이파이를 쓰는 사람들이 한 명으로 묶이지 않습니다.
+ID는 누구나 바꿔 보낼 수 있으므로 `MAX_ROOMS_PER_CLIENT`는 실수를 막는 정도의 제한이고, 서버를 지키는 것은 `MAX_ROOMS`입니다.
+
+## 사용 통계
+
+숫자만 `실행한 폴더/data/stats.json`(권한 600)에 쌓습니다. **닉네임, IP, 카드 내용은 저장하지 않습니다.**
+방문자는 브라우저가 만든 랜덤 ID의 해시로만 구분하며, 같은 ID는 하루에 한 번만 셉니다.
+
+통계 화면을 보려면 `STATS_TOKEN`을 정해서 서버를 켭니다.
+
+```bash
+export STATS_TOKEN="$(openssl rand -hex 16)"   # 긴 임의의 값
+echo "$STATS_TOKEN"                            # 따로 적어 두세요
+TZ=Asia/Seoul ./build/holdem --web             # TZ: 날짜를 한국 시간으로 세기
+```
+
+그다음 `http://서버주소:8080/stats?token=위의값` 으로 접속합니다.
+
+- `STATS_TOKEN`이 없으면 `/stats`는 404입니다. 토큰이 틀려도 404입니다.
+- 토큰을 코드나 git에 적지 마세요. 이 서버는 HTTPS가 없어 주소의 토큰이 암호화되지 않으므로, 다른 곳에서 쓰는 비밀번호를 재사용하지 마세요.
+- "총 방문 수"는 (브라우저, 날짜)의 합, "게임당 평균 판 수"는 완료한 판 수를 게임 시작 횟수로 나눈 값입니다.
 
 ## 서버 배포 (Ubuntu 22.04)
 
@@ -233,10 +268,11 @@ src/
   web_json.*      작은 JSON 도구               web_session.* 게임 방과 게임 스레드
   web_server.*    HTTP 서버와 API
   review.*        판이 끝난 뒤의 핸드 리뷰 데이터
+  stats.*         익명 사용 통계와 /stats 화면
   bench.cpp       성능/정확도 측정 프로그램 (docs/bench.md 생성)
 web/index.html    웹 화면 (HTML+CSS+JS 한 파일)
 third_party/      httplib.h (cpp-httplib v0.67.0, MIT 라이선스)
-tests/            test_evaluator / test_pot / test_game / test_web / test_review (CHECK 방식)
+tests/            test_evaluator / test_pot / test_game / test_web / test_review / test_server (CHECK 방식)
 docs/bench.md     측정 결과 전체
 ```
 

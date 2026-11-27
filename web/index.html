@@ -451,6 +451,10 @@
   .mine-badge { padding: 0 8px; border-radius: 4px; background: #7ff0b5; color: #072016; font-size: 12px; font-weight: 800; white-space: nowrap; }
   .hr-desc { font-size: 13px; color: var(--muted); line-height: 1.45; }
 
+  /* 화면 안 안내 (알림창을 쓰지 않는다) */
+  #error:not(:empty) { color: #ffd0c8; text-align: center; border: 1px solid #a8665c; border-radius: 10px; padding: 8px 10px; background: #1d1210; line-height: 1.5; }
+  #closedNotice { display: flex; align-items: center; justify-content: space-between; gap: 10px; border: 1px solid var(--gold); border-radius: 10px; padding: 8px 10px; background: #14140e; }
+
   /* 초보자용 규칙 화면 */
   #screen-rules { font-size: 17px; line-height: 1.65; word-break: keep-all; }
   .rules-lead { font-family: var(--serif); font-size: 21px; font-weight: 700; line-height: 1.6; color: var(--gold-light); padding: 6px 4px; }
@@ -601,7 +605,11 @@
     </div>
   </header>
 
-  <div id="error" role="alert" style="color:#ffb4a8; text-align:center"></div>
+  <div id="error" role="alert"></div>
+  <div id="closedNotice" role="alert" hidden>
+    <span></span>
+    <button type="button">확인</button>
+  </div>
 
   <!-- 1) 규칙 설명 (처음 들어오면 보임) -->
   <section class="screen" id="screen-rules" hidden>
@@ -900,6 +908,25 @@ let lastTurnId = -1;    // 레이즈 입력창을 새 차례에만 초기화하�
 let requestSeq = 0;     // 늦게 도착한 옛 응답을 버리기 위한 번호
 let sending = false;    // 행동을 보내는 중에는 버튼을 잠근다
 
+// 브라우저 식별값: 처음 접속할 때 랜덤 ID를 만들어 저장하고, 서버에는 그 해시만 보낸다.
+// (방 개수 제한과 익명 방문자 수 세기에만 쓴다. 이름, IP 같은 정보는 담지 않는다)
+const CLIENT = (() => {
+  let id = recall("clientId");
+  if (!/^[0-9a-f]{32}$/.test(id || "")) {
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    id = [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
+    remember("clientId", id);
+  }
+  const fnv = (seed) => {  // 간단한 해시 (http 주소에서도 동작해야 해서 직접 계산)
+    let h = seed;
+    for (const ch of id) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+    return (h >>> 0).toString(16).padStart(8, "0");
+  };
+  return { hash: fnv(2166136261) + fnv(3339451297), stored: recall("clientId") === id };
+})();
+const POST_HEADERS = { "Content-Type": "application/json", "X-Client-Id": CLIENT.hash };
+
 // 화면 글자는 모두 textContent로 넣는다 (HTML 삽입 방지).
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -1049,6 +1076,9 @@ function renderGame() {
 
 function render() {
   $("info").textContent = "";
+  const closed = state && !state.hasGame ? state.closed : "";
+  $("closedNotice").hidden = !closed;
+  if (closed) $("closedNotice").firstElementChild.textContent = closed;
   if (showingRules) return showScreen("rules");
   if (!state) return;
   if (!state.hasGame) return showScreen(menu);
@@ -1088,16 +1118,20 @@ async function post(path, body) {
   try {
     const res = await fetch(path, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: POST_HEADERS,
       body: JSON.stringify(body || {}),
     });
-    if (!res.ok) error = (await res.json()).error;
+    if (!res.ok) {  // 한도 안내(429)는 message에, 그 밖의 오류는 error에 문장이 있다
+      const data = await res.json();
+      error = data.message || data.error;
+    }
   } catch (e) {
     error = "서버에 연결할 수 없습니다.";
   }
   sending = false;
   await refresh();
   $("error").textContent = error;
+  if (error) $("error").scrollIntoView({ block: "nearest" });
   return !error;
 }
 
@@ -1128,6 +1162,7 @@ function remember(key, value) { try { localStorage.setItem(key, value); } catch 
 function recall(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
 
 $("showRules").onclick = () => { showingRules = true; render(); window.scrollTo(0, 0); };
+$("closedNotice").querySelector("button").onclick = () => post("/api/room/leave");  // 서버가 안내를 잊는다
 $("rulesOk").onclick = () => {
   showingRules = false;
   remember("rulesSeen", "1");
@@ -1210,6 +1245,8 @@ $("hostName").value = $("joinName").value = recall("nickname") || "";
 showingRules = !recall("rulesSeen");  // 처음 들어온 사람에게는 규칙부터
 render();
 poll();
+// 방문 1회 알림. 저장이 막힌 브라우저는 새로고침마다 새 사람이 되므로 세지 않는다.
+if (CLIENT.stored) fetch("/api/visit", { method: "POST", headers: POST_HEADERS, body: "{}" }).catch(() => {});
 </script>
 
 <script>

@@ -96,8 +96,8 @@ static std::string makeRoom(RoomManager& manager, const std::string& token, cons
                             const RoomSettings& settings, bool solo,
                             RoomManager::Clock::time_point now = RoomManager::Clock::now()) {
     std::string error;
-    bool full = false;
-    return manager.create(token, name, settings, solo, error, full, now);
+    CreateFail fail = CreateFail::None;
+    return manager.create(token, name, settings, solo, error, fail, "", now);
 }
 
 static std::string joinRoom(RoomManager& manager, const std::string& code, const std::string& name,
@@ -125,14 +125,14 @@ static void testRoomCleanup() {
 static void testRoomLimit() {
     RoomManager manager(fastOptions());
     std::vector<std::string> tokens;
-    for (std::size_t i = 0; i < RoomManager::kMaxRooms; ++i) {
+    for (std::size_t i = 0; i < static_cast<std::size_t>(MAX_ROOMS); ++i) {
         tokens.push_back(makeRoom(manager, "", "나", soloSettings(), true));
         CHECK(!tokens.back().empty());
     }
     CHECK(makeRoom(manager, "", "나", soloSettings(), true).empty());  // 21번째는 거절
     // 이미 방이 있는 사람은 자기 방을 새로 만들 수 있다
     CHECK(makeRoom(manager, tokens[0], "나", soloSettings(), true) == tokens[0]);
-    CHECK(manager.size() == RoomManager::kMaxRooms);
+    CHECK(manager.size() == static_cast<std::size_t>(MAX_ROOMS));
 }
 
 static void testSettingsAndNickname() {
