@@ -2,6 +2,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <chrono>
 #include <cstddef>
 #include <cstdio>
@@ -17,6 +18,8 @@
 
 #include "check.h"
 #include "httplib.h"
+#include "ledger.h"
+#include "sha256.h"
 #include "stats.h"
 #include "web_server.h"
 #include "web_session.h"
@@ -206,8 +209,7 @@ std::time_t at(int day, int hour, int minute, int second) {
     t.tm_hour = hour;
     t.tm_min = minute;
     t.tm_sec = second;
-    t.tm_isdst = -1;
-    return std::mktime(&t);
+    return timegm(&t) - 9 * 60 * 60;  // 한국 시간 (시험하는 컴퓨터의 시간대와 무관)
 }
 
 void testCountersAndPersistence() {
@@ -293,6 +295,69 @@ void testWriteFailureDoesNotStopGame() {
     CHECK(blocked.summary().totalHands == 1);
 }
 
+void testSha256() {
+    CHECK(sha256Hex("") == "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+    CHECK(sha256Hex("abc") == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+    CHECK(sha256Hex(std::string(1000, 'a')) == "41edece42d63e8d9bf515a9ba6932e1c20cbc9f5a5d134645adb5db1b9737ea3");
+}
+
+void testLedger() {
+    const std::string folder = tempFolder();
+    const std::string path = folder + "/data/stats.json";
+    const std::string ledger = folder + "/data/stats-ledger.jsonl";
+    std::time_t now = at(10, 23, 59, 0);
+    const auto clock = [&now] { return now; };
+    {
+        Stats stats(path, clock);
+        CHECK(stats.ledgerPath() == ledger);
+        stats.visit("1111111111111111", "instagram");
+        stats.visit("2222222222222222", "홍길동 010-1234-5678");  // 모르는 이름은 other
+        stats.visit("3333333333333333");
+        stats.gameStarted(true, 3);
+        stats.gameStarted(false, 2);
+        stats.handFinished();
+        CHECK(stats.updateLedger() && !std::ifstream(ledger));  // 오늘은 아직 쓰지 않는다
+        now = at(11, 0, 0, 1);  // 한국 시간 자정이 지남
+        CHECK(stats.updateLedger() && stats.updateLedger());  // 두 번 불러도 한 줄
+    }
+    const std::string first = readAll(ledger);
+    CHECK(std::count(first.begin(), first.end(), '\n') == 1);
+    CHECK(first.find("{\"date\":\"2026-11-10\",\"counts\":{\"visits\":3,\"unique_visitors\":3,\"solo_starts\":1,"
+                     "\"room_starts\":1,\"hands_finished\":1,\"src\":{\"instagram\":1,\"other\":1}},"
+                     "\"prev\":\"genesis\",\"hash\":\"") == 0);
+    CHECK(first.find("010-1234") == std::string::npos && first.find("1111111111111111") == std::string::npos);
+
+    now = at(13, 9, 0, 0);  // 이틀 넘게 꺼져 있었다
+    {
+        Stats stats(path, clock);  // 켜면서 11일, 12일을 덧붙인다
+        CHECK(!stats.summary().ledgerBroken);
+    }
+    const std::string three = readAll(ledger);
+    CHECK(three.compare(0, first.size(), first) == 0);  // 앞줄은 그대로
+    const LedgerState chain = checkLedger(three);
+    CHECK(chain.ok && chain.hashes.size() == 3 && chain.lastDate == "2026-11-12");
+
+    CHECK(!checkLedger(three.substr(0, three.size() - 1)).ok);  // 잘린 줄
+    std::string edited = three;
+    edited.replace(edited.find("\"visits\":3"), 10, "\"visits\":9");
+    CHECK(!checkLedger(edited).ok);
+    CHECK(!checkLedger(three.substr(first.size())).ok);  // 앞줄 삭제
+
+    // 고친 파일, 뒷줄 삭제, 파일 삭제는 모두 경고하고 덧붙이지 않는다
+    now = at(14, 9, 0, 0);
+    for (const std::string& bad : {edited, first, std::string()}) {
+        std::ofstream(ledger, std::ios::trunc) << bad;
+        Stats stats(path, clock);
+        CHECK(stats.summary().ledgerBroken && !stats.updateLedger());
+        CHECK(statsPageHtml(stats.summary()).find("ledger 불일치") != std::string::npos);
+        CHECK(readAll(ledger) == bad);
+    }
+    std::ofstream(ledger, std::ios::trunc) << three;  // 원래대로 돌리면 이어서 쓴다
+    Stats stats(path, clock);
+    CHECK(!stats.summary().ledgerBroken && checkLedger(readAll(ledger)).hashes.size() == 4);
+    CHECK(statsPageHtml(stats.summary()).find("ledger 불일치") == std::string::npos);
+}
+
 void testStatsPage() {
     const std::string folder = tempFolder();
     WebOptions options = fastOptions();
@@ -375,6 +440,8 @@ int main() {
     testCountersAndPersistence();
     testDateBoundary();
     testBrokenFileIsKept();
+    testSha256();
+    testLedger();
     testWriteFailureDoesNotStopGame();
     testStatsPage();
     testAssets();

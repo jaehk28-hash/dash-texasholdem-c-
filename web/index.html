@@ -1485,7 +1485,11 @@ if (location.hash) history.replaceState(null, "", location.pathname + location.s
 render();
 poll();
 // 방문 1회 알림. 저장이 막힌 브라우저는 새로고침마다 새 사람이 되므로 세지 않는다.
-if (CLIENT.stored) fetch("/api/visit", { method: "POST", headers: POST_HEADERS, body: "{}" }).catch(() => {});
+// 링크에 ?src=instagram 같은 유입 경로가 있으면 함께 보낸다 (서버는 정해 둔 이름만 센다).
+if (CLIENT.stored) {
+  const src = (new URLSearchParams(location.search).get("src") || "").slice(0, 16);
+  fetch("/api/visit", { method: "POST", headers: POST_HEADERS, body: JSON.stringify({ src }) }).catch(() => {});
+}
 </script>
 
 <script>

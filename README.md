@@ -69,7 +69,7 @@ CMake가 없을 때는 컴파일러로 바로 빌드할 수 있습니다 (macOS/
 ```bash
 mkdir -p build
 CORE=(src/card.cpp src/evaluator.cpp src/pot.cpp src/review.cpp src/game.cpp src/equity.cpp src/bots.cpp src/human_player.cpp)
-WEB=(src/web_json.cpp src/web_session.cpp src/web_server.cpp src/stats.cpp)
+WEB=(src/web_json.cpp src/web_session.cpp src/web_server.cpp src/stats.cpp src/ledger.cpp src/sha256.cpp)
 WEBFLAGS=(-isystem third_party -pthread -DHOLDEM_WEB_DIR="\"$PWD/web\"")
 c++ -std=c++17 -O2 -Wall -Wextra -Isrc "${WEBFLAGS[@]}" "${CORE[@]}" "${WEB[@]}" src/main.cpp -o build/holdem
 c++ -std=c++17 -O2 -Wall -Wextra -Isrc "${CORE[@]}" src/bench.cpp -o build/holdem_bench
@@ -233,7 +233,7 @@ ID는 누구나 바꿔 보낼 수 있으므로 `MAX_ROOMS_PER_CLIENT`는 실수�
 ```bash
 export STATS_TOKEN="$(openssl rand -hex 16)"   # 긴 임의의 값
 echo "$STATS_TOKEN"                            # 따로 적어 두세요
-TZ=Asia/Seoul ./build/holdem --web             # TZ: 날짜를 한국 시간으로 세기
+./build/holdem --web                           # 날짜는 늘 한국 시간으로 센다
 ```
 
 그다음 `http://서버주소:8080/stats?token=위의값` 으로 접속합니다.
@@ -241,6 +241,26 @@ TZ=Asia/Seoul ./build/holdem --web             # TZ: 날짜를 한국 시간으�
 - `STATS_TOKEN`이 없으면 `/stats`는 404입니다. 토큰이 틀려도 404입니다.
 - 토큰을 코드나 git에 적지 마세요. 이 서버는 HTTPS가 없어 주소의 토큰이 암호화되지 않으므로, 다른 곳에서 쓰는 비밀번호를 재사용하지 마세요.
 - "총 방문 수"는 (브라우저, 날짜)의 합, "게임당 평균 판 수"는 완료한 판 수를 게임 시작 횟수로 나눈 값입니다.
+
+### 날짜별 기록 (ledger)
+
+한국 시간 자정이 지나면 전날 집계를 `data/stats-ledger.jsonl`에 한 줄 덧붙입니다(꺼져 있었다면 다음에 켤 때).
+줄마다 앞줄의 해시를 담아, 지난 줄을 고치면 검증에서 드러납니다. 서버를 켤 때 전체를 검증하며, 어긋나면 `/stats`에 "ledger 불일치"가 표시되고 더 덧붙이지 않습니다.
+
+- **`data/` 폴더는 다시 배포해도 남아 있어야 합니다.** 지워지면 기록이 처음부터 다시 시작됩니다.
+- 유입 경로는 `https://주소/?src=instagram`처럼 붙입니다. 세는 이름: `instagram`, `everytime`, `kakao`, `discord`, `friend`, `poster`, `qr`, `github` (그 밖은 `other`).
+- 항목 설명과 검증 방법: [tools/ledger/README.md](tools/ledger/README.md)
+
+공개 저장소에 올리기 (자동 실행은 설정돼 있지 않습니다):
+
+```bash
+# 처음 한 번: GitHub에 기록 전용 공개 저장소를 만들고 받아 둔다
+git clone git@github.com:계정/holdem-ledger.git ~/holdem-ledger
+
+# 서버를 실행하는 폴더에서
+LEDGER_REPO=~/holdem-ledger tools/ledger/publish.sh --dry-run   # 무엇이 올라갈지만 확인
+LEDGER_REPO=~/holdem-ledger tools/ledger/publish.sh             # 실제로 올리기
+```
 
 ## 서버 배포 (Ubuntu 22.04)
 

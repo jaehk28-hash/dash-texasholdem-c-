@@ -335,7 +335,13 @@ void setupRoutes(httplib::Server& server, RoomManager& rooms, const std::string&
     // 방문 집계: 브라우저가 처음 열릴 때 한 번 부른다. 저장하는 것은 ID의 해시뿐이다.
     server.Post("/api/visit", [&rooms](const httplib::Request& req, httplib::Response& res) {
         const auto& stats = rooms.options().stats;
-        if (stats) stats->visit(clientId(req));
+        std::map<std::string, JsonValue> body;
+        std::string src;  // 유입 경로. 정해 둔 이름만 Stats가 센다.
+        if (parseFlatJsonObject(req.body, body)) {
+            const auto found = body.find("src");
+            if (found != body.end() && found->second.type == JsonValue::Type::String) src = found->second.text;
+        }
+        if (stats) stats->visit(clientId(req), src);
         res.set_content("{\"ok\":true}", kJson);
     });
 

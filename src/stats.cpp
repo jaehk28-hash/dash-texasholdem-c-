@@ -22,27 +22,59 @@
 #include <thread>
 #include <utility>
 
+#include "ledger.h"
 #include "web_json.h"
 
 namespace {
 
+constexpr std::time_t kDaySeconds = 24 * 60 * 60;
+constexpr std::time_t kKoreaOffset = 9 * 60 * 60;  // 한국 시간 = UTC+9 (서머타임 없음)
+constexpr auto kLedgerCheck = std::chrono::seconds(20);  // 자정이 지났는지 보는 간격
+
+// 한국 시간의 날짜. 서버의 시간대 설정과 상관없다.
 std::string dateText(std::time_t time) {
-    std::tm local{};
-    localtime_r(&time, &local);  // 서버의 시간대를 따른다 (TZ 환경변수로 바꿀 수 있다)
+    const std::time_t shifted = time + kKoreaOffset;
+    std::tm korea{};
+    gmtime_r(&shifted, &korea);
     char buf[32];
-    std::snprintf(buf, sizeof(buf), "%04d-%02d-%02d", local.tm_year + 1900, local.tm_mon + 1, local.tm_mday);
+    std::snprintf(buf, sizeof(buf), "%04d-%02d-%02d", korea.tm_year + 1900, korea.tm_mon + 1, korea.tm_mday);
     return buf;
 }
 
-// time에서 days일 전의 날짜 (정오 기준으로 계산해 시간 변경의 영향을 피한다)
-std::string dateBefore(std::time_t time, int days) {
-    std::tm local{};
-    localtime_r(&time, &local);
-    local.tm_hour = 12;
-    local.tm_min = local.tm_sec = 0;
-    local.tm_mday -= days;
-    local.tm_isdst = -1;
-    return dateText(std::mktime(&local));
+// "2026-11-30" -> "2026-12-01"
+std::string nextDate(const std::string& date) {
+    std::tm t{};
+    if (std::sscanf(date.c_str(), "%d-%d-%d", &t.tm_year, &t.tm_mon, &t.tm_mday) != 3) return "9999-99-99";
+    t.tm_year -= 1900;
+    t.tm_mon -= 1;
+    t.tm_hour = 12;
+    return dateText(timegm(&t) + kDaySeconds);
+}
+
+// 세는 유입 경로. 아무 글자나 받으면 공개 기록에 개인정보가 섞일 수 있어 정해 둔 이름만 쓴다.
+const char* const kSources[] = {"instagram", "everytime", "kakao", "discord", "friend", "poster", "qr", "github"};
+
+std::string sourceName(const std::string& src) {
+    if (src.empty()) return "";
+    for (const char* known : kSources) {
+        if (src == known) return src;
+    }
+    return "other";
+}
+
+std::string folderOf(const std::string& path) {
+    const std::size_t slash = path.rfind('/');
+    return slash == std::string::npos ? "" : path.substr(0, slash + 1);
+}
+
+// ledger 끝에 한 줄을 덧붙인다. 기존 내용은 건드리지 않는다 (O_APPEND).
+bool appendLine(const std::string& path, const std::string& line) {
+    const int fd = ::open(path.c_str(), O_WRONLY | O_APPEND | O_CREAT, 0600);
+    if (fd < 0) return false;
+    const std::string text = line + "\n";
+    bool ok = ::write(fd, text.data(), text.size()) == static_cast<ssize_t>(text.size());  // 한 번에 쓴다
+    ok = ::fsync(fd) == 0 && ok;
+    return ::close(fd) == 0 && ok;
 }
 
 // path의 윗 폴더들을 만든다 (이미 있으면 그대로 둔다)
@@ -74,8 +106,15 @@ bool writeFile(const std::string& path, const std::string& content) {
 }  // namespace
 
 Stats::Stats(std::string path, Clock clock)
-    : path_(std::move(path)), clock_(clock ? std::move(clock) : [] { return std::time(nullptr); }) {
+    : path_(std::move(path)),
+      ledgerPath_(folderOf(path_) + "stats-ledger.jsonl"),
+      clock_(clock ? std::move(clock) : [] { return std::time(nullptr); }) {
     load();
+    if (ledgerFrom_.empty()) {
+        ledgerFrom_ = today();
+        dirty_ = true;
+    }
+    updateLedger();  // 시작할 때 체인 전체를 검증한다
     writer_ = std::thread([this] { writerLoop(); });
 }
 
@@ -104,6 +143,10 @@ void Stats::load() {
     for (const auto& [key, value] : values) {
         if (key.rfind("seen.", 0) == 0 && value.type == JsonValue::Type::String) {
             seen_[key.substr(5)] = value.text;
+        } else if (key == "ledger.from" && value.type == JsonValue::Type::String) {
+            ledgerFrom_ = value.text;
+        } else if (key == "ledger.head" && value.type == JsonValue::Type::String) {
+            ledgerHead_ = value.text;
         } else if (value.type == JsonValue::Type::Integer) {
             counters_[key] = value.number;
         }
@@ -122,20 +165,23 @@ void Stats::changedLocked() {
     cv_.notify_all();
 }
 
-void Stats::visit(const std::string& idHash) {
+void Stats::visit(const std::string& idHash, const std::string& src) {
     if (!validIdHash(idHash)) return;
     try {
-        const std::string date = today();
         std::lock_guard<std::mutex> lock(mutex_);
+        const std::string date = today();  // 잠근 뒤에 읽어야 ledger에 쓴 날짜가 바뀌지 않는다
         const auto found = seen_.find(idHash);
         if (found != seen_.end() && found->second == date) return;  // 오늘 이미 셌다
         if (found == seen_.end()) {
             if (seen_.size() >= kMaxVisitorIds) return;
             ++counters_["unique"];
+            ++counters_["day." + date + ".new"];
         }
         seen_[idHash] = date;
         ++counters_["visits"];
         ++counters_["day." + date + ".visitors"];
+        const std::string source = sourceName(src);
+        if (!source.empty()) ++counters_["day." + date + ".src." + source];
         changedLocked();
     } catch (const std::exception& e) {
         std::fprintf(stderr, "통계 기록 실패: %s\n", e.what());
@@ -146,6 +192,7 @@ void Stats::gameStarted(bool solo, int bots) {
     try {
         std::lock_guard<std::mutex> lock(mutex_);
         ++counters_[solo ? "solo" : "room"];
+        ++counters_["day." + today() + (solo ? ".solo" : ".room")];
         ++counters_["bots." + std::to_string(bots)];
         changedLocked();
     } catch (const std::exception& e) {
@@ -155,8 +202,8 @@ void Stats::gameStarted(bool solo, int bots) {
 
 void Stats::handFinished() {
     try {
-        const std::string date = today();
         std::lock_guard<std::mutex> lock(mutex_);
+        const std::string date = today();
         ++counters_["hands"];
         ++counters_["day." + date + ".hands"];
         changedLocked();
@@ -173,6 +220,7 @@ StatsSummary Stats::summary(int days) const {
         return it == counters_.end() ? 0LL : it->second;
     };
     StatsSummary s;
+    s.ledgerBroken = ledgerBroken_;
     s.totalVisits = get("visits");
     s.uniqueVisitors = get("unique");
     s.soloStarts = get("solo");
@@ -180,7 +228,7 @@ StatsSummary Stats::summary(int days) const {
     s.totalHands = get("hands");
     for (int i = days - 1; i >= 0; --i) {
         DayStats day;
-        day.date = dateBefore(now, i);
+        day.date = dateText(now - i * kDaySeconds);
         day.hands = get("day." + day.date + ".hands");
         day.visitors = get("day." + day.date + ".visitors");
         s.days.push_back(day);
@@ -210,6 +258,8 @@ std::string Stats::serializeLocked() const {
         out += comma + jsonString("seen." + id) + ":" + jsonString(date);
         comma = ",\n";
     }
+    out += comma + jsonString("ledger.from") + ":" + jsonString(ledgerFrom_);
+    if (!ledgerHead_.empty()) out += ",\n" + jsonString("ledger.head") + ":" + jsonString(ledgerHead_);
     return out + "\n}\n";
 }
 
@@ -232,16 +282,103 @@ bool Stats::flush() {
     return false;
 }
 
+bool Stats::updateLedger() {
+    std::lock_guard<std::mutex> updating(ledgerMutex_);
+    try {
+        std::string date, from, head;
+        long long recorded = 0;  // 지금까지 덧붙였다고 기억하는 줄 수
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            date = today();
+            ledgerChecked_ = date;
+            from = ledgerFrom_;
+            head = ledgerHead_;
+            recorded = counters_["ledger.lines"];
+        }
+
+        std::string content;
+        if (std::ifstream file{ledgerPath_, std::ios::binary}) {
+            std::ostringstream all;
+            all << file.rdbuf();
+            content = all.str();
+        }
+        LedgerState chain = checkLedger(content);
+        // 체인 자체는 맞아도, 뒤쪽 줄을 지우거나 통째로 새로 만들면 기억해 둔 hash와 어긋난다.
+        const bool kept = recorded <= 0 || (static_cast<std::size_t>(recorded) <= chain.hashes.size() &&
+                                            chain.hashes[static_cast<std::size_t>(recorded) - 1] == head);
+        const bool broken = !chain.ok || !kept;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            ledgerBroken_ = broken;
+        }
+        if (broken) {
+            std::fprintf(stderr, "ledger 불일치: %s 를 확인하세요. 더 덧붙이지 않습니다.\n", ledgerPath_.c_str());
+            return false;
+        }
+
+        // 마지막 줄 다음 날부터 어제까지. 아무도 안 온 날도 0으로 남긴다.
+        std::string prev = chain.hashes.empty() ? "genesis" : chain.hashes.back();
+        std::size_t lines = chain.hashes.size();
+        for (std::string day = chain.lastDate.empty() ? from : nextDate(chain.lastDate); day < date;
+             day = nextDate(day)) {
+            LedgerCounts counts;
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                const std::string base = "day." + day + ".";
+                auto get = [&](const std::string& name) {
+                    const auto it = counters_.find(base + name);
+                    return it == counters_.end() ? 0LL : it->second;
+                };
+                counts.visits = get("visitors");
+                counts.uniqueVisitors = get("new");
+                counts.soloStarts = get("solo");
+                counts.roomStarts = get("room");
+                counts.handsFinished = get("hands");
+                for (const char* source : kSources) {
+                    if (get(std::string("src.") + source) > 0) counts.src[source] = get(std::string("src.") + source);
+                }
+                if (get("src.other") > 0) counts.src["other"] = get("src.other");
+            }
+            const std::string line = ledgerLine(day, counts, prev);
+            makeParentFolders(ledgerPath_);
+            if (!appendLine(ledgerPath_, line)) {
+                std::fprintf(stderr, "ledger 쓰기 실패(%s): %s\n", ledgerPath_.c_str(), std::strerror(errno));
+                return false;
+            }
+            prev = line.substr(line.size() - 66, 64);  // 줄 끝의 hash
+            ++lines;
+        }
+        if (lines > 0) {
+            std::lock_guard<std::mutex> lock(mutex_);
+            if (counters_["ledger.lines"] != static_cast<long long>(lines)) {
+                counters_["ledger.lines"] = static_cast<long long>(lines);
+                ledgerHead_ = prev;
+                changedLocked();
+            }
+        }
+        return true;
+    } catch (const std::exception& e) {
+        std::fprintf(stderr, "ledger 갱신 실패: %s\n", e.what());
+    }
+    return false;
+}
+
 void Stats::writerLoop() {
     std::unique_lock<std::mutex> lock(mutex_);
     while (!stopping_) {
-        cv_.wait(lock, [this] { return stopping_ || dirty_; });
+        cv_.wait_for(lock, kLedgerCheck, [this] { return stopping_ || dirty_; });
         if (stopping_) break;
-        // 잠깐 모았다가 한 번에 쓴다.
-        cv_.wait_for(lock, std::chrono::milliseconds(200), [this] { return stopping_; });
-        lock.unlock();
-        flush();
-        lock.lock();
+        if (dirty_) {  // 잠깐 모았다가 한 번에 쓴다.
+            cv_.wait_for(lock, std::chrono::milliseconds(200), [this] { return stopping_; });
+            lock.unlock();
+            flush();
+            lock.lock();
+        }
+        if (today() != ledgerChecked_) {  // 자정(한국 시간)이 지났다
+            lock.unlock();
+            updateLedger();
+            lock.lock();
+        }
     }
 }
 
@@ -277,7 +414,13 @@ std::string statsPageHtml(const StatsSummary& s) {
         ".col{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-end;align-items:center}"
         ".col i{display:block;width:80%;max-height:100px;background:#c9a24b;border-radius:3px 3px 0 0}"
         ".col em{font-style:normal;font-size:10px}.col small{font-size:10px;color:#b9b4a4;padding:2px 0}"
-        "p{font-size:12px;color:#b9b4a4}</style></head><body><main><h1>사용 통계</h1><div class=\"cards\">";
+        "p{font-size:12px;color:#b9b4a4}.warn{border:2px solid #e0a33a;border-radius:10px;padding:10px;"
+        "font-size:15px;color:#ffd48a}</style></head><body><main><h1>사용 통계</h1>";
+    if (s.ledgerBroken) {
+        html += "<p class=\"warn\" role=\"alert\"><strong>ledger 불일치</strong>: data/stats-ledger.jsonl의 내용이 바뀌었거나 "
+                "줄이 사라졌습니다. 공개 저장소의 기록과 비교하세요. 해결될 때까지 새 줄을 덧붙이지 않습니다.</p>";
+    }
+    html += "<div class=\"cards\">";
     html += card("총 판 수", std::to_string(s.totalHands));
     html += card("오늘 판 수", std::to_string(s.todayHands));
     html += card("고유 방문자 수", std::to_string(s.uniqueVisitors));
@@ -290,6 +433,6 @@ std::string statsPageHtml(const StatsSummary& s) {
     html += "</div>";
     html += chart("최근 14일 판 수", &DayStats::hands);
     html += chart("최근 14일 고유 방문자 수", &DayStats::visitors);
-    html += "<p>숫자만 저장합니다. 닉네임, IP, 카드 내용은 저장하지 않습니다. 날짜는 서버 시간대 기준입니다.</p>";
+    html += "<p>숫자만 저장합니다. 닉네임, IP, 카드 내용은 저장하지 않습니다. 날짜는 한국 시간 기준입니다.</p>";
     return html + "</main></body></html>";
 }
