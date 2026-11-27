@@ -687,6 +687,31 @@
   #screen-setup input:not([type=range]):not([type=checkbox]), #screen-setup select { background: #120a05; border-color: #8a6f38; }
   #screen-setup input::placeholder { color: #b9a88a; opacity: 1; }
 
+  /* 게임 흐름 안내 (움직임 없음) */
+  #flowGuide { display: flex; flex-direction: column; gap: 8px; border-color: var(--gold); }
+  .guide-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  #flowGuide h3 { font-size: 16px; }
+  #flowGuide .guide-head button { min-width: 44px; min-height: 44px; }
+  .guide-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+  .guide-never { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 6px; font-size: 14px; cursor: pointer; }
+  .guide-never input { width: 22px; height: 22px; flex: none; margin: 0; cursor: pointer; }
+  .guide-foot button { min-width: 88px; min-height: 44px; }
+  #guideAgain { min-height: 44px; margin-top: 8px; }
+  #guideAgainNote:empty { display: none; }
+  ol.steps.small { list-style: none; display: grid; gap: 6px; font-size: 13px; line-height: 1.45; word-break: keep-all; }
+  ol.steps.small .step { position: relative; grid-template-columns: 24px minmax(0, 1fr); gap: 8px; padding: 6px 8px; border-radius: 8px; }
+  ol.steps.small .step::after { display: none; }
+  ol.steps.small .step-num { width: 22px; height: 22px; font-size: 12px; }
+  ol.steps.small .step h4 { font-size: 14px; }
+  @media (min-width: 700px) { ol.steps.small { grid-template-columns: 1fr 1fr; } }
+  /* 좁은 화면: 테이블이 바로 보이도록 목록만 안에서 스크롤 */
+  @media (max-width: 699px) { #guideSteps { max-height: 168px; overflow-y: auto; overscroll-behavior: contain; } }
+  /* 아주 넓은 화면: 테이블 왼쪽 빈 곳에 (행동 기록은 오른쪽) */
+  @media (min-width: 1240px) {
+    #flowGuide { position: fixed; left: 12px; top: 74px; width: 220px; max-height: calc(100vh - 90px); overflow-y: auto; }
+    #flowGuide ol.steps.small { grid-template-columns: 1fr; }
+  }
+
   /* 지금 상황, 핸드 리뷰 */
   #now { font-size: 14px; line-height: 1.55; display: flex; flex-direction: column; gap: 4px; }
   #now h3 { font-size: 15px; margin: 0; }
@@ -821,6 +846,8 @@
           <div class="step-text"><h4>승부</h4><p>끝까지 남은 사람끼리 카드를 보여줘요. 가장 센 조합이 가운데 칩(팟)을 모두 가져가요. 다들 포기하면 마지막에 남은 한 명이 바로 가져가요.</p></div>
         </li>
       </ol>
+      <button type="button" class="link" id="guideAgain">게임 진행 안내 다시 보기</button>
+      <p id="guideAgainNote" role="status"></p>
     </div>
 
     <div class="panel">
@@ -988,6 +1015,18 @@
 
   <!-- 6) 게임 테이블 -->
   <section class="screen" id="screen-game" hidden>
+    <!-- 게임 흐름 안내: 테이블 위에 끼워 넣는 칸이라 아무것도 가리지 않는다 -->
+    <aside class="panel" id="flowGuide" aria-labelledby="flowGuideTitle" hidden>
+      <div class="guide-head">
+        <h3 id="flowGuideTitle">한 판은 이렇게 흘러가요</h3>
+        <button type="button" class="guide-close" aria-label="안내 닫기">✕</button>
+      </div>
+      <ol class="steps small" id="guideSteps" tabindex="0"></ol>
+      <div class="guide-foot">
+        <label class="guide-never"><input type="checkbox" id="guideNever"> 다시 보지 않기</label>
+        <button type="button" class="primary guide-close">닫기</button>
+      </div>
+    </aside>
     <div class="table" id="table">
       <div class="mid">
         <div class="pot" id="pot"></div>
@@ -2083,9 +2122,50 @@ function fill(template, values) {
     }, 400);
   }, true);
 
+  // ---- 게임 흐름 안내 ----
+  // 게임에 들어오면 보이고, 닫으면 그 게임(방 코드)에서는 다시 뜨지 않는다. 저장이 막혀 있으면 이번 접속에만 기억.
+  // 문구는 규칙 화면의 4단계를 복사해서 쓴다 (두 번 적지 않는다).
+  $("guideSteps").append(...[...$("flowSteps").children].map((step) => {
+    const copy = step.cloneNode(true);
+    copy.querySelector(".step-art").remove();
+    const art = copy.querySelector(".board-art");
+    if (art) art.remove();
+    return copy;
+  }));
+  // "다시 보지 않기"는 이 브라우저의 localStorage에만 저장한다 (서버에 보내지 않아 다른 플레이어와 무관).
+  // 저장이 막혀 있으면 recall이 null이라, 지금 게임에서만 숨겨진다.
+  let guideClosed = recall("guideClosed") || "";  // 안내를 닫은 게임의 방 코드
+  function renderGuide() {
+    $("flowGuide").hidden = recall("guideNever") === "1" || state.code === guideClosed;
+  }
+  document.querySelectorAll("#flowGuide .guide-close").forEach((button) => {
+    button.onclick = () => {
+      guideClosed = state.code;
+      remember("guideClosed", guideClosed);
+      if ($("guideNever").checked) remember("guideNever", "1");
+      $("guideNever").checked = false;
+      $("flowGuide").hidden = true;
+    };
+  });
+  // 규칙 화면의 "다시 보기": 저장한 설정을 풀고, 게임 중이면 바로 게임으로 돌아가 안내를 보여 준다.
+  $("guideAgain").onclick = () => {
+    remember("guideNever", "0");
+    remember("guideClosed", "");
+    guideClosed = "";
+    $("guideNever").checked = false;
+    if (state && state.hasGame && state.phase !== "lobby") {
+      $("rulesOk").click();
+      renderGuide();
+    } else {
+      $("guideAgainNote").textContent = "다음 게임에 들어가면 안내가 다시 나와요.";
+    }
+  };
+  $("showRules").addEventListener("click", () => { $("guideAgainNote").textContent = ""; });
+
   // 기존 화면 갱신(renderHint)이 힌트 칸을 새로 그릴 때마다 함께 갱신한다.
   new MutationObserver(() => {
     if (!state || !state.players) return;
+    renderGuide();
     renderNow();
     renderResult();
     renderFlow();
