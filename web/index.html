@@ -379,14 +379,40 @@
   .rk-place { font-weight: 800; color: var(--gold-light); }
   .rk-delta { font-weight: 800; text-align: right; font-variant-numeric: tabular-nums; }
   .rk-delta.plus { color: #8ff0b9; } .rk-delta.minus { color: #ff9aa5; }
-  .rk-sub { grid-column: 2 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
   .rk.out { opacity: .65; }
-  #result .rv-cards .card, .rk .card { flex-basis: 27px; height: 38px; }
+  /* 이번 판 순위의 한 행: 순위·이름·증감 / 족보 이름 / 최종 5장 */
+  .rr { border: 1px solid var(--line); border-radius: 10px; padding: 8px 6px; display: flex; flex-direction: column; gap: 6px; }
+  .rr.win { border: 2px solid var(--gold-light); background: rgba(201, 162, 75, .12); }
+  .rr-head { display: flex; align-items: center; gap: 8px; }
+  .rr-head .rk-delta { margin-left: auto; white-space: nowrap; }
+  .rr-name { font-weight: 700; min-width: 0; }
+  .win-badge { padding: 0 8px; border-radius: 4px; background: var(--gold-light); color: #17150f; font-size: 12px; font-weight: 800; white-space: nowrap; }
+  .rr-hand { font-family: var(--serif); font-size: 20px; font-weight: 700; color: var(--ivory); line-height: 1.3; display: flex; align-items: center; gap: 6px; }
+  .rr-suit { font-size: 30px; line-height: 1; }
+  .rr-suit.red { color: #ff8d97; }
+  /* 5장은 항상 한 줄. 폭이 모자라면 카드가 함께 줄어든다 */
+  .b5 { display: flex; flex-wrap: nowrap; align-items: stretch; gap: 3px; }
+  .b5-group { min-width: 0; display: flex; flex-direction: column; border: 2px solid var(--gold-light); border-radius: 8px; padding: 5px 2px 2px; background: rgba(232, 207, 133, .16); }
+  .b5-group.B { border-color: #7fd4ff; background: rgba(127, 212, 255, .16); }
+  .b5-cards { display: flex; gap: 2px; }
+  .b5-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 1px; }
+  .b5-group, .b5 > .b5-col { flex: var(--n, 1) 1 0; max-width: calc(var(--n, 1) * 52px); }
+  .b5 > .b5-col { padding-top: 7px; }
+  .b5 .card { flex: none; width: 100%; max-width: 44px; height: auto; aspect-ratio: 5 / 7; padding: 3px; }
+  .b5 .card span:first-child { font-size: clamp(12px, 4.2vw, 18px); }
+  .b5 .card span:last-child { font-size: clamp(15px, 5.4vw, 24px); }
+  .b5-group .card { border: 2px solid var(--gold); background: #fffaec; transform: translateY(-3px); }
+  .b5 > .b5-col .card { opacity: .5; }
+  .b5-mine { height: 8px; width: 8px; border-radius: 50%; }
+  .b5-mine.on, .b5-legend i { background: #7ff0b5; }
+  .b5-note { font-size: 11px; color: var(--muted); line-height: 1.3; white-space: nowrap; }
+  .b5-group > .b5-note { text-align: center; font-weight: 700; color: var(--ivory); }
+  .b5-legend i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
 
   /* 효과 줄이기: 움직임과 빛을 모두 끈다 (회색 처리 같은 의미 표시는 남긴다) */
   html.reduce-fx *, html.reduce-fx *::before, html.reduce-fx *::after { animation: none !important; transition: none !important; text-shadow: none !important; }
   html.reduce-fx body::before, html.reduce-fx body::after { display: none; }
-  html.reduce-fx :is(button, .neon, .preset, .marquee, .bulb, .bubble, .card, .seat, .seat::before, .pile i, .rv-key, #screen-home header button) { box-shadow: none !important; }
+  html.reduce-fx :is(button, .neon, .marquee, .bulb, .bubble, .card, .seat, .seat::before, .pile i, .rv-key, #screen-home header button) { box-shadow: none !important; }
   html.reduce-fx .wrap header button { box-shadow: none !important; }
   html.reduce-fx :is(.star, .neon svg) { filter: none !important; }
   html.reduce-fx button:active:not(:disabled), html.reduce-fx #screen-home .neon { transform: none !important; }
@@ -425,28 +451,34 @@
   .row { display: flex; gap: 6px; }
   .row > button { flex: 1; }
 
-  /* 설정 화면: 프리셋, 상세 설정 */
-  .presets { display: flex; flex-direction: column; gap: 12px; padding: 4px 2px; }
-  .preset { --glow: #19e6ff; --tint: #c9fbff; display: grid; grid-template-columns: 1fr auto; align-items: center; text-align: left; column-gap: 10px;
-    min-height: 74px; padding: 10px 16px; border: 2px solid color-mix(in srgb, var(--glow) 55%, transparent); border-radius: 14px; background: #0a0d1c; color: #fff; }
-  .preset.gold { --glow: #ffb52e; --tint: #ffe7ac; }
-  .preset.pink { --glow: #ff2d78; --tint: #ffd0e0; }
-  .preset b { font-family: var(--serif); font-size: 22px; text-shadow: 0 0 8px var(--glow); }
-  .preset small { grid-column: 1; font-size: 13px; font-weight: 500; color: var(--tint); }
-  .preset::after { content: ""; grid-column: 2; grid-row: 1 / span 2; width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--tint);
-    display: grid; place-items: center; font-size: 17px; font-weight: 800; color: #0a0d1c; }
-  /* 선택한 프리셋: 색뿐 아니라 체크 표시로도 알 수 있게 */
-  .preset[aria-pressed="true"] { border-color: var(--tint); box-shadow: 0 0 6px var(--glow), 0 0 18px var(--glow), inset 0 0 18px color-mix(in srgb, var(--glow) 40%, transparent); }
-  .preset[aria-pressed="true"]::after { content: "✓"; background: var(--tint); }
+  /* 설정 화면: 상대 인원, 승률 힌트, 상세 설정 */
+  #soloMain { display: flex; flex-direction: column; gap: 10px; }
+  #soloMain h3 { margin-bottom: 0; }
+  .sub, .help-block { font-size: 13px; color: var(--muted); }
+  .count-buttons { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; margin-top: 8px; }
+  .count-buttons button { min-height: 56px; padding: 0; font-size: 22px; font-weight: 800; border: 2px solid #4a4a55; color: var(--ivory); background: #0a0d1c; }
+  /* 선택된 것만 네온 강조 */
+  .count-buttons button[aria-pressed="true"] { border-color: #c9fbff; background: #0d2c3a; color: #fff;
+    box-shadow: 0 0 6px #19e6ff, 0 0 18px #19e6ff, inset 0 0 14px rgba(25, 230, 255, .45); }
+  .switch-title { font-family: var(--serif); font-size: 17px; font-weight: 700; color: var(--gold-light); }
+  /* 켜짐/꺼짐 스위치 */
+  #hintRow input[type=checkbox] { appearance: none; -webkit-appearance: none; position: relative; flex: none; width: 84px; height: 44px; border-radius: 22px;
+    border: 2px solid #6a6a72; background: #17181c; cursor: pointer; }
+  #hintRow input::before { content: ""; position: absolute; top: 4px; left: 4px; width: 32px; height: 32px; border-radius: 50%; background: #b9b9bf; transition: transform .15s; }
+  #hintRow input::after { content: "꺼짐"; position: absolute; right: 8px; top: 11px; font-size: 13px; font-weight: 700; color: #d4d4d8; }
+  #hintRow input:checked { border-color: #c9fbff; background: #0d4a5c; }
+  #hintRow input:checked::before { transform: translateX(40px); background: #fff; }
+  #hintRow input:checked::after { content: "켜짐"; right: auto; left: 10px; color: #fff; }
   #advanced > summary { min-height: 44px; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; font-weight: 700;
     color: var(--gold-light); border: 1px dashed var(--line); border-radius: 10px; list-style: none; }
   #advanced > summary::-webkit-details-marker { display: none; }
   #advanced > summary::after { content: "▾"; }
   #advanced[open] > summary::after { content: "▴"; }
   #advanced[open] > summary { margin-bottom: 8px; }
-  #screen-setup:not(.solo) #advanced > summary, #screen-setup:not(.solo) .help { display: none; }
+  #screen-setup:not(.solo) #advanced > summary, #screen-setup:not(.solo) .help, #screen-setup:not(.solo) .help-block, #screen-setup.solo #botsRow { display: none; }
   #screen-setup.solo label { flex-wrap: wrap; row-gap: 0; padding: 4px 0; border-bottom: 1px solid rgba(201, 162, 75, .14); }
   #screen-setup.solo label:last-child { border-bottom: 0; }
+  #screen-setup.solo #hintRow { border-bottom: 0; }
   .help { flex-basis: 100%; font-size: 12px; line-height: 1.4; color: var(--muted); }
   #setupWarn { color: #ffcf8a; font-size: 14px; line-height: 1.5; text-align: center; }
   #setupWarn:empty { display: none; }
@@ -561,10 +593,20 @@
   <!-- 3) 게임 설정 (혼자 하기 / 방 만들기) -->
   <section class="screen" id="screen-setup" hidden>
     <h2 id="setupTitle"></h2>
-    <div class="presets" id="presets" role="group" aria-label="게임 방식 고르기">
-      <button type="button" class="preset" data-preset="easy" aria-pressed="false"><b>입문</b><small>봇 2명 · 승률 힌트 켜짐</small></button>
-      <button type="button" class="preset gold" data-preset="normal" aria-pressed="true"><b>보통</b><small>봇 3명 · 승률 힌트 켜짐</small></button>
-      <button type="button" class="preset pink" data-preset="full" aria-pressed="false"><b>풀 테이블</b><small>봇 5명 · 승률 힌트 꺼짐</small></button>
+    <!-- 혼자 하기: 인원과 힌트만 먼저 보여 준다 -->
+    <div id="soloMain">
+      <div class="panel">
+        <h3 id="countTitle">상대 인원</h3>
+        <p class="sub">같이 치는 컴퓨터 상대의 수예요</p>
+        <div class="count-buttons" id="botButtons" role="group" aria-labelledby="countTitle">
+          <button type="button" data-bots="1" aria-pressed="false">1</button>
+          <button type="button" data-bots="2" aria-pressed="false">2</button>
+          <button type="button" data-bots="3" aria-pressed="true">3</button>
+          <button type="button" data-bots="4" aria-pressed="false">4</button>
+          <button type="button" data-bots="5" aria-pressed="false">5</button>
+        </div>
+      </div>
+      <div class="panel" id="hintSlot"></div>
     </div>
     <details id="advanced">
       <summary>상세 설정</summary>
@@ -572,17 +614,17 @@
         <label class="multi">내 닉네임 <input id="hostName" maxlength="10" placeholder="한글/영문 1~10자"></label>
         <label>시작 칩 <input type="number" id="chips" inputmode="numeric">
           <small class="help">처음 갖고 시작하는 가상 칩이에요. 돈이 아니에요.</small></label>
+        <div class="help-block">블라인드는 매 판 강제로 내는 최소 베팅이에요.</div>
         <label>스몰 블라인드 <input type="number" id="sb" inputmode="numeric">
           <small class="help">카드를 받기 전에 한 사람이 강제로 내는 작은 판돈이에요.</small></label>
         <label>빅 블라인드 <input type="number" id="bb" inputmode="numeric">
           <small class="help">다른 사람이 강제로 내는 큰 판돈이에요. 이 판의 최소 베팅 금액이기도 해요. 보통 스몰 블라인드의 2배예요.</small></label>
-        <label>봇 수 <select id="bots"></select>
-          <small class="help">같이 치는 컴퓨터 상대의 수예요.</small></label>
+        <label id="botsRow">봇 수 <select id="bots"></select></label>
         <label class="multi">제한 시간 <select id="turnSeconds">
           <option value="30">30초</option><option value="60" selected>60초</option><option value="120">2분</option>
         </select></label>
-        <label>승률 힌트 <input type="checkbox" id="useHint" checked>
-          <small class="help">내 패로 이길 확률을 화면에 보여줘요.</small></label>
+        <label id="hintRow"><span class="switch-title">승률 힌트</span><input type="checkbox" id="useHint" role="switch" checked>
+          <small class="help">내 카드가 이길 확률을 알려줘요. 연습할 땐 켜두는 걸 추천해요.</small></label>
         <label>진행 속도 <select id="pace"><option value="slow">느리게(5초)</option><option value="normal">보통(3초)</option><option value="fast">빠르게(1초)</option></select>
           <small class="help">봇 한 명이 행동하는 데 걸리는 시간이에요. 게임 중에도 바꿀 수 있어요.</small></label>
         <label>효과 줄이기 <input type="checkbox" id="reduceFxSetup">
@@ -1024,6 +1066,7 @@ const TEXTS = {
   result: {
     title: "이번 판 결과 (제 {hand} 판)", ranking: "이번 판 순위", standings: "현재 칩 순위", place: "{place}위",
     tie: "무승부", same: "공동", folded: "폴드", out: "탈락", hidden: "카드 비공개 (모두 폴드해서 보여 주지 않아요)",
+    win: "승리", kicker: "키커", mine: "점이 있는 카드 = 그 사람이 손에 쥔 카드 (나머지는 공용 카드)",
     potsLine: "팟이 여러 개예요: {pots}",
   },
   notIn: "칩이 없어 이번 판에는 참여하지 않아요.",
@@ -1280,21 +1323,58 @@ function fill(template, values) {
     return out;
   }
 
-  // ---- 이번 판 결과 (순위는 서버가 계산한 값을 그대로 그린다) ----
+  // ---- 이번 판 결과 (순위와 최종 5장은 서버가 계산한 값을 그대로 그린다) ----
+  const SUIT_SIGN = { s: "♠", h: "♥", d: "♦", c: "♣" };
+
+  // 최종 5장: 묶음은 상자로, 묶음 밖(키커)은 흐리게
+  function bestRow(r) {
+    const row = el("div", "b5");
+    const column = (c, note) => {
+      const col = el("div", "b5-col");
+      col.append(cardNode(c.card), el("span", "b5-mine" + (c.hole ? " on" : "")));
+      if (c.hole) col.lastChild.title = "손패";
+      if (note) col.append(el("span", "b5-note", note));
+      return col;
+    };
+    for (const group of r.groups) {
+      const mine = r.best5.filter((c) => c.group === group.id);
+      const box = el("div", "b5-group " + group.id), inner = el("div", "b5-cards");
+      box.style.setProperty("--n", mine.length);
+      inner.append(...mine.map((c) => column(c)));
+      box.append(inner);
+      if (group.label) box.append(el("span", "b5-note", group.label));
+      row.append(box);
+    }
+    row.append(...r.best5.filter((c) => !c.group).map((c) => column(c, TEXTS.result.kicker)));
+    return row;
+  }
+
   function resultNodes(review) {
     const T = TEXTS.result, name = (seat) => review.names[seat];
     const signed = (n) => (n > 0 ? "+" : "") + num(n);
     const out = [el("h4", "", T.ranking)];
+    if (review.showdown) {
+      const legend = line("", "rv-muted b5-legend");
+      legend.append(el("i", ""), T.mine);
+      out.push(legend);
+    }
     for (const r of review.ranking) {
-      const row = el("div", "rk");
-      const place = r.folded ? T.folded : fill(T.place, { place: r.place });
-      row.append(el("span", "rk-place", place), el("span", "", name(r.seat) + (r.tie ? " · " + T.tie : "")),
-        el("span", "rk-delta" + (r.delta > 0 ? " plus" : r.delta < 0 ? " minus" : ""), signed(r.delta)));
-      if (!r.folded) {
-        const sub = el("div", "rk-sub");
-        if (r.cards.length) sub.append(cards(r.cards), el("span", "", r.handName));
-        else sub.append(el("span", "", T.hidden));
-        row.append(sub);
+      const row = el("div", "rr" + (r.place === 1 ? " win" : ""));
+      const head = el("div", "rr-head");
+      const place = r.folded ? T.folded : (r.tie ? T.same + " " : "") + fill(T.place, { place: r.place });
+      head.append(el("span", "rk-place", place), el("span", "rr-name", name(r.seat) + (r.tie ? " · " + T.tie : "")));
+      if (r.place === 1) head.append(el("span", "win-badge", T.win));
+      head.append(el("span", "rk-delta" + (r.delta > 0 ? " plus" : r.delta < 0 ? " minus" : ""), signed(r.delta)));
+      row.append(head);
+      if (r.best5.length) {
+        const hand = el("div", "rr-hand", r.handName);
+        if (r.hand === "FLUSH" || r.hand === "STRAIGHT_FLUSH" || r.hand === "ROYAL_FLUSH") {
+          const suit = r.best5[0].card[1];
+          hand.append(el("span", "rr-suit" + (suit === "h" || suit === "d" ? " red" : ""), SUIT_SIGN[suit]));
+        }
+        row.append(hand, bestRow(r));
+      } else if (!r.folded) {
+        row.append(line(T.hidden, "rv-muted"));
       }
       out.push(row);
     }
@@ -1419,34 +1499,18 @@ function showHomeStep(friends) {
 $("goFriends").onclick = () => showHomeStep(true);
 $("homeBack").onclick = () => showHomeStep(false);
 
-// ---- 설정 화면 보조: 프리셋, 상세 설정, 입력 검사 (서버로 보내는 내용과 방식은 그대로) ----
-// base가 true면 서버 기본값(칩, 블라인드)을 쓴다.
-const PRESETS = {
-  easy: { base: false, bots: 2, hint: true },
-  normal: { base: true, bots: 3, hint: true },
-  full: { base: true, bots: 5, hint: false },
-};
+// ---- 설정 화면 보조: 상대 인원, 승률 힌트, 입력 검사 (서버로 보내는 내용과 방식은 그대로) ----
 const STANDARD = { chips: 10000, sb: 50, bb: 100 };
-let preset = "normal";
 
 function fillMoney(values) {
   for (const key of ["chips", "sb", "bb"]) $(key).value = values[key];
 }
 function serverDefaults() { return (state && state.defaults) || STANDARD; }
 
-// 고른 프리셋 표시 (name이 빈 값이면 직접 설정한 상태)
-function markPreset(name) {
-  document.querySelectorAll(".preset").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.preset === name)));
-}
-
-function applyPreset(name) {
-  preset = name;
-  const p = PRESETS[name];
-  fillMoney(p.base ? serverDefaults() : STANDARD);
-  $("bots").value = String(p.bots);
-  $("useHint").checked = p.hint;
-  markPreset(name);
-  checkSetup();
+// 인원 버튼은 서버로 보내는 값(#bots)을 바꾸고 선택 표시를 맞춘다.
+function chooseBots(count) {
+  $("bots").value = String(count);
+  document.querySelectorAll("#botButtons button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.bots === String(count))));
 }
 
 // 서버의 validateSettings와 같은 범위를 미리 검사해서 쉬운 말로 알려 준다.
@@ -1472,29 +1536,37 @@ function checkSetup() {
 function arrangeSetup() {
   const screen = $("screen-setup");
   screen.classList.toggle("solo", setupSolo);
-  $("presets").hidden = !setupSolo;
+  $("soloMain").hidden = !setupSolo;
   // 혼자 하기: 상세 설정은 시작 버튼 아래에 접어 둔다. 방 만들기: 예전처럼 위에 펼쳐 둔다.
   screen.insertBefore($("advanced"), setupSolo ? screen.querySelector(".back") : $("startSetup"));
   $("advanced").open = !setupSolo;
-  if (setupSolo) {
-    applyPreset(preset);
+  // 승률 힌트 스위치는 하나뿐이라, 화면 종류에 따라 자리를 옮긴다.
+  if (setupSolo) $("hintSlot").append($("hintRow"));
+  else $("pace").closest("label").before($("hintRow"));
+
+  if (setupSolo) {  // 마지막으로 고른 값 (처음이면 3명, 켜짐)
+    const saved = recall("bots");
+    chooseBots(/^[1-5]$/.test(saved) ? saved : 3);
+    $("useHint").checked = recall("hint") !== "0";
   } else {
     fillMoney(serverDefaults());
     $("useHint").checked = true;
-    checkSetup();
   }
+  checkSetup();
 }
 $("goSolo").addEventListener("click", arrangeSetup);
 $("goCreate").addEventListener("click", arrangeSetup);
-document.querySelectorAll(".preset").forEach((b) => { b.onclick = () => applyPreset(b.dataset.preset); });
+document.querySelectorAll("#botButtons button").forEach((b) => {
+  b.onclick = () => { chooseBots(b.dataset.bots); remember("bots", b.dataset.bots); };
+});
+// 힌트는 인원과 상관없이 따로 기억한다.
+$("useHint").addEventListener("change", () => { if (setupSolo) remember("hint", $("useHint").checked ? "1" : "0"); });
 // 스몰 블라인드를 바꾸면 빅 블라인드는 2배로 따라간다 (그 뒤에 직접 고칠 수 있다)
 $("sb").addEventListener("input", () => {
   const sb = Number($("sb").value);
   if (Number.isInteger(sb) && sb > 0) $("bb").value = sb * 2;
 });
-for (const id of ["chips", "sb", "bb", "bots", "useHint"]) {
-  $(id).addEventListener("input", () => { markPreset(""); checkSetup(); });
-}
+for (const id of ["chips", "sb", "bb"]) $(id).addEventListener("input", checkSetup);
 
 // ---- 겉모습 전용: 칩 이동과 긴장감 연출 ----
 // 서버의 행동 기록(state.log)에서 새로 생긴 줄을 읽어 연출한다. 게임 진행은 기다리지 않고, 버튼도 막지 않는다.

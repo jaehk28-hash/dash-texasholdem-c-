@@ -189,6 +189,25 @@ std::string intListJson(const std::vector<int>& values) {
     return j + "]";
 }
 
+std::string bestHandJson(const std::optional<BestHand>& best) {
+    if (!best) return ",\"best5\":[],\"hand\":\"\",\"label\":\"\",\"groups\":[]";
+    std::string j = ",\"best5\":[";
+    for (std::size_t i = 0; i < best->cards.size(); ++i) {
+        const BestCard& c = best->cards[i];
+        j += i ? "," : "";
+        j += "{\"card\":" + jsonString(cardToString(c.card));
+        j += ",\"group\":" + (c.group ? jsonString(std::string(1, c.group)) : std::string("null"));
+        j += std::string(",\"hole\":") + boolJson(c.hole) + "}";
+    }
+    j += "],\"hand\":" + jsonString(best->code) + ",\"label\":" + jsonString(best->label) + ",\"groups\":[";
+    for (std::size_t i = 0; i < best->groups.size(); ++i) {
+        j += i ? "," : "";
+        j += "{\"id\":" + jsonString(std::string(1, best->groups[i].id)) +
+             ",\"label\":" + jsonString(best->groups[i].label) + "}";
+    }
+    return j + "]";
+}
+
 std::string compareJson(const std::optional<HandCompare>& c) {
     if (!c) return "null";
     const char* type = c->type == HandCompare::Type::Category ? "category"
@@ -260,7 +279,7 @@ std::string reviewToJson(const HandReview& r, const ReviewFlow* flow) {
         j += std::string(",\"folded\":") + boolJson(row.folded) + ",\"tie\":" + boolJson(row.tie);
         j += ",\"handName\":" + jsonString(row.handName);
         j += ",\"cards\":" + (row.cards ? cardListJson(row.cards->data(), row.cards->size()) : std::string("[]"));
-        j += ",\"delta\":" + std::to_string(row.delta) + "}";
+        j += ",\"delta\":" + std::to_string(row.delta) + bestHandJson(row.best) + "}";
     }
     j += "],\"standings\":[";
     for (std::size_t i = 0; i < r.standings.size(); ++i) {

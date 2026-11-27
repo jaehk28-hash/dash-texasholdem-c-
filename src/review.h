@@ -42,6 +42,29 @@ std::string describeHand(HandScore score);
 // 족보의 대략적인 세기: 1(하이 카드) ~ 6(풀 하우스 이상)
 int strengthLevel(HandScore score);
 
+// 최종 5장의 카드 하나
+struct BestCard {
+    Card card;
+    char group = 0;     // 족보를 이루는 묶음 'A' 또는 'B'. 0이면 족보에 안 들어가는 카드(키커)
+    bool hole = false;  // 그 사람이 손에 쥔 카드인가 (아니면 공용 카드)
+};
+
+// 묶음과 그 이름 ("트리플 2"). 5장 전체가 한 묶음이면 이름은 비워 둔다.
+struct CardGroup {
+    char id = 'A';
+    std::string label;
+};
+
+struct BestHand {
+    std::string code;   // "FULL_HOUSE" 같은 족보 코드
+    std::string label;  // "풀 하우스 (2 트리플 + 8 페어)"
+    std::vector<BestCard> cards;  // 5장. 중요한 카드부터
+    std::vector<CardGroup> groups;
+};
+
+// 홀 카드 2장 + 공용 카드 5장에서 최종 5장과 묶음을 계산한다.
+BestHand describeBestHand(const std::array<Card, 2>& hole, const std::vector<Card>& board);
+
 // "이번 판 순위"의 한 줄. 폴드한 사람은 순위가 없고(place 0) 카드도 담지 않는다.
 struct HandRankRow {
     int seat = 0;
@@ -51,6 +74,7 @@ struct HandRankRow {
     std::string handName;                      // 쇼다운에 참여했을 때만
     std::optional<std::array<Card, 2>> cards;  // 쇼다운에 참여했을 때만
     int delta = 0;                             // 이번 판의 칩 증감
+    std::optional<BestHand> best;              // 쇼다운에 참여했을 때만
 };
 
 // "현재 칩 순위"의 한 줄

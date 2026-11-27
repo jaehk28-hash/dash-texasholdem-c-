@@ -88,7 +88,7 @@ PORT=9000 ./build/holdem --web
 
 | 메뉴 | 내용 |
 |---|---|
-| 혼자 봇과 하기 | 시작 칩, 블라인드, 봇 수(1~5), 힌트를 고르고 바로 시작 |
+| 혼자 봇과 하기 | 상대 인원(1~5, 기본 3)과 승률 힌트만 고르고 시작. 칩, 블라인드, 속도는 "상세 설정"에 있습니다 |
 | 방 만들기 | 위 설정 + 닉네임, 제한 시간(30초/60초/2분), 봇 수(0~5). **6자리 방 코드**가 나옵니다 |
 | 코드로 들어가기 | 친구에게 받은 코드와 닉네임을 입력 |
 
@@ -141,7 +141,9 @@ PORT=9000 ./build/holdem --web
 | `waiting` | `null` 또는 `{next: flop\|turn\|river\|showdown\|nextHand, gateId, canContinue}` |
 | `canSkip`, `skipping`, `pace` | 건너뛰기 가능/진행 중, 현재 속도 |
 | `myHand` | 플랍 이후 내 족보 `{name,level(1~6),boardOnly}` |
-| `review.ranking[]` | 이번 판 순위: `seat, place, folded, tie, handName, cards, delta` (폴드는 카드 없음) |
+| `review.ranking[]` | 이번 판 순위: `seat, place, folded, tie, handName, cards, delta, best5, hand, label, groups` (폴드는 카드 없음) |
+| `ranking[].best5[]` | 최종 5장: `card`, `group`(`A`, `B`, 족보에 안 들어가면 `null`), `hole`(손패인지) |
+| `ranking[].hand, label, groups` | `FULL_HOUSE` 같은 코드, `풀 하우스 (2 트리플 + 8 페어)`, 묶음 이름 `[{id,label}]` |
 | `review.standings[]` | 현재 칩 순위: `seat, rank, tie, chips, change, out` |
 | `review` | 마지막으로 끝난 판의 리뷰. 아직 없으면 `null` (화면은 판이 끝났을 때만 보여 줌) |
 | `review.handNumber, showdown, board, names` | 판 번호, 쇼다운 여부, 공용 카드, 좌석별 이름 |

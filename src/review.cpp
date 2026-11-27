@@ -141,6 +141,88 @@ int strengthLevel(HandScore score) {
     }
 }
 
+BestHand describeBestHand(const std::array<Card, 2>& hole, const std::vector<Card>& board) {
+    const std::array<Card, 5> five = bestFive(hole, board);
+    const HandScore score = evaluate5(five.data());
+    const HandCategory category = categoryOf(score);
+    auto rank = [](int r) -> std::string {
+        if (r == 14) return "A";
+        if (r == 13) return "K";
+        if (r == 12) return "Q";
+        if (r == 11) return "J";
+        return std::to_string(r);
+    };
+    const std::string first = rank(rankAt(score, 0)), second = rank(rankAt(score, 1));
+
+    BestHand best;
+    // 묶음 A는 앞에서 sizeA장, 묶음 B는 그 다음 sizeB장 (five는 같은 숫자가 많은 순으로 정렬되어 있다)
+    int sizeA = 5, sizeB = 0;
+    std::string labelA, labelB, detail;
+    switch (category) {
+        case HandCategory::HighCard:
+            best.code = "HIGH_CARD";
+            sizeA = 1;
+            detail = first;
+            break;
+        case HandCategory::OnePair:
+            best.code = "ONE_PAIR";
+            sizeA = 2;
+            labelA = "페어 " + first;
+            detail = first;
+            break;
+        case HandCategory::TwoPair:
+            best.code = "TWO_PAIR";
+            sizeA = sizeB = 2;
+            labelA = "페어 " + first;
+            labelB = "페어 " + second;
+            detail = first + " 페어 + " + second + " 페어";
+            break;
+        case HandCategory::ThreeOfAKind:
+            best.code = "THREE_OF_A_KIND";
+            sizeA = 3;
+            labelA = "트리플 " + first;
+            detail = first;
+            break;
+        case HandCategory::Straight:
+            best.code = "STRAIGHT";
+            detail = first + "까지";
+            break;
+        case HandCategory::Flush:
+            best.code = "FLUSH";
+            detail = first + " 높음";
+            break;
+        case HandCategory::FullHouse:
+            best.code = "FULL_HOUSE";
+            sizeA = 3;
+            sizeB = 2;
+            labelA = "트리플 " + first;
+            labelB = "페어 " + second;
+            detail = first + " 트리플 + " + second + " 페어";
+            break;
+        case HandCategory::FourOfAKind:
+            best.code = "FOUR_OF_A_KIND";
+            sizeA = 4;
+            labelA = "포카드 " + first;
+            detail = first;
+            break;
+        case HandCategory::StraightFlush:
+            best.code = rankAt(score, 0) == 14 ? "ROYAL_FLUSH" : "STRAIGHT_FLUSH";
+            detail = rankAt(score, 0) == 14 ? "" : first + "까지";
+            break;
+    }
+    best.label = handName(score) + (detail.empty() ? "" : " (" + detail + ")");
+    best.groups.push_back({'A', labelA});
+    if (sizeB) best.groups.push_back({'B', labelB});
+    for (int i = 0; i < 5; ++i) {
+        BestCard c;
+        c.card = five[i];
+        c.group = i < sizeA ? 'A' : i < sizeA + sizeB ? 'B' : 0;
+        c.hole = five[i] == hole[0] || five[i] == hole[1];
+        best.cards.push_back(c);
+    }
+    return best;
+}
+
 std::vector<StandingRow> buildStandings(const std::vector<int>& chips, const std::vector<int>& previousRanks) {
     std::vector<StandingRow> rows;
     for (std::size_t i = 0; i < chips.size(); ++i) {
@@ -264,6 +346,7 @@ HandReview buildHandReview(const HandSummary& hand, const std::vector<std::strin
         }
         row.handName = e.detail;
         row.cards = e.hole;
+        row.best = describeBestHand(e.hole, hand.board);
         row.delta = delta(e.seat);
         r.ranking.push_back(row);
     }

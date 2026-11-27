@@ -364,6 +364,81 @@ void testPacing() {
     CHECK(!room.setPace("x", Pace::Slow, error));
 }
 
+// "AAAB-" 처럼 5장의 묶음을 한 줄로
+std::string groupsOf(const BestHand& best) {
+    std::string out;
+    for (const BestCard& c : best.cards) out += c.group ? c.group : '-';
+    return out;
+}
+
+std::string cardsOf(const BestHand& best) {
+    std::string out;
+    for (const BestCard& c : best.cards) out += cardToString(c.card);
+    return out;
+}
+
+// 요청받은 샘플: 보드 8c 2d Ad 2h 6c
+void testSampleBoard() {
+    const Result r = play({{{"8h", "2s"}, {"Ks", "3c"}}, "8c 2d Ad 2h 6c", {}, {}});
+    CHECK(r.review.ranking.size() == 2);
+    const HandRankRow& first = r.review.ranking[0];
+    const HandRankRow& second = r.review.ranking[1];
+    CHECK(first.seat == 0 && first.best && second.best);
+    if (!first.best || !second.best) return;
+    CHECK(first.best->code == "FULL_HOUSE");
+    CHECK(first.best->label == "풀 하우스 (2 트리플 + 8 페어)");
+    CHECK(first.handName == "풀 하우스 2·8");
+    CHECK(groupsOf(*first.best) == "AAABB");
+    for (int i = 0; i < 3; ++i) CHECK(first.best->cards[i].card.rank == 2);
+    for (int i = 3; i < 5; ++i) CHECK(first.best->cards[i].card.rank == 8);
+    CHECK(first.best->groups.size() == 2 && first.best->groups[0].label == "트리플 2" &&
+          first.best->groups[1].label == "페어 8");
+    int holes = 0;
+    for (const BestCard& c : first.best->cards) {
+        const std::string text = cardToString(c.card);
+        CHECK(c.hole == (text == "8h" || text == "2s"));
+        holes += c.hole;
+    }
+    CHECK(holes == 2);
+    CHECK(second.best->code == "ONE_PAIR" && second.best->label == "원 페어 (2)");
+    CHECK(groupsOf(*second.best) == "AA---");
+    CHECK(cardsOf(*second.best).substr(4) == "AdKs8c");  // 키커 A, K, 8
+    const std::string json = reviewToJson(r.review, nullptr);
+    CHECK(json.find("\"hand\":\"FULL_HOUSE\"") != std::string::npos);
+    CHECK(json.find("\"group\":\"B\"") != std::string::npos && json.find("\"group\":null") != std::string::npos);
+}
+
+void testBestHandGroups() {
+    auto best = [](const char* h1, const char* h2, std::vector<const char*> board) {
+        std::vector<Card> cards;
+        for (const char* c : board) cards.push_back(card(c));
+        return describeBestHand({card(h1), card(h2)}, cards);
+    };
+    const BestHand two = best("Ks", "7c", {"Kd", "7h", "As", "3c", "2d"});
+    CHECK(two.code == "TWO_PAIR" && groupsOf(two) == "AABB-" && two.label == "투 페어 (K 페어 + 7 페어)");
+    CHECK(two.cards[4].card.rank == 14);  // 키커
+    CHECK(groupsOf(best("9s", "9c", {"9d", "Ah", "Ks", "3c", "2d"})) == "AAA--");
+    CHECK(groupsOf(best("9s", "9c", {"9d", "9h", "Ks", "3c", "2d"})) == "AAAA-");
+    CHECK(groupsOf(best("As", "9c", {"Jd", "7h", "5s", "3c", "2d"})) == "A----");
+    const BestHand straight = best("9s", "8c", {"7d", "6h", "5s", "3c", "2d"});
+    CHECK(straight.code == "STRAIGHT" && groupsOf(straight) == "AAAAA" && straight.groups.size() == 1);
+    CHECK(best("As", "9s", {"Js", "7s", "5s", "3c", "2d"}).code == "FLUSH");
+    CHECK(best("9s", "8s", {"7s", "6s", "5s", "3c", "2d"}).code == "STRAIGHT_FLUSH");
+    CHECK(best("As", "Ks", {"Qs", "Js", "Ts", "3c", "2d"}).code == "ROYAL_FLUSH");
+}
+
+// 동점이면 같은 순위. 폴드한 사람은 카드도 최종 5장도 없다.
+void testBestHandTieAndFold() {
+    const Result r = play({{{"Ac", "7h"}, {"Qc", "Qd"}, {"Ad", "7s"}}, "As Ks 9h 4d 2c",
+                           {{}, {Action::fold()}, {}}, {}});
+    CHECK(r.review.ranking.size() == 3);
+    CHECK(r.review.ranking[0].place == 1 && r.review.ranking[1].place == 1);
+    CHECK(r.review.ranking[0].tie && r.review.ranking[1].tie && r.review.ranking[0].best && r.review.ranking[1].best);
+    CHECK(r.review.ranking[2].folded && !r.review.ranking[2].best && !r.review.ranking[2].cards);
+    const std::string json = reviewToJson(r.review, nullptr);
+    CHECK(json.find("\"Qc\"") == std::string::npos && json.find("\"Qd\"") == std::string::npos);
+}
+
 // 봇끼리 많은 판을 두어도 리뷰 금액과 족보가 항상 게임 결과와 맞아야 한다.
 void testRandomHands() {
     for (unsigned seed = 1; seed <= 40; ++seed) {
@@ -437,6 +512,9 @@ int main() {
     testGates();
     testSkip();
     testPacing();
+    testSampleBoard();
+    testBestHandGroups();
+    testBestHandTieAndFold();
     testRandomHands();
     testRoomReview();
     std::printf("%d개 검사 중 %d개 실패\n", g_checks, g_failures);
