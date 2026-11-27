@@ -173,7 +173,7 @@
   .seat:not(.me) > .stack { background: #101513; border-inline: 1px solid #4d4632; }
   .seat:not(.me) > .status { order: 1; background: #101513; border: 1px solid #4d4632; border-top: 0; border-radius: 0 0 8px 8px; }
   .name { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .pos { display: block; min-height: 13px; color: var(--gold-light); font-size: 10px; font-weight: 700; line-height: 13px; overflow: hidden; text-overflow: ellipsis; }
+  .pos { display: block; min-height: 13px; color: var(--gold-light); font-size: 10px; font-weight: 700; line-height: 13px; white-space: nowrap; }
   .pos[data-trait]::after { content: " " attr(data-trait); color: var(--muted); font-weight: 500; }
   .status { min-height: 15px; color: #b9dcc8; font-size: 11px; }
 
@@ -451,6 +451,64 @@
   .mine-badge { padding: 0 8px; border-radius: 4px; background: #7ff0b5; color: #072016; font-size: 12px; font-weight: 800; white-space: nowrap; }
   .hr-desc { font-size: 13px; color: var(--muted); line-height: 1.45; }
 
+  /* 초보자용 규칙 화면 */
+  #screen-rules { font-size: 17px; line-height: 1.65; word-break: keep-all; }
+  .rules-lead { font-family: var(--serif); font-size: 21px; font-weight: 700; line-height: 1.6; color: var(--gold-light); padding: 6px 4px; }
+  .screen ol.steps { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 16px; font-size: 16px; line-height: 1.6; }
+  .step { position: relative; display: grid; grid-template-columns: 32px 46px minmax(0, 1fr); gap: 8px; align-items: start; padding: 12px 8px;
+          border: 1px solid var(--line); border-radius: 12px; background: rgba(0, 0, 0, .25); }
+  .step:not(:last-child)::after { content: ""; position: absolute; left: 23px; bottom: -17px; width: 2px; height: 16px; background: var(--gold); }
+  .step-num { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--gold-light); color: #17120a; font-weight: 800; }
+  .step h4 { font-size: 17px; color: var(--gold-light); }
+  /* CSS로 그린 아이콘: 작은 카드 뒷면과 칩 */
+  .step-art { position: relative; width: 46px; height: 40px; }
+  .step-art i { position: absolute; display: none; }
+  .art-hole i:nth-child(-n+2), .art-board i { display: block; width: 18px; height: 26px; top: 5px; border-radius: 3px; border: 1px solid var(--ivory); background: var(--wine); }
+  .art-hole i:first-child { left: 8px; transform: rotate(-10deg); } .art-hole i:nth-child(2) { left: 21px; transform: rotate(10deg); }
+  .art-board i { width: 13px; height: 20px; top: 8px; background: var(--ivory); }
+  .art-board i:nth-child(1) { left: 1px; } .art-board i:nth-child(2) { left: 16px; } .art-board i:nth-child(3) { left: 31px; }
+  .art-choice i:nth-child(-n+2), .art-win i { display: block; width: 20px; height: 20px; border-radius: 50%; border: 3px dashed var(--ivory); }
+  .art-choice i:first-child { left: 1px; top: 10px; background: #1d8a5b; } .art-choice i:nth-child(2) { left: 25px; top: 10px; background: #55585b; }
+  .art-win i { left: 13px; background: #b98f35; } .art-win i:nth-child(1) { top: 18px; } .art-win i:nth-child(2) { top: 11px; } .art-win i:nth-child(3) { top: 4px; }
+  .board-art { display: flex; align-items: flex-start; flex-wrap: nowrap; gap: 4px; margin-top: 10px; }
+  .board-art figure { text-align: center; } .board-art figure > div { display: flex; gap: 2px; justify-content: center; }
+  .board-art figcaption { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .mb { display: block; width: 18px; height: 27px; border-radius: 3px; border: 1px solid var(--ivory);
+        background: repeating-linear-gradient(45deg, transparent 0 3px, rgba(232, 207, 133, .55) 3px 4px), var(--wine); }
+  .arrow { line-height: 27px; color: var(--gold); }
+  /* 버튼 뜻 표 */
+  .acts { width: 100%; border-collapse: collapse; font-size: 16px; }
+  .acts th, .acts td { padding: 9px 0; border-top: 1px solid var(--line); vertical-align: middle; text-align: left; }
+  .acts th { width: 92px; padding-right: 10px; }
+  .act { display: block; text-align: center; padding: 6px 0; border-radius: 8px; border: 1px solid; font-weight: 800; font-size: 15px; }
+  .act.fold { background: linear-gradient(#45484a, #2b2d2f); border-color: #6a6e70; color: #f0f0ee; }
+  .act.go { background: linear-gradient(#1d7a52, #0f5036); border-color: #3a9a70; color: #fff; }
+  .act.up { background: linear-gradient(#ecd591, #bd9440); border-color: var(--gold-light); color: #17120a; }
+  .act.all { background: #15110a; border: 3px double var(--gold-light); color: #f6df9c; }
+  #glossary > summary { min-height: 44px; display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 700; color: var(--gold-light); list-style: none; }
+  #glossary > summary::-webkit-details-marker { display: none; }
+  #glossary > summary::after { content: "▾"; } #glossary[open] > summary::after { content: "▴"; }
+  #glossary dt { margin-top: 10px; font-weight: 800; color: var(--gold-light); }
+  #glossary dd { font-size: 16px; }
+  .rules-note { font-size: 14px; color: var(--muted); text-align: center; }
+  .rules-end { border-top: 1px solid var(--gold); margin-top: 8px; padding-top: 18px; display: flex; flex-direction: column; gap: 8px; text-align: center; }
+  .rules-slogan { font-family: var(--serif); font-size: 26px; font-weight: 700; color: var(--gold-light); line-height: 1.4; }
+  .rules-sub { font-size: 14px; color: #9a9a9a; }
+  /* 첫 게임 안내 */
+  .screen ol.steps.small, ol.steps.small { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 10px; font-size: 15px; line-height: 1.55; word-break: keep-all; }
+  ol.steps.small .step { grid-template-columns: 28px minmax(0, 1fr); padding: 8px; }
+  ol.steps.small .step-num { width: 26px; height: 26px; font-size: 13px; }
+  ol.steps.small .step::after { display: none; }
+  /* 용어 "?" 버튼과 말풍선. 보이는 크기는 작게, 누르는 영역은 넓게 */
+  button.tip { position: relative; display: inline-block; width: 15px; height: 15px; min-height: 0; margin: 0 1px 0 2px; padding: 0; border-radius: 50%;
+    border: 1px solid var(--gold); background: #101513; color: var(--gold-light); font: 800 10px/13px system-ui, sans-serif; vertical-align: 1px; box-shadow: none; }
+  button.tip::after { content: ""; position: absolute; inset: -8px; }
+  button.tip:active:not(:disabled), button.tip:hover:not(:disabled) { transform: none; box-shadow: none; }
+  #tipPop { position: fixed; z-index: 40; width: min(260px, calc(100vw - 16px)); padding: 10px 12px; border-radius: 10px; border: 1px solid var(--gold);
+    background: #0c100e; color: var(--ink); font-size: 14px; line-height: 1.55; box-shadow: 0 10px 28px rgba(0, 0, 0, .85); pointer-events: none; word-break: keep-all; }
+  #tipPop b { color: var(--gold-light); display: block; }
+  #tipPop small { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; }
+
   /* 지금 상황, 핸드 리뷰 */
   #now { font-size: 14px; line-height: 1.55; display: flex; flex-direction: column; gap: 4px; }
   #now h3 { font-size: 15px; margin: 0; }
@@ -547,36 +605,75 @@
 
   <!-- 1) 규칙 설명 (처음 들어오면 보임) -->
   <section class="screen" id="screen-rules" hidden>
+    <p class="rules-lead">내 카드 2장 + 테이블에 깔린 카드 5장 중에서, 가장 센 5장 조합을 만든 사람이 이겨요. 이길 것 같으면 칩을 더 걸고, 질 것 같으면 포기(폴드)하면 돼요.</p>
+
     <div class="panel">
-      <h3>한 판의 흐름</h3>
-      <ol>
-        <li>두 사람이 블라인드(의무 베팅)를 냅니다.</li>
-        <li>각자 홀 카드 2장을 받고 첫 베팅을 합니다 (프리플랍).</li>
-        <li>공용 카드 3장(플랍), 1장(턴), 1장(리버)이 차례로 깔리고 그때마다 베팅합니다.</li>
-        <li>끝까지 남으면 카드를 공개합니다(쇼다운). 7장 중 가장 좋은 5장이 이깁니다.</li>
-        <li>나머지가 모두 폴드하면 남은 한 사람이 바로 팟을 가져갑니다.</li>
+      <h3>한 판은 이렇게 흘러가요</h3>
+      <ol class="steps" id="flowSteps">
+        <li class="step">
+          <span class="step-num">1</span>
+          <span class="step-art art-hole" aria-hidden="true"><i></i><i></i><i></i></span>
+          <div class="step-text"><h4>카드 받기</h4><p>나만 볼 수 있는 카드 2장을 받아요. 다른 사람에게는 보이지 않아요.</p></div>
+        </li>
+        <li class="step">
+          <span class="step-num">2</span>
+          <span class="step-art art-choice" aria-hidden="true"><i></i><i></i><i></i></span>
+          <div class="step-text"><h4>첫 번째 선택</h4><p>내 카드가 괜찮은지 보고, 계속할지(콜·레이즈) 포기할지(폴드) 정해요.</p></div>
+        </li>
+        <li class="step">
+          <span class="step-num">3</span>
+          <span class="step-art art-board" aria-hidden="true"><i></i><i></i><i></i></span>
+          <div class="step-text"><h4>테이블 카드 열기</h4><p>모두가 같이 쓰는 카드가 3장 → 1장 → 1장 순서로 열려요. 열릴 때마다 한 번씩 선택해요.</p>
+            <div class="board-art" role="img" aria-label="테이블 카드는 처음 3장, 4번째, 5번째 순서로 열려요">
+              <figure><div><i class="mb"></i><i class="mb"></i><i class="mb"></i></div><figcaption>처음 3장</figcaption></figure>
+              <span class="arrow">→</span>
+              <figure><div><i class="mb"></i></div><figcaption>4번째</figcaption></figure>
+              <span class="arrow">→</span>
+              <figure><div><i class="mb"></i></div><figcaption>5번째</figcaption></figure>
+            </div></div>
+        </li>
+        <li class="step">
+          <span class="step-num">4</span>
+          <span class="step-art art-win" aria-hidden="true"><i></i><i></i><i></i></span>
+          <div class="step-text"><h4>승부</h4><p>끝까지 남은 사람끼리 카드를 보여줘요. 가장 센 조합이 가운데 칩(팟)을 모두 가져가요. 다들 포기하면 마지막에 남은 한 명이 바로 가져가요.</p></div>
+        </li>
       </ol>
     </div>
+
     <div class="panel">
-      <h3>내 차례에 할 수 있는 것</h3>
-      <ul>
-        <li><b>폴드</b>: 이번 판 포기</li>
-        <li><b>체크</b>: 낼 칩이 없을 때 그냥 넘기기</li>
-        <li><b>콜</b>: 앞사람이 건 만큼 맞추기</li>
-        <li><b>벳/레이즈</b>: 더 걸기. 입력하는 금액은 이번 라운드에 거는 <b>총액</b></li>
-        <li><b>올인</b>: 가진 칩 전부 걸기</li>
-      </ul>
+      <h3>버튼은 이런 뜻이에요</h3>
+      <table class="acts">
+        <tbody>
+          <tr><th scope="row"><span class="act fold">폴드</span></th><td>이번 판을 포기해요. 이미 건 칩은 돌려받지 못해요.</td></tr>
+          <tr><th scope="row"><span class="act go">체크</span></th><td>아무것도 안 걸고 넘겨요. 앞에서 건 사람이 없을 때만 할 수 있어요.</td></tr>
+          <tr><th scope="row"><span class="act go">콜</span></th><td>앞 사람이 건 만큼 나도 맞춰서 걸어요.</td></tr>
+          <tr><th scope="row"><span class="act up">레이즈</span></th><td>앞 사람보다 더 많이 걸어요. 자신 있을 때 해요.</td></tr>
+          <tr><th scope="row"><span class="act all">올인</span></th><td>가진 칩을 전부 걸어요.</td></tr>
+        </tbody>
+      </table>
     </div>
+
+    <details class="panel" id="glossary">
+      <summary>모르는 말이 나왔나요?</summary>
+      <dl>
+          <dt>팟</dt><dd>가운데 모이는 칩. 이기면 다 가져가요.</dd>
+          <dt>블라인드</dt><dd>매 판 시작할 때 두 사람이 먼저 내는 최소 참가비예요. 안 내면 판이 안 굴러가서 있는 규칙이에요.</dd>
+          <dt>홀 카드</dt><dd>내가 받은 비밀 카드 2장.</dd>
+          <dt>프리플랍 / 플랍 / 턴 / 리버</dt><dd>테이블 카드가 열리기 전 / 처음 3장 / 4번째 / 5번째가 열린 단계 이름이에요.</dd>
+          <dt>쇼다운</dt><dd>마지막에 카드를 펼쳐서 승부하는 순간.</dd>
+          <dt>키커</dt><dd>같은 족보일 때 승부를 가르는 남는 카드.</dd>
+          <dt>딜러 버튼(D)</dt><dd>이번 판에서 순서의 기준이 되는 자리 표시예요. 판마다 한 칸씩 옮겨가요.</dd>
+      </dl>
+    </details>
+
     <button type="button" class="link" id="rulesToHands">족보는 상단의 족보 버튼에서 볼 수 있어요</button>
-    <div class="panel">
-      <h3>알아 둘 점</h3>
-      <ul>
-        <li>연습용 칩만 사용하며 실제 돈은 오가지 않습니다.</li>
-        <li>칩이 0이 되면 탈락합니다.</li>
-        <li>친구와 할 때는 제한 시간이 지나면 자동으로 체크 또는 폴드됩니다.</li>
-      </ul>
+    <p class="rules-note">칩이 0이 되면 탈락해요.<br>친구와 할 때는 시간이 지나면 자동으로 체크하거나 폴드해요.</p>
+
+    <div class="rules-end">
+      <p class="rules-slogan">일단 해보면서 배우는 홀덤!</p>
+      <p class="rules-sub">틀려도 괜찮아요. 칩은 연습용이에요.</p>
+      <button class="primary big" id="rulesOk">바로 시작하기</button>
     </div>
-    <button class="primary big" id="rulesOk">확인했어요</button>
   </section>
 
   <!-- 2) 메뉴 -->
@@ -757,6 +854,21 @@
     <div class="modal-body" id="handsBody"></div>
   </div>
 </dialog>
+
+<dialog class="modal" id="firstGuide" aria-labelledby="firstGuideTitle">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h2 id="firstGuideTitle">한 판은 이렇게 흘러가요</h2>
+      <button type="button" class="modal-close" aria-label="닫기">✕</button>
+    </div>
+    <div class="modal-body">
+      <ol class="steps small" id="firstSteps"></ol>
+      <button type="button" class="primary big modal-close">알겠어요</button>
+    </div>
+  </div>
+</dialog>
+
+<div id="tipPop" role="tooltip" hidden></div>
 
 <dialog class="modal" id="story" aria-labelledby="storyTitle">
   <div class="modal-box">
@@ -1016,7 +1128,13 @@ function remember(key, value) { try { localStorage.setItem(key, value); } catch 
 function recall(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
 
 $("showRules").onclick = () => { showingRules = true; render(); window.scrollTo(0, 0); };
-$("rulesOk").onclick = () => { showingRules = false; remember("rulesSeen", "1"); render(); };
+$("rulesOk").onclick = () => {
+  showingRules = false;
+  remember("rulesSeen", "1");
+  if (state && !state.hasGame && menu === "home") $("goSolo").click();  // 혼자 하기 설정 화면으로
+  else render();
+  window.scrollTo(0, 0);
+};
 $("goSolo").onclick = () => openSetup(true);
 $("goCreate").onclick = () => openSetup(false);
 $("goJoin").onclick = () => goMenu("join");
@@ -1102,6 +1220,20 @@ poll();
 // ============================================================================
 const TEXTS = {
   nowTitle: "지금 상황",
+  // 게임 화면의 "?" 말풍선. seat가 true면 좌석 약어라서 아래 seatNote를 덧붙인다.
+  terms: {
+    "프리플랍": { text: "테이블 카드가 열리기 전 단계예요." },
+    "블라인드": { text: "매 판 시작할 때 두 사람이 먼저 내는 최소 참가비예요." },
+    "BTN/SB": { text: "둘이 할 때, 딜러 버튼 자리가 작은 블라인드도 내요.", seat: true },
+    "BTN": { text: "딜러 버튼(D) 자리예요. 이번 판 순서의 기준이에요.", seat: true },
+    "SB": { text: "작은 블라인드(참가비)를 먼저 내는 자리예요.", seat: true },
+    "BB": { text: "큰 블라인드(참가비)를 먼저 내는 자리예요.", seat: true },
+    "UTG": { text: "큰 블라인드 바로 다음 자리예요. 처음에 가장 먼저 선택해요.", seat: true },
+    "HJ": { text: "딜러 버튼 두 칸 앞자리예요.", seat: true },
+    "CO": { text: "딜러 버튼 바로 앞자리예요.", seat: true },
+    "MP": { text: "가운데쯤 순서인 자리예요.", seat: true },
+  },
+  seatNote: "처음엔 신경 안 써도 돼요.",
   hands: {
     title: "족보", stronger: "위에 있을수록 강한 족보예요 ▲", mine: "지금 내 족보",
     tie: "같은 족보면 높은 숫자가 이기고, 그래도 같으면 키커(남는 카드)로 가려요. 모두 같으면 팟을 나눠요.",
@@ -1609,9 +1741,108 @@ function fill(template, values) {
     let downOutside = false;
     dialog.addEventListener("pointerdown", (e) => { downOutside = e.target === dialog; });
     dialog.addEventListener("click", (e) => { if (downOutside && e.target === dialog) close(); });
+    return { open, close };
   }
   setupModal($("hands"), [$("showHands"), $("rulesToHands")], markMyHand);
   setupModal($("story"), [$("showStory")]);
+
+  // ---- 용어 "?" ----
+  const TERM_PATTERN = /(^|[^A-Za-z])(프리플랍|블라인드|BTN\/SB|BTN|UTG|SB|BB|HJ|CO|MP)(?![A-Za-z])/;
+  function tipButton(term) {
+    const button = el("button", "tip", "?");
+    button.type = "button";
+    button.dataset.term = term;
+    button.setAttribute("aria-label", term + " 뜻 보기");
+    return button;
+  }
+  // 상자 안의 글에서 용어가 처음 나오는 곳마다 "?"를 붙인다. (상자가 새로 그려질 때마다 다시 붙임)
+  function annotate(box) {
+    const done = new Set([...box.querySelectorAll(".tip")].map((b) => b.dataset.term));
+    const walker = document.createTreeWalker(box, NodeFilter.SHOW_TEXT);
+    const nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    for (let node of nodes) {
+      let from = 0, found;
+      while (node && (found = TERM_PATTERN.exec(node.textContent.slice(from)))) {
+        const end = from + found.index + found[0].length;
+        if (!done.has(found[2])) {
+          done.add(found[2]);
+          const rest = node.splitText(end);
+          rest.before(tipButton(found[2]));
+          node = rest;
+          from = 0;
+        } else {
+          from = end;
+        }
+      }
+    }
+  }
+  for (const id of ["now", "actions", "log"]) {
+    new MutationObserver(() => annotate($(id))).observe($(id), { childList: true });
+  }
+
+  // 말풍선은 하나만 두고 위치를 옮긴다. 좌석은 계속 새로 만들어지므로 "어느 자리의 어느 용어"인지로 기억한다.
+  const pop = $("tipPop");
+  let openKey = "", pinned = false;
+  const keyOf = (button) => {
+    const home = button.closest(".seat") ? "seat" + button.closest(".seat").dataset.slot : (button.closest("[id]") || {}).id;
+    return home + ":" + button.dataset.term;
+  };
+  function showTip(button, pin) {
+    const term = TEXTS.terms[button.dataset.term];
+    pop.replaceChildren(el("b", "", button.dataset.term), el("span", "", term.text));
+    if (term.seat) pop.append(el("small", "", TEXTS.seatNote));
+    pop.hidden = false;
+    openKey = keyOf(button);
+    pinned = pin;
+    const at = button.getBoundingClientRect();
+    const left = Math.min(Math.max(8, at.left + at.width / 2 - pop.offsetWidth / 2), innerWidth - pop.offsetWidth - 8);
+    const below = at.bottom + 8 + pop.offsetHeight <= innerHeight;
+    pop.style.left = left + "px";
+    pop.style.top = (below ? at.bottom + 8 : at.top - 8 - pop.offsetHeight) + "px";
+  }
+  function hideTip() { pop.hidden = true; openKey = ""; pinned = false; }
+  function toggleTip(button) {
+    if (pinned && openKey === keyOf(button)) hideTip();
+    else showTip(button, true);
+  }
+  // 누르는 순간 처리한다 (좌석이 새로 만들어지면 click이 사라질 수 있어서)
+  document.addEventListener("pointerdown", (e) => {
+    const button = e.target.closest && e.target.closest(".tip");
+    if (button) { e.preventDefault(); toggleTip(button); } else if (!pop.hidden) hideTip();
+  });
+  document.addEventListener("click", (e) => {
+    const button = e.target.closest && e.target.closest(".tip");
+    if (button && e.detail === 0) toggleTip(button);  // 키보드로 눌렀을 때
+  });
+  document.addEventListener("pointerover", (e) => {  // 마우스를 올리면 보여 준다
+    if (e.pointerType !== "mouse" || pinned) return;
+    const button = e.target.closest && e.target.closest(".tip");
+    if (button) showTip(button, false);
+    else if (!pop.hidden) hideTip();
+  });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") hideTip(); });
+  window.addEventListener("scroll", () => { if (!pop.hidden) hideTip(); }, { passive: true });
+  // 화면이 바뀌면 닫는다
+  new MutationObserver(hideTip).observe($("screen-game"), { attributes: true, attributeFilter: ["hidden"] });
+
+  // ---- 첫 게임에서 한 번만 보여 주는 안내 ----
+  // 규칙 화면의 4단계를 복사해서 쓴다 (문구를 두 번 적지 않는다).
+  $("firstSteps").append(...[...$("flowSteps").children].map((step) => {
+    const copy = step.cloneNode(true);
+    copy.querySelector(".step-art").remove();
+    const art = copy.querySelector(".board-art");
+    if (art) art.remove();
+    return copy;
+  }));
+  const firstGuide = setupModal($("firstGuide"), []);
+  let guideShown = recall("guideSeen") === "1";  // 저장이 막혀 있으면 이번 접속에 한 번
+  function showFirstGuide() {
+    if (guideShown || state.phase !== "playing" || document.querySelector("dialog[open]")) return;
+    guideShown = true;
+    remember("guideSeen", "1");
+    firstGuide.open();
+  }
 
   // 기존 화면 갱신(renderHint)이 힌트 칸을 새로 그릴 때마다 함께 갱신한다.
   new MutationObserver(() => {
@@ -1620,6 +1851,7 @@ function fill(template, values) {
     renderResult();
     renderFlow();
     markMyHand();  // 열어 둔 동안 카드가 더 깔리면 표시도 따라간다
+    showFirstGuide();
   }).observe($("hint"), { childList: true });
 })();
 </script>
@@ -2023,6 +2255,13 @@ const FX = (() => {
       seat.children[1].classList.add("stack");
       const isBot = !state.members.some((m) => m.name === p.name);
       if (isBot && TRAITS[p.name]) seat.querySelector(".pos").dataset.trait = TRAITS[p.name];
+      if (p.position) {  // 좌석 약어 옆 "?"
+        const tip = el("button", "tip", "?");
+        tip.type = "button";
+        tip.dataset.term = p.position;
+        tip.setAttribute("aria-label", p.position + " 뜻 보기");
+        seat.querySelector(".pos").append(tip);
+      }
       if (p.position.startsWith("BTN")) { dealer = seat; seat.append(el("span", "dealer", "D")); }
       if (!p.isMe) {
         const hands = document.createElementNS("http://www.w3.org/2000/svg", "svg");
