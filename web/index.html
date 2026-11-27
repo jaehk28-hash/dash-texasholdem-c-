@@ -79,21 +79,7 @@
   #allin { background: linear-gradient(#2e2615, #15110a); border: 3px double var(--gold-light); color: #f6df9c; font-weight: 800; font-size: 17px; letter-spacing: .08em; }
 
   /* ===== 시작 화면: 빈티지 네온 간판 ===== */
-  html:has(#screen-home:not([hidden])) { background:
-      radial-gradient(circle at 13% 9%, rgba(235, 238, 255, 0.8) 0 1.2px, transparent 2.0px),
-      radial-gradient(circle at 71% 4%, rgba(235, 238, 255, 0.5) 0 1px, transparent 1.8px),
-      radial-gradient(circle at 37% 21%, rgba(235, 238, 255, 0.55) 0 1px, transparent 1.8px),
-      radial-gradient(circle at 88% 17%, rgba(235, 238, 255, 0.75) 0 1.3px, transparent 2.1px),
-      radial-gradient(circle at 6% 38%, rgba(235, 238, 255, 0.45) 0 1px, transparent 1.8px),
-      radial-gradient(circle at 58% 33%, rgba(235, 238, 255, 0.35) 0 0.9px, transparent 1.7000000000000002px),
-      radial-gradient(circle at 94% 46%, rgba(235, 238, 255, 0.5) 0 1px, transparent 1.8px),
-      radial-gradient(circle at 24% 56%, rgba(235, 238, 255, 0.3) 0 0.9px, transparent 1.7000000000000002px),
-      radial-gradient(circle at 79% 63%, rgba(235, 238, 255, 0.3) 0 1px, transparent 1.8px),
-      radial-gradient(circle at 47% 12%, rgba(235, 238, 255, 0.4) 0 0.8px, transparent 1.6px),
-      radial-gradient(ellipse 80% 22% at 25% 62%, rgba(190, 180, 200, .07), transparent 70%),
-      radial-gradient(ellipse 70% 18% at 80% 78%, rgba(210, 180, 160, .07), transparent 70%),
-      linear-gradient(#05061a 0%, #0a0a1f 40%, #160f14 70%, #1f130b 100%) #1f130b;
-    background-attachment: fixed; }
+  html:has(#screen-home:not([hidden])) { background: #1f130b; }
   .wrap:has(#screen-home:not([hidden])) header h1 { display: none; }
   /* 머리글의 작은 네온 간판: 규칙, 처음으로 */
   #homeBack { display: none; white-space: nowrap; }
@@ -618,18 +604,50 @@
   #screen-home .neon::before, #screen-home .neon::after { content: ""; position: absolute; bottom: 100%; width: 3px; height: 18px;
     background: repeating-linear-gradient(#8d7a5c 0 4px, transparent 4px 6px); }
   #screen-home .neon::before { left: 18%; } #screen-home .neon::after { right: 18%; }
-  /* 등불 빛만 아주 천천히 숨 쉰다 (5초 주기) */
+  /* 등불 빛은 아주 천천히 숨 쉰다 (5초 주기) */
   .lamp-glow { animation: lamp 5s ease-in-out infinite; }
   .lamp-glow:nth-of-type(even) { animation-delay: -2.5s; }
   @keyframes lamp { 0%, 100% { opacity: .72; } 50% { opacity: 1; } }
-  /* 시작 화면과 설정 화면에서는 다른 움직임(전구 점멸, 연기)을 멈춘다 */
+  /* 시작 화면에서는 전구 점멸과 연기를 멈춘다 */
   #screen-home .bulb { animation: none; }
-  html:has(#screen-home:not([hidden])) body::before, html:has(#screen-home:not([hidden])) body::after,
-  html:has(#screen-setup:not([hidden])) body::before, html:has(#screen-setup:not([hidden])) body::after { display: none; }
+  html:has(#screen-home:not([hidden])) body::before, html:has(#screen-home:not([hidden])) body::after { display: none; }
   .door { transform-box: fill-box; }
   .door-l { transform-origin: left center; } .door-r { transform-origin: right center; }
   @media (prefers-reduced-motion: reduce) { .lamp-glow { animation: none; } }
   html.reduce-fx .lamp-glow { animation: none !important; }
+
+  /* ===== 밤하늘: 노을 직후의 하늘, 별, 달, 구름, 별똥별 (움직임은 transform, opacity만) ===== */
+  #sky { display: none; position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; background:
+      linear-gradient(#0f1844 0%, #1b2462 24%, #352f6c 44%, #5d3d6e 58%, #96506a 68%, #c06f50 75%, #7a4630 81%, #3a2314 90%, #1f130b 100%); }
+  body:has(#screen-home:not([hidden])) #sky { display: block; }
+  #sky i { position: absolute; display: block; }
+  .stars i { border-radius: 50%; background: #eef1ff; }
+  .stars i.twinkle { animation: twinkle ease-in-out infinite; }
+  @keyframes twinkle { 50% { opacity: .5; } }
+  .moon { position: absolute; width: 30px; height: 30px; top: 60px; right: 6px; }  /* 간판 오른쪽 위 */
+  @media (min-width: 700px) { .moon { width: 46px; height: 46px; top: 56px; right: 12%; } }
+  #sky .cloud { left: 0; width: 70vw; height: 16px; border-radius: 50%; animation: drift linear infinite;
+    background: radial-gradient(closest-side, rgba(222, 190, 220, .24), rgba(222, 190, 220, .1) 55%, transparent); }
+  #sky .cloud.one { top: 17%; animation-duration: 110s; animation-delay: -48s; }
+  #sky .cloud.two { top: 31%; width: 55vw; height: 11px; animation-duration: 150s; animation-delay: -112s; }
+  @keyframes drift { from { transform: translateX(-75vw); } to { transform: translateX(105vw); } }
+  /* 별똥별: 25초에 한 번, 0.8초 동안 */
+  #sky .shoot { left: 8%; top: 11%; width: 70px; height: 1.5px; opacity: 0; transform: rotate(18deg); animation: shoot 25s linear 7s infinite;
+    background: linear-gradient(90deg, transparent, rgba(255, 250, 235, .9)); }
+  @keyframes shoot {
+    0% { opacity: 0; transform: translate(0, 0) rotate(18deg); }
+    .8% { opacity: .85; }
+    3.2% { opacity: 0; transform: translate(150px, 49px) rotate(18deg); }
+    100% { opacity: 0; transform: translate(150px, 49px) rotate(18deg); }
+  }
+  /* 등불 곁의 따뜻한 먼지. 건물 그림과 같은 크기의 상자 안에서 위치를 잡는다 */
+  .dust { position: absolute; z-index: 2; left: 0; bottom: 0; width: 100%; aspect-ratio: 320 / 244; pointer-events: none; }
+  .dust i { position: absolute; width: 3px; height: 3px; border-radius: 50%; background: #ffe0a0; box-shadow: 0 0 6px 2px rgba(255, 178, 70, .55);
+    opacity: .35; animation: float ease-in-out infinite alternate; }
+  @keyframes float { to { transform: translate(var(--x), var(--y)); opacity: .85; } }
+  /* 움직임 줄이기: 정지된 별(과 달)만 남긴다 */
+  @media (prefers-reduced-motion: reduce) { #sky .cloud, #sky .shoot, .dust { display: none; } .stars i.twinkle { animation: none; } }
+  html.reduce-fx #sky .cloud, html.reduce-fx #sky .shoot, html.reduce-fx .dust { display: none; }
   @media (min-width: 700px) {
     .saloon .marquee { padding: 26px 30px; }
     .saloon .star { width: 16px; height: 16px; } .saloon .bulb { width: 8px; height: 8px; }
@@ -641,30 +659,52 @@
     #screen-home .porch-signs .neon { width: 344px; }
   }
 
-  /* ===== 술집 내부 (설정 화면): 벽돌 벽, 선반, 바 카운터 ===== */
-  html:has(#screen-setup:not([hidden])) { background:
-      radial-gradient(ellipse 80% 45% at 50% 12%, rgba(255, 168, 64, .22), transparent 70%),
+  /* ===== 술집 내부: class="indoor"인 화면(설정, 코드 입력, 대기실)이 함께 쓴다 =====
+     배경은 #tavern 하나뿐이다. 새 화면에도 indoor만 붙이면 같은 배경과 패널이 적용된다. */
+  #tavern { display: none; }
+  .wrap:has(.indoor:not([hidden])) #tavern { display: block; }
+  html:has(.indoor:not([hidden])) { background: #24120b; }
+  html:has(.indoor:not([hidden])) body::before, html:has(.indoor:not([hidden])) body::after { display: none; }
+  /* 벽: 위는 벽돌, 아래는 세로 나무판자. 화면에 고정 */
+  #tavern::before { content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none; background:
+      radial-gradient(ellipse 80% 40% at 50% 18%, rgba(255, 168, 64, .24), transparent 70%),
       radial-gradient(ellipse 110% 90% at 50% 40%, transparent 55%, rgba(0, 0, 0, .65)),
+      repeating-linear-gradient(90deg, transparent 0 30px, rgba(0, 0, 0, .6) 30px 32px, rgba(255, 215, 160, .06) 32px 34px) bottom / 100% 38% no-repeat,
+      linear-gradient(#4a2a16, #2b170b) bottom / 100% 38% no-repeat,
       linear-gradient(90deg, rgba(0, 0, 0, .55) 2px, transparent 2px) 0 0 / 44px 36px,
       linear-gradient(90deg, rgba(0, 0, 0, .55) 2px, transparent 2px) 22px 18px / 44px 36px,
       repeating-linear-gradient(transparent 0 16px, rgba(0, 0, 0, .6) 16px 18px),
-      #2a140d;
-    background-attachment: fixed; }
-  .bar-top { position: relative; margin: -2px 0 0; }
-  .bar-art { display: block; width: min(100%, 440px); height: auto; margin: 0 auto; }
-  #screen-setup #setupTitle { position: absolute; left: 50%; bottom: -4px; transform: translateX(-50%); white-space: nowrap; font-size: 18px; padding: 3px 18px;
-    border-radius: 8px; border: 1px solid #e8c56b; background: #1c100a; color: #f6dfa0; box-shadow: 0 3px 8px rgba(0, 0, 0, .7); }
-  /* 패널: 어두운 나무판 + 금색 테두리. 반투명 바탕으로 뒤의 벽이 글씨를 방해하지 않게 */
-  #screen-setup .panel { border: 1px solid #b8933f; border-radius: 10px; background:
-      repeating-linear-gradient(90deg, rgba(255, 210, 150, .028) 0 2px, transparent 2px 13px), rgba(28, 16, 9, .93);
+      #2a140d; }
+  /* 화면 아래쪽의 윤이 나는 바 카운터 */
+  #tavern::after { content: ""; position: fixed; left: 0; right: 0; bottom: 0; height: 72px; z-index: -1; pointer-events: none; background:
+      linear-gradient(105deg, transparent 18%, rgba(255, 232, 190, .2) 28%, transparent 40%, transparent 64%, rgba(255, 232, 190, .12) 73%, transparent 84%),
+      linear-gradient(#d29255 0 2px, #8a4f27 4px, #63341a 22px, #2b150a 23px, #1b0d06 27px, transparent 28px),
+      repeating-linear-gradient(90deg, transparent 0 46px, rgba(0, 0, 0, .55) 46px 49px),
+      #3a200f; box-shadow: 0 -8px 16px rgba(0, 0, 0, .55); }
+  .bar-art { display: block; width: min(100%, 520px); height: auto; margin: 0 auto; }
+  .indoor { padding-bottom: 76px; }  /* 마지막 버튼이 카운터 위까지 올라올 수 있게 */
+  .indoor h2 { align-self: center; font-size: 18px; padding: 4px 18px; border-radius: 8px; border: 1px solid #e8c56b; background: #1c100a; color: #f6dfa0;
+    box-shadow: 0 3px 8px rgba(0, 0, 0, .7); }
+  /* 패널: 어두운 나무판 + 금색 테두리. 거의 불투명해서 뒤의 벽이 글씨를 방해하지 않는다 */
+  .indoor .panel { border: 1px solid #b8933f; border-radius: 10px; background:
+      repeating-linear-gradient(90deg, rgba(255, 210, 150, .028) 0 2px, transparent 2px 13px), rgba(28, 16, 9, .94);
     box-shadow: inset 0 0 0 3px rgba(0, 0, 0, .45), inset 0 0 0 4px rgba(184, 147, 63, .28), 0 10px 16px rgba(0, 0, 0, .55); }
-  #screen-setup .panel h3 { color: #f6dfa0; }
-  #screen-setup .sub, #screen-setup .help, #screen-setup .help-block { color: #d6c6a8; }
-  /* 바 카운터 상판: 윤이 나는 나무 */
-  .counter-top { height: 20px; margin: -4px -4px 0; border-radius: 6px; background:
-      linear-gradient(105deg, transparent 18%, rgba(255, 232, 190, .22) 30%, transparent 42%, transparent 66%, rgba(255, 232, 190, .12) 74%, transparent 84%),
-      linear-gradient(#c08048 0 2px, #8a4f27 3px, #5c3018 12px, #2b150a 13px, #4a2813 16px, #1b0d06);
-    box-shadow: 0 8px 14px rgba(0, 0, 0, .6); }
+  .indoor .panel h3 { color: #f6dfa0; }
+  .indoor .sub, .indoor .help, .indoor .help-block { color: #d6c6a8; }
+  /* 입력칸: 나무판에 파낸 어두운 홈. 선택하면 금색 테두리 */
+  .indoor input:not([type=range]):not([type=checkbox]), .indoor select { background: #0f0804; border: 2px solid #6d5530; color: var(--ivory);
+    box-shadow: inset 0 3px 7px #000, 0 1px 0 rgba(255, 220, 170, .18); }
+  .indoor input:not([type=range]):not([type=checkbox]):focus, .indoor select:focus { border-color: #f0cf72; outline: 2px solid #f0cf72; outline-offset: 1px; }
+  .indoor input::placeholder { color: #b9a88a; opacity: 1; }
+  /* 보조 버튼 (.back은 카드 뒷면에도 쓰는 이름이라 button으로 한정) */
+  .indoor button.back, .indoor button.leave { border-color: #6d5a45; color: #e2d3bb; background: linear-gradient(#2c1c12, #160d07); font-weight: 600; }
+  .indoor #advanced > summary { background: rgba(28, 16, 9, .94); border: 1px solid #8a6f38; }
+  /* 패널 밖의 안내 글도 어두운 바탕 위에 */
+  #lobbyWait, #setupWarn:not(:empty), .wrap:has(.indoor:not([hidden])) #error:not(:empty) {
+    background: rgba(20, 11, 6, .94); border-radius: 8px; padding: 6px 10px; text-align: center; }
+  /* 휴대폰에서 입력 중에는 키보드 위로 올릴 수 있게 아래에 여유를 둔다 */
+  html.typing .indoor { padding-bottom: 60vh; }
+
   /* 상대 인원: 위스키 통 윗면 (둥근 나무 + 금속 테) */
   #screen-setup .count-buttons button { width: 100%; max-width: 60px; min-height: 0; aspect-ratio: 1; justify-self: center; border-radius: 50%;
     border: 4px solid #8b8f94; color: #fff1d6; text-shadow: 0 1px 3px #000; background:
@@ -682,10 +722,6 @@
   #screen-setup #hintRow input:checked::before { background: linear-gradient(#fff3c4, #c9a24b 55%, #e8c56b); }
   #screen-setup .switch-title { color: #f6dfa0; }
   #screen-setup #startSetup { min-height: 58px; font-size: 20px; }
-  #screen-setup .back { border-color: #6d5a45; color: #e2d3bb; background: linear-gradient(#2c1c12, #160d07); font-weight: 600; }
-  #screen-setup #advanced > summary { background: rgba(28, 16, 9, .9); border: 1px solid #8a6f38; }
-  #screen-setup input:not([type=range]):not([type=checkbox]), #screen-setup select { background: #120a05; border-color: #8a6f38; }
-  #screen-setup input::placeholder { color: #b9a88a; opacity: 1; }
 
   /* 게임 흐름 안내 (움직임 없음) */
   #flowGuide { display: flex; flex-direction: column; gap: 8px; border-color: var(--gold); }
@@ -792,6 +828,8 @@
 </style>
 </head>
 <body>
+<!-- 시작 화면의 밤하늘 (장식). 별은 아래 스크립트가 채운다 -->
+<div id="sky" aria-hidden="true"><div class="stars" id="stars"></div><svg class="moon" viewBox="0 0 40 40"><defs><radialGradient id="moon-glow"><stop offset=".35" stop-color="#fff1c8" stop-opacity=".35"/><stop offset="1" stop-color="#fff1c8" stop-opacity="0"/></radialGradient></defs><circle cx="20" cy="20" r="20" fill="url(#moon-glow)"/><path d="M23 9a11 11 0 1 0 8 17a9 9 0 0 1-8-17z" fill="#fbf0cd"/></svg><i class="cloud one"></i><i class="cloud two"></i><i class="shoot"></i></div>
 <div class="wrap">
   <header>
     <svg id="headLogo" class="coupe-icon" role="img" aria-label="Coupe Holdem 로고" viewBox="108 116 224 278"><use href="/logo.svg?v=2#coupe"/></svg>
@@ -809,6 +847,11 @@
   <div id="closedNotice" role="alert" hidden>
     <span></span>
     <button type="button">확인</button>
+  </div>
+
+  <!-- 술집 내부 배경: indoor 화면들이 함께 쓴다 (장식이라 화면 읽기에서는 뺀다) -->
+  <div id="tavern" aria-hidden="true">
+    <svg class="bar-art" viewBox="0 0 360 92" preserveAspectRatio="xMidYMid meet" aria-hidden="true"><defs><radialGradient id="bar-amber" cx=".5" cy=".6" r=".6"><stop offset="0" stop-color="#ffb24a" stop-opacity=".75"/><stop offset=".55" stop-color="#c46a1c" stop-opacity=".32"/><stop offset="1" stop-color="#c46a1c" stop-opacity="0"/></radialGradient><radialGradient id="bar-lamp"><stop offset="0" stop-color="#ffc66a" stop-opacity=".8"/><stop offset="1" stop-color="#ff9a2e" stop-opacity="0"/></radialGradient><pattern id="bar-wood" width="36" height="64" patternUnits="userSpaceOnUse"><rect width="36" height="64" fill="#3b2214"/><path d="M0 0V64M12 0V64M24 0V64" stroke="#170c05" stroke-width="1.4"/><path d="M4 3q1 9.0 0 18" stroke="#2a170c" fill="none" stroke-width=".7"/><path d="M9 30q1 11.0 0 22" stroke="#2a170c" fill="none" stroke-width=".7"/><path d="M17 12q1 13.0 0 26" stroke="#2a170c" fill="none" stroke-width=".7"/><path d="M22 44q1 8.0 0 16" stroke="#2a170c" fill="none" stroke-width=".7"/><path d="M29 6q1 7.0 0 14" stroke="#2a170c" fill="none" stroke-width=".7"/><path d="M31 36q1 10.0 0 20" stroke="#2a170c" fill="none" stroke-width=".7"/><path d="M6 52q1 5.0 0 10" stroke="#2a170c" fill="none" stroke-width=".7"/><ellipse cx="18" cy="50" rx="1.8" ry="3" fill="#170c05" opacity=".7"/></pattern></defs><rect x="22" y="24" width="316" height="62" fill="url(#bar-wood)"/><rect x="22" y="24" width="316" height="62" fill="url(#bar-amber)"/><path d="M36 77v-26h3v-10h4v10h3v26z" fill="#6b2a1c"/><path d="M39 73v-14" stroke="#ffe3ac" stroke-width="1" opacity=".45"/><rect x="37.5" y="63" width="8" height="6" fill="#d9c39a" opacity=".55"/><path d="M53 77q-3-14 3-19v-9h5v9q6 5 3 19z" fill="#3f5a2c"/><path d="M56 73v-14" stroke="#ffe3ac" stroke-width="1" opacity=".45"/><rect x="54.5" y="63" width="8" height="6" fill="#d9c39a" opacity=".55"/><path d="M68 77q-3-14 3-19v-9h5v9q6 5 3 19z" fill="#3f5a2c"/><path d="M71 73v-14" stroke="#ffe3ac" stroke-width="1" opacity=".45"/><rect x="69.5" y="63" width="8" height="6" fill="#d9c39a" opacity=".55"/><svg x="85" y="53" width="19" height="24" viewBox="108 116 224 278" style="--coupe-w:16px;--coupe-bubbles:none"><use href="/logo.svg?v=2#coupe"/></svg><path d="M109 77q-3-14 3-19v-9h5v9q6 5 3 19z" fill="#3f5a2c"/><path d="M112 73v-14" stroke="#ffe3ac" stroke-width="1" opacity=".45"/><rect x="110.5" y="63" width="8" height="6" fill="#d9c39a" opacity=".55"/><path d="M129 77v-22q0-4 4-6v-8h5v8q4 2 4 6v22z" fill="#3f5a2c"/><path d="M132 73v-14" stroke="#ffe3ac" stroke-width="1" opacity=".45"/><rect x="130.5" y="63" width="8" height="6" fill="#d9c39a" opacity=".55"/><path d="M144 77v-26h3v-10h4v10h3v26z" fill="#2d3f52"/><path d="M147 73v-14" stroke="#ffe3ac" stroke-width="1" opacity=".45"/><rect x="145.5" y="63" width="8" height="6" fill="#d9c39a" opacity=".55"/><path d="M159 77v-22q0-4 4-6v-8h5v8q4 2 4 6v22z" fill="#3f5a2c"/><path d="M162 73v-14" stroke="#ffe3ac" stroke-width="1" opacity=".45"/><rect x="160.5" y="63" width="8" height="6" fill="#d9c39a" opacity=".55"/><svg x="179" y="53" width="19" height="24" viewBox="108 116 224 278" style="--coupe-w:16px;--coupe-bubbles:none"><use href="/logo.svg?v=2#coupe"/></svg><path d="M203 77v-26h3v-10h4v10h3v26z" fill="#3f5a2c"/><path d="M206 73v-14" stroke="#ffe3ac" stroke-width="1" opacity=".45"/><rect x="204.5" y="63" width="8" height="6" fill="#d9c39a" opacity=".55"/><path d="M223 77v-22q0-4 4-6v-8h5v8q4 2 4 6v22z" fill="#6b2a1c"/><path d="M226 73v-14" stroke="#ffe3ac" stroke-width="1" opacity=".45"/><rect x="224.5" y="63" width="8" height="6" fill="#d9c39a" opacity=".55"/><path d="M243 77q-3-14 3-19v-9h5v9q6 5 3 19z" fill="#7a4a1a"/><path d="M246 73v-14" stroke="#ffe3ac" stroke-width="1" opacity=".45"/><rect x="244.5" y="63" width="8" height="6" fill="#d9c39a" opacity=".55"/><path d="M258 77q-3-14 3-19v-9h5v9q6 5 3 19z" fill="#7a4a1a"/><path d="M261 73v-14" stroke="#ffe3ac" stroke-width="1" opacity=".45"/><rect x="259.5" y="63" width="8" height="6" fill="#d9c39a" opacity=".55"/><svg x="275" y="53" width="19" height="24" viewBox="108 116 224 278" style="--coupe-w:16px;--coupe-bubbles:none"><use href="/logo.svg?v=2#coupe"/></svg><path d="M299 77v-22q0-4 4-6v-8h5v8q4 2 4 6v22z" fill="#6b2a1c"/><path d="M302 73v-14" stroke="#ffe3ac" stroke-width="1" opacity=".45"/><rect x="300.5" y="63" width="8" height="6" fill="#d9c39a" opacity=".55"/><path d="M314 77q-3-14 3-19v-9h5v9q6 5 3 19z" fill="#6b2a1c"/><path d="M317 73v-14" stroke="#ffe3ac" stroke-width="1" opacity=".45"/><rect x="315.5" y="63" width="8" height="6" fill="#d9c39a" opacity=".55"/><rect x="24" y="77" width="312" height="6" fill="#8a5a30"/><rect x="24" y="83" width="312" height="3" fill="#1b0f08"/><rect x="16" y="20" width="328" height="6" fill="#6b4426"/><rect x="16" y="20" width="8" height="70" fill="#5c381e"/><rect x="336" y="20" width="8" height="70" fill="#5c381e"/><path d="M40 0V22" stroke="#0e0804" stroke-width="2"/><circle class="lamp-glow" cx="40" cy="36" r="30" fill="url(#bar-lamp)"/><path d="M30 29Q40 17 50 29Z" fill="#1a0f08"/><path d="M33 29h14l-2 15h-10z" fill="#ffd98a"/><path d="M40 29v15M33 29l2 15M47 29l-2 15" stroke="#2a1a0c" stroke-width="1.2"/><rect x="34" y="44" width="12" height="4" fill="#1a0f08"/><path d="M180 0V6" stroke="#0e0804" stroke-width="2"/><circle class="lamp-glow" cx="180" cy="20" r="30" fill="url(#bar-lamp)"/><path d="M170 13Q180 1 190 13Z" fill="#1a0f08"/><path d="M173 13h14l-2 15h-10z" fill="#ffd98a"/><path d="M180 13v15M173 13l2 15M187 13l-2 15" stroke="#2a1a0c" stroke-width="1.2"/><rect x="174" y="28" width="12" height="4" fill="#1a0f08"/><path d="M320 0V22" stroke="#0e0804" stroke-width="2"/><circle class="lamp-glow" cx="320" cy="36" r="30" fill="url(#bar-lamp)"/><path d="M310 29Q320 17 330 29Z" fill="#1a0f08"/><path d="M313 29h14l-2 15h-10z" fill="#ffd98a"/><path d="M320 29v15M313 29l2 15M327 29l-2 15" stroke="#2a1a0c" stroke-width="1.2"/><rect x="314" y="44" width="12" height="4" fill="#1a0f08"/></svg>
   </div>
 
   <!-- 1) 규칙 설명 (처음 들어오면 보임) -->
@@ -909,6 +952,7 @@
     </div>
       </div>
       <svg class="facade" viewBox="0 0 320 244" aria-hidden="true"><defs><pattern id="sal-wood" width="36" height="64" patternUnits="userSpaceOnUse"><rect width="36" height="64" fill="#6a4328"/><path d="M0 0V64M12 0V64M24 0V64" stroke="#2f1b0e" stroke-width="1.4"/><path d="M4 3q1 9.0 0 18" stroke="#4d2f1a" fill="none" stroke-width=".7"/><path d="M9 30q1 11.0 0 22" stroke="#4d2f1a" fill="none" stroke-width=".7"/><path d="M17 12q1 13.0 0 26" stroke="#4d2f1a" fill="none" stroke-width=".7"/><path d="M22 44q1 8.0 0 16" stroke="#4d2f1a" fill="none" stroke-width=".7"/><path d="M29 6q1 7.0 0 14" stroke="#4d2f1a" fill="none" stroke-width=".7"/><path d="M31 36q1 10.0 0 20" stroke="#4d2f1a" fill="none" stroke-width=".7"/><path d="M6 52q1 5.0 0 10" stroke="#4d2f1a" fill="none" stroke-width=".7"/><ellipse cx="18" cy="50" rx="1.8" ry="3" fill="#2f1b0e" opacity=".7"/></pattern><pattern id="sal-wood-dark" width="36" height="64" patternUnits="userSpaceOnUse"><rect width="36" height="64" fill="#47291a"/><path d="M0 0V64M12 0V64M24 0V64" stroke="#1d0f07" stroke-width="1.4"/><path d="M4 3q1 9.0 0 18" stroke="#33190d" fill="none" stroke-width=".7"/><path d="M9 30q1 11.0 0 22" stroke="#33190d" fill="none" stroke-width=".7"/><path d="M17 12q1 13.0 0 26" stroke="#33190d" fill="none" stroke-width=".7"/><path d="M22 44q1 8.0 0 16" stroke="#33190d" fill="none" stroke-width=".7"/><path d="M29 6q1 7.0 0 14" stroke="#33190d" fill="none" stroke-width=".7"/><path d="M31 36q1 10.0 0 20" stroke="#33190d" fill="none" stroke-width=".7"/><path d="M6 52q1 5.0 0 10" stroke="#33190d" fill="none" stroke-width=".7"/><ellipse cx="18" cy="50" rx="1.8" ry="3" fill="#1d0f07" opacity=".7"/></pattern><linearGradient id="sal-window" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffd58a"/><stop offset="1" stop-color="#c9661d"/></linearGradient><radialGradient id="sal-glow"><stop offset="0" stop-color="#ffbe5c" stop-opacity=".75"/><stop offset="1" stop-color="#ff9a2e" stop-opacity="0"/></radialGradient><radialGradient id="sal-inside" cx=".5" cy=".55" r=".7"><stop offset="0" stop-color="#ffd27a"/><stop offset=".6" stop-color="#c46a1c"/><stop offset="1" stop-color="#3a1606"/></radialGradient><linearGradient id="sal-barrel" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#4a2812"/><stop offset=".42" stop-color="#c0813f"/><stop offset="1" stop-color="#45240f"/></linearGradient></defs><rect x="8" y="0" width="304" height="100" fill="url(#sal-wood)"/><rect x="2" y="0" width="316" height="6" fill="#2b190d"/><rect x="6" y="6" width="308" height="3" fill="#8a5a30"/><rect x="14" y="9" width="6" height="5" fill="#2b190d"/><rect x="34" y="9" width="6" height="5" fill="#2b190d"/><rect x="54" y="9" width="6" height="5" fill="#2b190d"/><rect x="74" y="9" width="6" height="5" fill="#2b190d"/><rect x="94" y="9" width="6" height="5" fill="#2b190d"/><rect x="114" y="9" width="6" height="5" fill="#2b190d"/><rect x="134" y="9" width="6" height="5" fill="#2b190d"/><rect x="154" y="9" width="6" height="5" fill="#2b190d"/><rect x="174" y="9" width="6" height="5" fill="#2b190d"/><rect x="194" y="9" width="6" height="5" fill="#2b190d"/><rect x="214" y="9" width="6" height="5" fill="#2b190d"/><rect x="234" y="9" width="6" height="5" fill="#2b190d"/><rect x="254" y="9" width="6" height="5" fill="#2b190d"/><rect x="274" y="9" width="6" height="5" fill="#2b190d"/><rect x="294" y="9" width="6" height="5" fill="#2b190d"/><rect x="36" y="23" width="50" height="56" fill="#2b190d"/><rect x="40" y="28" width="42" height="46" fill="url(#sal-window)"/><path d="M40 28h12.6q-2 23.0 -12.6 34.5zM82 28h-12.6q2 23.0 12.6 34.5z" fill="#8a2f22" opacity=".75"/><path d="M61.0 28v46M40 51.0h42" stroke="#2b190d" stroke-width="2.4"/><rect x="34" y="78" width="54" height="4" fill="#6b4426"/><rect x="135" y="23" width="50" height="56" fill="#2b190d"/><rect x="139" y="28" width="42" height="46" fill="url(#sal-window)"/><path d="M139 28h12.6q-2 23.0 -12.6 34.5zM181 28h-12.6q2 23.0 12.6 34.5z" fill="#8a2f22" opacity=".75"/><path d="M160.0 28v46M139 51.0h42" stroke="#2b190d" stroke-width="2.4"/><rect x="133" y="78" width="54" height="4" fill="#6b4426"/><rect x="234" y="23" width="50" height="56" fill="#2b190d"/><rect x="238" y="28" width="42" height="46" fill="url(#sal-window)"/><path d="M238 28h12.6q-2 23.0 -12.6 34.5zM280 28h-12.6q2 23.0 12.6 34.5z" fill="#8a2f22" opacity=".75"/><path d="M259.0 28v46M238 51.0h42" stroke="#2b190d" stroke-width="2.4"/><rect x="232" y="78" width="54" height="4" fill="#6b4426"/><rect x="8" y="100" width="304" height="122" fill="url(#sal-wood-dark)"/><rect x="38" y="123" width="52" height="50" fill="#2b190d"/><rect x="42" y="128" width="44" height="40" fill="url(#sal-window)"/><path d="M64.0 128v40M42 148.0h44" stroke="#2b190d" stroke-width="2.4"/><rect x="36" y="172" width="56" height="4" fill="#6b4426"/><rect x="230" y="123" width="52" height="50" fill="#2b190d"/><rect x="234" y="128" width="44" height="40" fill="url(#sal-window)"/><path d="M256.0 128v40M234 148.0h44" stroke="#2b190d" stroke-width="2.4"/><rect x="228" y="172" width="56" height="4" fill="#6b4426"/><rect x="119" y="112" width="82" height="110" fill="#2b190d"/><rect x="125" y="118" width="70" height="104" fill="url(#sal-inside)"/><path d="M125 222l-16 12h102l-16 -12z" fill="#ffb052" opacity=".3"/><g class="door door-l"><path d="M127 148C143.0 146 143.0 141 159 140V204L127 204Z" fill="#7a4a26" stroke="#2b160a" stroke-width="1.6"/><path d="M131 160h24" stroke="#2b160a" stroke-width="2"/><path d="M131 165h24" stroke="#2b160a" stroke-width="2"/><path d="M131 170h24" stroke="#2b160a" stroke-width="2"/><path d="M131 175h24" stroke="#2b160a" stroke-width="2"/><path d="M131 180h24" stroke="#2b160a" stroke-width="2"/><path d="M131 185h24" stroke="#2b160a" stroke-width="2"/><path d="M131 190h24" stroke="#2b160a" stroke-width="2"/><path d="M131 154h24v-0M131 197h24" stroke="#b5793f" stroke-width="1.4"/><circle cx="130" cy="165" r="1.6" fill="#e8c56b"/><circle cx="130" cy="190" r="1.6" fill="#e8c56b"/></g><g class="door door-r"><path d="M193 148C177.0 146 177.0 141 161 140V204L193 204Z" fill="#7a4a26" stroke="#2b160a" stroke-width="1.6"/><path d="M165 160h24" stroke="#2b160a" stroke-width="2"/><path d="M165 165h24" stroke="#2b160a" stroke-width="2"/><path d="M165 170h24" stroke="#2b160a" stroke-width="2"/><path d="M165 175h24" stroke="#2b160a" stroke-width="2"/><path d="M165 180h24" stroke="#2b160a" stroke-width="2"/><path d="M165 185h24" stroke="#2b160a" stroke-width="2"/><path d="M165 190h24" stroke="#2b160a" stroke-width="2"/><path d="M165 154h24v-0M165 197h24" stroke="#b5793f" stroke-width="1.4"/><circle cx="190" cy="165" r="1.6" fill="#e8c56b"/><circle cx="190" cy="190" r="1.6" fill="#e8c56b"/></g><path d="M0 108L14 86H306L320 108Z" fill="#33201a"/><path d="M14.0 86L0.0 108" stroke="#1b0f0b" stroke-width="1.2"/><path d="M28.6 86L16.4 108" stroke="#1b0f0b" stroke-width="1.2"/><path d="M43.2 86L32.8 108" stroke="#1b0f0b" stroke-width="1.2"/><path d="M57.8 86L49.199999999999996 108" stroke="#1b0f0b" stroke-width="1.2"/><path d="M72.4 86L65.6 108" stroke="#1b0f0b" stroke-width="1.2"/><path d="M87.0 86L82.0 108" stroke="#1b0f0b" stroke-width="1.2"/><path d="M101.6 86L98.39999999999999 108" stroke="#1b0f0b" stroke-width="1.2"/><path d="M116.2 86L114.79999999999998 108" stroke="#1b0f0b" stroke-width="1.2"/><path d="M130.8 86L131.2 108" stroke="#1b0f0b" stroke-width="1.2"/><path d="M145.4 86L147.6 108" stroke="#1b0f0b" stroke-width="1.2"/><path d="M160.0 86L164.0 108" stroke="#1b0f0b" stroke-width="1.2"/><path d="M174.6 86L180.39999999999998 108" stroke="#1b0f0b" stroke-width="1.2"/><path d="M189.2 86L196.79999999999998 108" stroke="#1b0f0b" stroke-width="1.2"/><path d="M203.79999999999998 86L213.2 108" stroke="#1b0f0b" stroke-width="1.2"/><path d="M218.4 86L229.59999999999997 108" stroke="#1b0f0b" stroke-width="1.2"/><path d="M233.0 86L245.99999999999997 108" stroke="#1b0f0b" stroke-width="1.2"/><path d="M247.6 86L262.4 108" stroke="#1b0f0b" stroke-width="1.2"/><path d="M262.2 86L278.79999999999995 108" stroke="#1b0f0b" stroke-width="1.2"/><path d="M276.8 86L295.2 108" stroke="#1b0f0b" stroke-width="1.2"/><path d="M291.4 86L311.59999999999997 108" stroke="#1b0f0b" stroke-width="1.2"/><path d="M306.0 86L328.0 108" stroke="#1b0f0b" stroke-width="1.2"/><rect x="0" y="108" width="320" height="6" fill="#7a4c2a"/><rect x="0" y="114" width="320" height="2" fill="#1b0f08"/><rect x="22" y="194" width="3" height="26" fill="#8a5a30"/><rect x="32" y="194" width="3" height="26" fill="#8a5a30"/><rect x="42" y="194" width="3" height="26" fill="#8a5a30"/><rect x="52" y="194" width="3" height="26" fill="#8a5a30"/><rect x="62" y="194" width="3" height="26" fill="#8a5a30"/><rect x="72" y="194" width="3" height="26" fill="#8a5a30"/><rect x="82" y="194" width="3" height="26" fill="#8a5a30"/><rect x="92" y="194" width="3" height="26" fill="#8a5a30"/><rect x="102" y="194" width="3" height="26" fill="#8a5a30"/><rect x="14" y="190" width="94" height="5" fill="#a06b38"/><rect x="220" y="194" width="3" height="26" fill="#8a5a30"/><rect x="230" y="194" width="3" height="26" fill="#8a5a30"/><rect x="240" y="194" width="3" height="26" fill="#8a5a30"/><rect x="250" y="194" width="3" height="26" fill="#8a5a30"/><rect x="260" y="194" width="3" height="26" fill="#8a5a30"/><rect x="270" y="194" width="3" height="26" fill="#8a5a30"/><rect x="280" y="194" width="3" height="26" fill="#8a5a30"/><rect x="290" y="194" width="3" height="26" fill="#8a5a30"/><rect x="300" y="194" width="3" height="26" fill="#8a5a30"/><rect x="212" y="190" width="94" height="5" fill="#a06b38"/><rect x="4" y="220" width="312" height="9" fill="#7a4c2a"/><path d="M24 220v9" stroke="#2f1b0e"/><path d="M48 220v9" stroke="#2f1b0e"/><path d="M72 220v9" stroke="#2f1b0e"/><path d="M96 220v9" stroke="#2f1b0e"/><path d="M120 220v9" stroke="#2f1b0e"/><path d="M144 220v9" stroke="#2f1b0e"/><path d="M168 220v9" stroke="#2f1b0e"/><path d="M192 220v9" stroke="#2f1b0e"/><path d="M216 220v9" stroke="#2f1b0e"/><path d="M240 220v9" stroke="#2f1b0e"/><path d="M264 220v9" stroke="#2f1b0e"/><path d="M288 220v9" stroke="#2f1b0e"/><path d="M312 220v9" stroke="#2f1b0e"/><rect x="4" y="229" width="312" height="4" fill="#2b190d"/><rect x="110" y="233" width="100" height="6" fill="#5c381e"/><rect x="10" y="114" width="8" height="106" fill="#8a5a30"/><rect x="10" y="114" width="3" height="106" fill="#b07a42"/><rect x="7" y="114" width="14" height="5" fill="#5c381e"/><rect x="8" y="214" width="12" height="6" fill="#5c381e"/><rect x="104" y="114" width="8" height="106" fill="#8a5a30"/><rect x="104" y="114" width="3" height="106" fill="#b07a42"/><rect x="101" y="114" width="14" height="5" fill="#5c381e"/><rect x="102" y="214" width="12" height="6" fill="#5c381e"/><rect x="208" y="114" width="8" height="106" fill="#8a5a30"/><rect x="208" y="114" width="3" height="106" fill="#b07a42"/><rect x="205" y="114" width="14" height="5" fill="#5c381e"/><rect x="206" y="214" width="12" height="6" fill="#5c381e"/><rect x="302" y="114" width="8" height="106" fill="#8a5a30"/><rect x="302" y="114" width="3" height="106" fill="#b07a42"/><rect x="299" y="114" width="14" height="5" fill="#5c381e"/><rect x="300" y="214" width="12" height="6" fill="#5c381e"/><circle class="lamp-glow" cx="28" cy="132" r="22" fill="url(#sal-glow)"/><path d="M28 116v6" stroke="#140c07" stroke-width="1.5"/><path d="M22 124h12l-2 -3h-8z" fill="#140c07"/><path d="M23 124h10l-1.5 13h-7z" fill="#ffd98a"/><path d="M28 124v13M23 124l1.5 13M33 124l-1.5 13" stroke="#2a1a0c" stroke-width="1"/><rect x="23" y="137" width="10" height="3" fill="#140c07"/><circle class="lamp-glow" cx="98" cy="132" r="22" fill="url(#sal-glow)"/><path d="M98 116v6" stroke="#140c07" stroke-width="1.5"/><path d="M92 124h12l-2 -3h-8z" fill="#140c07"/><path d="M93 124h10l-1.5 13h-7z" fill="#ffd98a"/><path d="M98 124v13M93 124l1.5 13M103 124l-1.5 13" stroke="#2a1a0c" stroke-width="1"/><rect x="93" y="137" width="10" height="3" fill="#140c07"/><circle class="lamp-glow" cx="222" cy="132" r="22" fill="url(#sal-glow)"/><path d="M222 116v6" stroke="#140c07" stroke-width="1.5"/><path d="M216 124h12l-2 -3h-8z" fill="#140c07"/><path d="M217 124h10l-1.5 13h-7z" fill="#ffd98a"/><path d="M222 124v13M217 124l1.5 13M227 124l-1.5 13" stroke="#2a1a0c" stroke-width="1"/><rect x="217" y="137" width="10" height="3" fill="#140c07"/><circle class="lamp-glow" cx="292" cy="132" r="22" fill="url(#sal-glow)"/><path d="M292 116v6" stroke="#140c07" stroke-width="1.5"/><path d="M286 124h12l-2 -3h-8z" fill="#140c07"/><path d="M287 124h10l-1.5 13h-7z" fill="#ffd98a"/><path d="M292 124v13M287 124l1.5 13M297 124l-1.5 13" stroke="#2a1a0c" stroke-width="1"/><rect x="287" y="137" width="10" height="3" fill="#140c07"/><path d="M50 181h24q9 21.0 0 42h-24q-9 -21.0 0 -42z" fill="url(#sal-barrel)" stroke="#1c0e05" stroke-width="1.2"/><path d="M54.32 183q-2.16 21.0 0 38" stroke="#4a2810" fill="none" stroke-width=".9"/><path d="M62.0 183q0.0 21.0 0 38" stroke="#4a2810" fill="none" stroke-width=".9"/><path d="M69.68 183q2.16 21.0 0 38" stroke="#4a2810" fill="none" stroke-width=".9"/><path d="M47.8 186.88q14.2 3 28.4 0" stroke="#2c2622" stroke-width="2.2" fill="none"/><path d="M46.2 194.86q15.8 3 31.6 0" stroke="#2c2622" stroke-width="2.2" fill="none"/><path d="M46.2 210.4q15.8 3 31.6 0" stroke="#2c2622" stroke-width="2.2" fill="none"/><path d="M48 218.38q14.0 3 28 0" stroke="#2c2622" stroke-width="2.2" fill="none"/><ellipse cx="62.0" cy="181" rx="12.0" ry="3.6" fill="#c08a4e" stroke="#2a170a" stroke-width="1.4"/><ellipse cx="62.0" cy="181" rx="7.0" ry="1.8" fill="none" stroke="#7a4c22"/><path d="M80 191h18q9 17.0 0 34h-18q-9 -17.0 0 -34z" fill="url(#sal-barrel)" stroke="#1c0e05" stroke-width="1.2"/><path d="M82.76 193q-2.16 17.0 0 30" stroke="#4a2810" fill="none" stroke-width=".9"/><path d="M89.0 193q0.0 17.0 0 30" stroke="#4a2810" fill="none" stroke-width=".9"/><path d="M95.24 193q2.16 17.0 0 30" stroke="#4a2810" fill="none" stroke-width=".9"/><path d="M77.8 195.76q11.2 3 22.4 0" stroke="#2c2622" stroke-width="2.2" fill="none"/><path d="M76.2 202.22q12.8 3 25.6 0" stroke="#2c2622" stroke-width="2.2" fill="none"/><path d="M76.2 214.8q12.8 3 25.6 0" stroke="#2c2622" stroke-width="2.2" fill="none"/><path d="M78 221.26q11.0 3 22 0" stroke="#2c2622" stroke-width="2.2" fill="none"/><ellipse cx="89.0" cy="191" rx="9.0" ry="3.6" fill="#c08a4e" stroke="#2a170a" stroke-width="1.4"/><ellipse cx="89.0" cy="191" rx="4.0" ry="1.8" fill="none" stroke="#7a4c22"/><path d="M220 183h23q9 20.0 0 40h-23q-9 -20.0 0 -40z" fill="url(#sal-barrel)" stroke="#1c0e05" stroke-width="1.2"/><path d="M224.06 185q-2.16 20.0 0 36" stroke="#4a2810" fill="none" stroke-width=".9"/><path d="M231.5 185q0.0 20.0 0 36" stroke="#4a2810" fill="none" stroke-width=".9"/><path d="M238.94 185q2.16 20.0 0 36" stroke="#4a2810" fill="none" stroke-width=".9"/><path d="M217.8 188.6q13.7 3 27.4 0" stroke="#2c2622" stroke-width="2.2" fill="none"/><path d="M216.2 196.2q15.3 3 30.6 0" stroke="#2c2622" stroke-width="2.2" fill="none"/><path d="M216.2 211.0q15.3 3 30.6 0" stroke="#2c2622" stroke-width="2.2" fill="none"/><path d="M218 218.6q13.5 3 27 0" stroke="#2c2622" stroke-width="2.2" fill="none"/><ellipse cx="231.5" cy="183" rx="11.5" ry="3.6" fill="#c08a4e" stroke="#2a170a" stroke-width="1.4"/><ellipse cx="231.5" cy="183" rx="6.5" ry="1.8" fill="none" stroke="#7a4c22"/><path d="M251 195h16q9 15.0 0 30h-16q-9 -15.0 0 -30z" fill="url(#sal-barrel)" stroke="#1c0e05" stroke-width="1.2"/><path d="M253.24 197q-2.16 15.0 0 26" stroke="#4a2810" fill="none" stroke-width=".9"/><path d="M259.0 197q0.0 15.0 0 26" stroke="#4a2810" fill="none" stroke-width=".9"/><path d="M264.76 197q2.16 15.0 0 26" stroke="#4a2810" fill="none" stroke-width=".9"/><path d="M248.8 199.2q10.2 3 20.4 0" stroke="#2c2622" stroke-width="2.2" fill="none"/><path d="M247.2 204.9q11.8 3 23.6 0" stroke="#2c2622" stroke-width="2.2" fill="none"/><path d="M247.2 216.0q11.8 3 23.6 0" stroke="#2c2622" stroke-width="2.2" fill="none"/><path d="M249 221.7q10.0 3 20 0" stroke="#2c2622" stroke-width="2.2" fill="none"/><ellipse cx="259.0" cy="195" rx="8.0" ry="3.6" fill="#c08a4e" stroke="#2a170a" stroke-width="1.4"/><ellipse cx="259.0" cy="195" rx="3.0" ry="1.8" fill="none" stroke="#7a4c22"/><rect x="6" y="224" width="6" height="20" fill="#a8723e"/><rect x="45" y="224" width="6" height="20" fill="#a8723e"/><rect x="0" y="225" width="58" height="5" fill="#d09a5c"/><rect x="0" y="230" width="58" height="2" fill="#4a2c17"/><rect x="268" y="224" width="6" height="20" fill="#a8723e"/><rect x="307" y="224" width="6" height="20" fill="#a8723e"/><rect x="262" y="225" width="58" height="5" fill="#d09a5c"/><rect x="262" y="230" width="58" height="2" fill="#4a2c17"/></svg>
+      <div class="dust" aria-hidden="true"><i style="left:7%;top:58%;--x:12px;--y:-18px;animation-duration:11s;animation-delay:-2s"></i><i style="left:12%;top:50%;--x:-9px;--y:-14px;animation-duration:14s;animation-delay:-7s"></i><i style="left:33%;top:57%;--x:10px;--y:-20px;animation-duration:12s;animation-delay:-5s"></i><i style="left:68%;top:52%;--x:-12px;--y:-15px;animation-duration:13s;animation-delay:-9s"></i><i style="left:93%;top:59%;--x:-10px;--y:-19px;animation-duration:10s;animation-delay:-3s"></i><i style="left:88%;top:49%;--x:8px;--y:-12px;animation-duration:15s;animation-delay:-11s"></i></div>
     </div>
     <!-- 포치 앞에 걸린 네온 사인 -->
     <div class="porch-signs">
@@ -936,12 +980,8 @@
   </section>
 
   <!-- 3) 게임 설정 (혼자 하기 / 방 만들기) -->
-  <section class="screen" id="screen-setup" hidden>
-    <!-- 술집 안쪽: 술병 선반과 랜턴 -->
-    <div class="bar-top">
-      <svg class="bar-art" viewBox="0 0 360 118" preserveAspectRatio="xMidYMid meet" aria-hidden="true"><defs><radialGradient id="bar-amber" cx=".5" cy=".6" r=".6"><stop offset="0" stop-color="#ffb24a" stop-opacity=".75"/><stop offset=".55" stop-color="#c46a1c" stop-opacity=".32"/><stop offset="1" stop-color="#c46a1c" stop-opacity="0"/></radialGradient><radialGradient id="bar-lamp"><stop offset="0" stop-color="#ffc66a" stop-opacity=".8"/><stop offset="1" stop-color="#ff9a2e" stop-opacity="0"/></radialGradient><pattern id="bar-wood" width="36" height="64" patternUnits="userSpaceOnUse"><rect width="36" height="64" fill="#3b2214"/><path d="M0 0V64M12 0V64M24 0V64" stroke="#170c05" stroke-width="1.4"/><path d="M4 3q1 9.0 0 18" stroke="#2a170c" fill="none" stroke-width=".7"/><path d="M9 30q1 11.0 0 22" stroke="#2a170c" fill="none" stroke-width=".7"/><path d="M17 12q1 13.0 0 26" stroke="#2a170c" fill="none" stroke-width=".7"/><path d="M22 44q1 8.0 0 16" stroke="#2a170c" fill="none" stroke-width=".7"/><path d="M29 6q1 7.0 0 14" stroke="#2a170c" fill="none" stroke-width=".7"/><path d="M31 36q1 10.0 0 20" stroke="#2a170c" fill="none" stroke-width=".7"/><path d="M6 52q1 5.0 0 10" stroke="#2a170c" fill="none" stroke-width=".7"/><ellipse cx="18" cy="50" rx="1.8" ry="3" fill="#170c05" opacity=".7"/></pattern></defs><rect x="22" y="24" width="316" height="62" fill="url(#bar-wood)"/><rect x="22" y="24" width="316" height="62" fill="url(#bar-amber)"/><path d="M36 77v-26h3v-10h4v10h3v26z" fill="#6b2a1c"/><path d="M39 73v-14" stroke="#ffe3ac" stroke-width="1" opacity=".45"/><rect x="37.5" y="63" width="8" height="6" fill="#d9c39a" opacity=".55"/><path d="M53 77q-3-14 3-19v-9h5v9q6 5 3 19z" fill="#3f5a2c"/><path d="M56 73v-14" stroke="#ffe3ac" stroke-width="1" opacity=".45"/><rect x="54.5" y="63" width="8" height="6" fill="#d9c39a" opacity=".55"/><path d="M68 77q-3-14 3-19v-9h5v9q6 5 3 19z" fill="#3f5a2c"/><path d="M71 73v-14" stroke="#ffe3ac" stroke-width="1" opacity=".45"/><rect x="69.5" y="63" width="8" height="6" fill="#d9c39a" opacity=".55"/><svg x="85" y="53" width="19" height="24" viewBox="108 116 224 278" style="--coupe-w:16px;--coupe-bubbles:none"><use href="/logo.svg?v=2#coupe"/></svg><path d="M109 77q-3-14 3-19v-9h5v9q6 5 3 19z" fill="#3f5a2c"/><path d="M112 73v-14" stroke="#ffe3ac" stroke-width="1" opacity=".45"/><rect x="110.5" y="63" width="8" height="6" fill="#d9c39a" opacity=".55"/><path d="M129 77v-22q0-4 4-6v-8h5v8q4 2 4 6v22z" fill="#3f5a2c"/><path d="M132 73v-14" stroke="#ffe3ac" stroke-width="1" opacity=".45"/><rect x="130.5" y="63" width="8" height="6" fill="#d9c39a" opacity=".55"/><path d="M144 77v-26h3v-10h4v10h3v26z" fill="#2d3f52"/><path d="M147 73v-14" stroke="#ffe3ac" stroke-width="1" opacity=".45"/><rect x="145.5" y="63" width="8" height="6" fill="#d9c39a" opacity=".55"/><path d="M159 77v-22q0-4 4-6v-8h5v8q4 2 4 6v22z" fill="#3f5a2c"/><path d="M162 73v-14" stroke="#ffe3ac" stroke-width="1" opacity=".45"/><rect x="160.5" y="63" width="8" height="6" fill="#d9c39a" opacity=".55"/><svg x="179" y="53" width="19" height="24" viewBox="108 116 224 278" style="--coupe-w:16px;--coupe-bubbles:none"><use href="/logo.svg?v=2#coupe"/></svg><path d="M203 77v-26h3v-10h4v10h3v26z" fill="#3f5a2c"/><path d="M206 73v-14" stroke="#ffe3ac" stroke-width="1" opacity=".45"/><rect x="204.5" y="63" width="8" height="6" fill="#d9c39a" opacity=".55"/><path d="M223 77v-22q0-4 4-6v-8h5v8q4 2 4 6v22z" fill="#6b2a1c"/><path d="M226 73v-14" stroke="#ffe3ac" stroke-width="1" opacity=".45"/><rect x="224.5" y="63" width="8" height="6" fill="#d9c39a" opacity=".55"/><path d="M243 77q-3-14 3-19v-9h5v9q6 5 3 19z" fill="#7a4a1a"/><path d="M246 73v-14" stroke="#ffe3ac" stroke-width="1" opacity=".45"/><rect x="244.5" y="63" width="8" height="6" fill="#d9c39a" opacity=".55"/><path d="M258 77q-3-14 3-19v-9h5v9q6 5 3 19z" fill="#7a4a1a"/><path d="M261 73v-14" stroke="#ffe3ac" stroke-width="1" opacity=".45"/><rect x="259.5" y="63" width="8" height="6" fill="#d9c39a" opacity=".55"/><svg x="275" y="53" width="19" height="24" viewBox="108 116 224 278" style="--coupe-w:16px;--coupe-bubbles:none"><use href="/logo.svg?v=2#coupe"/></svg><path d="M299 77v-22q0-4 4-6v-8h5v8q4 2 4 6v22z" fill="#6b2a1c"/><path d="M302 73v-14" stroke="#ffe3ac" stroke-width="1" opacity=".45"/><rect x="300.5" y="63" width="8" height="6" fill="#d9c39a" opacity=".55"/><path d="M314 77q-3-14 3-19v-9h5v9q6 5 3 19z" fill="#6b2a1c"/><path d="M317 73v-14" stroke="#ffe3ac" stroke-width="1" opacity=".45"/><rect x="315.5" y="63" width="8" height="6" fill="#d9c39a" opacity=".55"/><rect x="24" y="77" width="312" height="6" fill="#8a5a30"/><rect x="24" y="83" width="312" height="3" fill="#1b0f08"/><rect x="16" y="20" width="328" height="6" fill="#6b4426"/><rect x="16" y="20" width="8" height="70" fill="#5c381e"/><rect x="336" y="20" width="8" height="70" fill="#5c381e"/><path d="M40 0V22" stroke="#0e0804" stroke-width="2"/><circle class="lamp-glow" cx="40" cy="36" r="30" fill="url(#bar-lamp)"/><path d="M30 29Q40 17 50 29Z" fill="#1a0f08"/><path d="M33 29h14l-2 15h-10z" fill="#ffd98a"/><path d="M40 29v15M33 29l2 15M47 29l-2 15" stroke="#2a1a0c" stroke-width="1.2"/><rect x="34" y="44" width="12" height="4" fill="#1a0f08"/><path d="M180 0V6" stroke="#0e0804" stroke-width="2"/><circle class="lamp-glow" cx="180" cy="20" r="30" fill="url(#bar-lamp)"/><path d="M170 13Q180 1 190 13Z" fill="#1a0f08"/><path d="M173 13h14l-2 15h-10z" fill="#ffd98a"/><path d="M180 13v15M173 13l2 15M187 13l-2 15" stroke="#2a1a0c" stroke-width="1.2"/><rect x="174" y="28" width="12" height="4" fill="#1a0f08"/><path d="M320 0V22" stroke="#0e0804" stroke-width="2"/><circle class="lamp-glow" cx="320" cy="36" r="30" fill="url(#bar-lamp)"/><path d="M310 29Q320 17 330 29Z" fill="#1a0f08"/><path d="M313 29h14l-2 15h-10z" fill="#ffd98a"/><path d="M320 29v15M313 29l2 15M327 29l-2 15" stroke="#2a1a0c" stroke-width="1.2"/><rect x="314" y="44" width="12" height="4" fill="#1a0f08"/></svg>
-      <h2 id="setupTitle"></h2>
-    </div>
+  <section class="screen indoor" id="screen-setup" hidden>
+    <h2 id="setupTitle"></h2>
     <!-- 혼자 하기: 인원과 힌트만 먼저 보여 준다 -->
     <div id="soloMain">
       <div class="panel">
@@ -980,14 +1020,13 @@
           <small class="help">움직임과 빛나는 효과를 끄고 가만히 보여 줘요.</small></label>
       </div>
     </details>
-    <div class="counter-top" id="counterTop" aria-hidden="true"></div>
     <button class="primary big" id="startSetup"></button>
     <div id="setupWarn" role="status"></div>
     <button class="back">뒤로</button>
   </section>
 
   <!-- 4) 코드 입력 -->
-  <section class="screen" id="screen-join" hidden>
+  <section class="screen indoor" id="screen-join" hidden>
     <h2>코드로 방 들어가기</h2>
     <div class="panel">
       <label>방 코드 <input id="joinCode" inputmode="numeric" maxlength="6" placeholder="숫자 6자리"></label>
@@ -998,7 +1037,7 @@
   </section>
 
   <!-- 5) 대기실 -->
-  <section class="screen" id="screen-lobby" hidden>
+  <section class="screen indoor" id="screen-lobby" hidden>
     <h2>대기실</h2>
     <div class="panel">
       <div>친구에게 이 코드를 알려 주세요</div>
@@ -2229,7 +2268,6 @@ function arrangeSetup() {
   $("soloMain").hidden = !setupSolo;
   // 혼자 하기: 상세 설정은 시작 버튼 아래에 접어 둔다. 방 만들기: 예전처럼 위에 펼쳐 둔다.
   screen.insertBefore($("advanced"), setupSolo ? screen.querySelector(".back") : $("startSetup"));
-  $("startSetup").before($("counterTop"));  // 카운터 상판은 항상 시작 버튼 바로 위
   $("advanced").open = !setupSolo;
   // 승률 힌트 스위치는 하나뿐이라, 화면 종류에 따라 자리를 옮긴다.
   if (setupSolo) $("hintSlot").append($("hintRow"));
@@ -2741,6 +2779,52 @@ const FX = (() => {
     window.addEventListener(type, () => table.classList.remove("peek"));
   }
   table.addEventListener("contextmenu", (e) => { if (e.target.closest(".seat.me > .cards")) e.preventDefault(); });
+})();
+
+// ---- 밤하늘의 별 80개 (매번 같은 자리). 다섯 개 중 하나만 4~6초 주기로 천천히 밝기가 변한다 ----
+(function () {
+  let seed = 7;
+  const random = () => (seed = (seed * 48271) % 2147483647) / 2147483647;
+  const stars = [];
+  for (let i = 0; i < 80; i++) {
+    const star = document.createElement("i");
+    const size = [1, 1, 1.5, 1.5, 2, 2.5][Math.floor(random() * 6)];
+    star.style.cssText = `left:${(random() * 100).toFixed(1)}%;top:${(random() * random() * 35 + random() * 30).toFixed(1)}%;`
+      + `width:${size}px;height:${size}px`;
+    if (i % 5 === 0) {
+      star.className = "twinkle";
+      star.style.animationDuration = (4 + random() * 2).toFixed(1) + "s";
+      star.style.animationDelay = (-random() * 6).toFixed(1) + "s";
+    }
+    stars.push(star);
+  }
+  document.getElementById("stars").append(...stars);
+})();
+
+// ---- 휴대폰: 입력칸이 키보드에 가려지지 않게 화면 위쪽으로 올린다 ----
+(function () {
+  const narrow = window.matchMedia("(max-width: 699px)");
+  const typed = (node) => node && node.matches && node.matches(".indoor input:not([type=checkbox]):not([type=range])");
+  let timer;
+  function lift() {
+    const input = document.activeElement;
+    if (!narrow.matches || !typed(input)) return;
+    const view = window.visualViewport || { offsetTop: 0, height: innerHeight };
+    const box = input.getBoundingClientRect();
+    if (box.top >= view.offsetTop && box.bottom <= view.offsetTop + view.height * 0.6) return;  // 이미 잘 보인다
+    window.scrollBy(0, box.top - view.offsetTop - view.height * 0.25);
+  }
+  document.addEventListener("focusin", (e) => {
+    if (!narrow.matches || !typed(e.target)) return;
+    clearTimeout(timer);
+    document.documentElement.classList.add("typing");
+    setTimeout(lift, 300);  // 키보드가 올라온 뒤
+  });
+  document.addEventListener("focusout", (e) => {
+    // 버튼을 누르는 중에 화면이 움직이지 않게 조금 있다가 여유를 없앤다
+    if (typed(e.target)) timer = setTimeout(() => document.documentElement.classList.remove("typing"), 400);
+  });
+  if (window.visualViewport) window.visualViewport.addEventListener("resize", lift);
 })();
 </script>
 </body>
