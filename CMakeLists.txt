@@ -69,4 +69,5 @@ add_test(NAME test_review COMMAND test_review)
 
 add_executable(test_server tests/test_server.cpp)
 target_link_libraries(test_server holdem_web)
+target_compile_definitions(test_server PRIVATE HOLDEM_WEB_DIR="${CMAKE_CURRENT_SOURCE_DIR}/web")
 add_test(NAME test_server COMMAND test_server)

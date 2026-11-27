@@ -75,6 +75,15 @@ std::string loadIndexHtml() {
     return "";
 }
 
+// 파일 전체를 읽는다. 없으면 빈 문자열.
+std::string readBinary(const std::string& path) {
+    std::ifstream file(path, std::ios::binary);
+    if (!file) return "";
+    std::ostringstream content;
+    content << file.rdbuf();
+    return content.str();
+}
+
 // 방 코드를 마구 대입해 보는 것을 막는다: 같은 IP에서 1분에 10번 틀리면 잠시 거절.
 class JoinLimiter {
 public:
@@ -398,6 +407,28 @@ void setupRoutes(httplib::Server& server, RoomManager& rooms, const std::string&
     });
 }
 
+std::size_t setupAssets(httplib::Server& server, const std::string& folder) {
+    const std::pair<const char*, const char*> files[] = {
+        {"logo.svg", "image/svg+xml"},      {"favicon.svg", "image/svg+xml"},
+        {"favicon.ico", "image/x-icon"},    {"apple-touch-icon.png", "image/png"},
+        {"og-image.png", "image/png"},
+    };
+    std::size_t count = 0;
+    for (const auto& [name, type] : files) {
+        const std::string content = readBinary(folder + "/" + name);
+        if (content.empty()) {
+            std::fprintf(stderr, "그림 파일을 찾을 수 없습니다: %s/%s\n", folder.c_str(), name);
+            continue;
+        }
+        server.Get(std::string("/") + name, [content, type = std::string(type)](const httplib::Request&, httplib::Response& res) {
+            res.set_header("Cache-Control", "public, max-age=86400");
+            res.set_content(content, type);
+        });
+        ++count;
+    }
+    return count;
+}
+
 int runWebServer(int port, const WebOptions& options) {
     const std::string indexHtml = loadIndexHtml();
     if (indexHtml.empty()) {
@@ -408,6 +439,11 @@ int runWebServer(int port, const WebOptions& options) {
     RoomManager rooms(options);
     httplib::Server server;
     setupRoutes(server, rooms, indexHtml);
+#ifdef HOLDEM_WEB_DIR
+    setupAssets(server, std::ifstream(HOLDEM_WEB_DIR "/index.html") ? HOLDEM_WEB_DIR : "web");
+#else
+    setupAssets(server, "web");
+#endif
     // 기본 설정은 같은 포트에 서버 두 개가 뜰 수 있어서, 주소 재사용만 허용하도록 바꾼다.
     server.set_socket_options([](auto sock) {
         httplib::set_socket_opt(sock, SOL_SOCKET, SO_REUSEADDR, 1);

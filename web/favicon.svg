@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 작은 크기용: 잔은 굵게 채우고 스페이드를 크게 -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <path d="M2 24H62C60 41 47 49 32 49S4 41 2 24Z" fill="#c9a24b"/>
+  <path d="M28.500 46H35.500V58H28.500Z" fill="#c9a24b"/>
+  <rect x="14" y="55" width="36" height="8" rx="4" fill="#c9a24b"/>
+  <path transform="translate(32 21) scale(1.150)" d="M0-18C5-10 16-5 16 4C16 10 11 13 6.500 12C4.500 11.500 2.800 10.500 1.600 9C2.200 13 3.800 16.500 6.500 18.500L-6.500 18.500C-3.800 16.500-2.200 13-1.600 9C-2.800 10.500-4.500 11.500-6.500 12C-11 13-16 10-16 4C-16-5-5-10 0-18Z" fill="#ff2d78" stroke="#240a16" stroke-width="2.600" stroke-linejoin="round"/>
+</svg>

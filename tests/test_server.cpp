@@ -318,6 +318,37 @@ void testStatsPage() {
     CHECK(page->body.find("<script") == std::string::npos && page->body.find("http://") == std::string::npos);
 }
 
+// 로고와 미리보기 그림이 올바른 형식으로 제공되는가
+void testAssets() {
+    httplib::Server server;
+    CHECK(setupAssets(server, HOLDEM_WEB_DIR) == 5);
+    const int port = server.bind_to_any_port("127.0.0.1");
+    std::thread thread([&] { server.listen_after_bind(); });
+    server.wait_until_ready();
+    {
+        httplib::Client client("127.0.0.1", port);
+        const auto og = client.Get("/og-image.png");
+        CHECK(og && og->status == 200 && og->get_header_value("Content-Type") == "image/png");
+        CHECK(og && og->body.size() > 24 && og->body.compare(1, 3, "PNG") == 0);
+        // PNG 머리말의 가로, 세로 (1200 x 630)
+        auto number = [&](std::size_t at) {
+            int n = 0;
+            for (int i = 0; i < 4; ++i) n = n * 256 + static_cast<unsigned char>(og->body[at + i]);
+            return n;
+        };
+        CHECK(og && number(16) == 1200 && number(20) == 630);
+        const auto logo = client.Get("/logo.svg");
+        CHECK(logo && logo->status == 200 && logo->get_header_value("Content-Type") == "image/svg+xml");
+        for (const char* path : {"/favicon.svg", "/favicon.ico", "/apple-touch-icon.png"}) {
+            CHECK(client.Get(path)->status == 200);
+        }
+        CHECK(client.Get("/index.html")->status == 404);
+        CHECK(client.Get("/../README.md")->status != 200);
+    }
+    server.stop();
+    thread.join();
+}
+
 }  // namespace
 
 int main() {
@@ -332,6 +363,7 @@ int main() {
     testBrokenFileIsKept();
     testWriteFailureDoesNotStopGame();
     testStatsPage();
+    testAssets();
     std::printf("%d개 검사 중 %d개 실패\n", g_checks, g_failures);
     return g_failures == 0 ? 0 : 1;
 }

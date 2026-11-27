@@ -3,7 +3,22 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>홀덤 연습</title>
+<title>텍사스 홀덤 연습방</title>
+<meta name="description" content="도박장 분위기 없이, 부담 없이 배우는 텍사스 홀덤. 혼자 봇과, 또는 친구와 온라인으로 즐겨요. 칩은 연습용이에요.">
+<meta property="og:title" content="텍사스 홀덤 연습방">
+<meta property="og:description" content="도박장 분위기 없이, 부담 없이 배우는 텍사스 홀덤. 혼자 봇과, 또는 친구와 온라인으로 즐겨요. 칩은 연습용이에요.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://holdem.apps.khu-return.com">
+<meta property="og:image" content="https://holdem.apps.khu-return.com/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:site_name" content="텍사스 홀덤 연습방">
+<meta property="og:locale" content="ko_KR">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#0c100e">
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <style>
   /* ===== 지하 포커룸 테마 ===== */
   :root {
@@ -138,50 +153,56 @@
       radial-gradient(ellipse 75% 55% at 50% 18%, rgba(255, 236, 180, .12), transparent 70%),
       radial-gradient(ellipse at 50% 35%, #0c100e, #040505 75%) #040505; background-attachment: fixed; }
   /* --seat-w: 상대 좌석 폭 */
-  .table { --seat-w: min(104px, 31%); position: relative; isolation: isolate; height: 500px; overflow: hidden; border-radius: 14px;
+  .table { --seat-w: min(104px, 31%); position: relative; isolation: isolate; height: 560px; overflow: hidden; border-radius: 14px;
            background: radial-gradient(ellipse 70% 55% at 50% 35%, rgba(255, 233, 170, .13), transparent 75%), #050706; }
   /* 원근감: 테이블 판만 눕히고, 글자가 있는 요소는 똑바로 세워 둔다 */
-  .table::before, .table::after { content: ""; position: absolute; border-radius: 50%; transform-origin: 50% 100%; transform: perspective(900px) rotateX(30deg); }
-  .table::before { z-index: -2; inset: 30px 0 34px;
+  .table::before, .table::after { content: ""; position: absolute; border-radius: 46% / 34%; transform-origin: 50% 100%; transform: perspective(900px) rotateX(18deg); }
+  .table::before { z-index: -2; inset: 18px 0 8px;
     background: linear-gradient(165deg, #5c3b24, #2a180e 28%, #4b2d1b 55%, #180d08 82%, #3b2314);
     box-shadow: 0 24px 40px #000, inset 0 3px 3px rgba(255, 214, 160, .28), inset 0 -4px 8px rgba(0, 0, 0, .75); }
-  .table::after { z-index: -1; inset: 46px 15px 52px; border: 1px solid rgba(201, 162, 75, .45);
+  /* 펠트: 질감 + 가운데 타원 + 인원수만큼의 부채꼴(--sectors, 장식 스크립트가 만든다) */
+  .table::after { z-index: -1; inset: 30px 11px 20px; border: 1px solid rgba(201, 162, 75, .6);
     background:
-      radial-gradient(rgba(255, 255, 255, .035) 1px, transparent 1.4px) 0 0 / 4px 4px,
-      radial-gradient(rgba(0, 0, 0, .18) 1px, transparent 1.4px) 2px 1px / 5px 5px,
-      radial-gradient(ellipse at 50% 45%, #1b6448, #14503a 38%, #0f3b2a 68%, #07211a);
-    box-shadow: inset 0 0 40px rgba(0, 0, 0, .8); }
+      radial-gradient(rgba(255, 255, 255, .03) 1px, transparent 1.4px) 0 0 / 4px 4px,
+      radial-gradient(rgba(0, 0, 0, .16) 1px, transparent 1.4px) 2px 1px / 5px 5px,
+      radial-gradient(ellipse 33% 21% at 50% 52%, #14503a 0 97%, #c9a24b 98% 100%, transparent 101%),
+      var(--sectors, none),
+      radial-gradient(ellipse at 50% 48%, #1b6448, #14503a 45%, #0f3b2a 75%, #0a2b1f);
+    box-shadow: inset 0 0 34px rgba(0, 0, 0, .72); }
+  /* 펠트 위의 중앙 로고와 공용 카드 5칸 */
+  .felt-logo { position: absolute; z-index: 0; left: 50%; top: 188px; width: 54px; height: 65px; margin-left: -27px; opacity: .85; pointer-events: none; }
   .vignette { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse 85% 75% at 50% 48%, transparent 55%, rgba(0, 0, 0, .78)); }
 
-  /* ---- 좌석 위치 (data-slot은 장식 스크립트가 붙인다. 0 = 나) ---- */
+  /* ---- 좌석 위치 (data-slot은 장식 스크립트가 붙인다. 0 = 나) ----
+     상대 좌석은 모두 같은 순서와 높이(140px): 이름표 -> 카드 -> 칩 -> 잔 */
   .seat { position: absolute; z-index: 2; isolation: isolate; width: var(--seat-w); display: flex; flex-direction: column; align-items: center;
-          padding-top: 14px; text-align: center; font-size: 12px; line-height: 14px; }
-  .seat[data-slot="1"] { left: 0; top: 172px; }
-  .seat[data-slot="2"] { left: 0; top: 36px; }
-  .seat[data-slot="3"] { left: calc(50% - var(--seat-w) / 2); top: 0; }
-  .seat[data-slot="4"] { right: 0; top: 36px; }
-  .seat[data-slot="5"] { right: 0; top: 172px; }
+          padding-top: 12px; text-align: center; font-size: 12px; line-height: 13px; }
+  .seat[data-slot="1"] { left: 0; top: 188px; }
+  .seat[data-slot="2"] { left: 0; top: 44px; }
+  .seat[data-slot="3"] { left: calc(50% - var(--seat-w) / 2); top: 4px; }
+  .seat[data-slot="4"] { right: 0; top: 44px; }
+  .seat[data-slot="5"] { right: 0; top: 188px; }
   /* 확대해도 화면 밖으로 나가지 않게 바깥쪽을 기준으로 */
   .seat[data-slot="1"], .seat[data-slot="2"] { transform-origin: 0 50%; }
   .seat[data-slot="4"], .seat[data-slot="5"] { transform-origin: 100% 50%; }
   /* 어두운 어깨 실루엣 */
-  .seat:not(.me)::before { content: ""; position: absolute; z-index: -2; top: 0; left: 10%; width: 80%; height: 40px; border-radius: 50% 50% 20% 20% / 90% 90% 20% 20%;
+  .seat:not(.me)::before { content: ""; position: absolute; z-index: -2; top: 0; left: 12%; width: 76%; height: 30px; border-radius: 50% 50% 20% 20% / 90% 90% 20% 20%;
     background: radial-gradient(ellipse at 50% 100%, #1b201e, #020303 80%); box-shadow: 0 -1px 8px rgba(232, 207, 133, .16); }
-  /* 이름표 */
-  .name, .seat > .stack, .status { width: 100%; padding: 0 3px; }
-  .seat:not(.me) > .name { margin-top: 2px; background: #101513; border: 1px solid #4d4632; border-bottom: 0; border-radius: 8px 8px 0 0; padding-top: 2px; }
+  /* 1) 이름표 */
+  .name, .seat > .stack, .status { width: 100%; padding: 0 3px; white-space: nowrap; }
+  .seat:not(.me) > .name { background: #101513; border: 1px solid #4d4632; border-bottom: 0; border-radius: 8px 8px 0 0; padding-top: 2px; }
   .seat:not(.me) > .stack { background: #101513; border-inline: 1px solid #4d4632; }
   .seat:not(.me) > .status { order: 1; background: #101513; border: 1px solid #4d4632; border-top: 0; border-radius: 0 0 8px 8px; }
-  .name { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .name { font-weight: 700; overflow: hidden; text-overflow: ellipsis; }
   .pos { display: block; min-height: 13px; color: var(--gold-light); font-size: 10px; font-weight: 700; line-height: 13px; white-space: nowrap; }
   .pos[data-trait]::after { content: " " attr(data-trait); color: var(--muted); font-weight: 500; }
-  .status { min-height: 15px; color: #b9dcc8; font-size: 11px; }
+  .status { height: 14px; color: #b9dcc8; font-size: 10px; letter-spacing: -.03em; }
 
   /* 상대의 카드와 테이블에 올린 손 */
   .cards { display: flex; justify-content: center; gap: 3px; }
-  .seat:not(.me) > .cards { order: 2; position: relative; height: 44px; align-items: flex-start; padding-top: 3px; width: 100%; }
-  .opp-hands { position: absolute; z-index: 1; left: 50%; bottom: -3px; width: 78px; height: 22px; margin-left: -39px; pointer-events: none; }
-  .seat:not(.me) .card:not(.back) { position: relative; z-index: 2; flex-basis: 29px; height: 40px; }
+  .seat:not(.me) > .cards { order: 2; position: relative; height: 38px; align-items: flex-start; padding-top: 2px; width: 100%; }  /* 2) 카드 */
+  .opp-hands { position: absolute; z-index: 1; left: 50%; bottom: 0; width: 78px; height: 20px; margin-left: -39px; pointer-events: none; }
+  .seat:not(.me) .card:not(.back) { position: relative; z-index: 2; flex-basis: 27px; height: 37px; }
   .card { flex: 0 0 23px; height: 33px; border-radius: 4px; border: 1px solid #b8ad8e; color: #17150f; position: relative;
           background: linear-gradient(150deg, #fbf6e8, var(--ivory) 55%, #e6dcc0); box-shadow: 0 2px 5px rgba(0, 0, 0, .6);
           display: flex; flex-direction: column; justify-content: space-between; padding: 2px; line-height: 1;
@@ -200,11 +221,11 @@
   .seat.turn:not(.me) > :is(.name, .stack, .status) { background: #22241c; border-color: var(--gold-light); }
   .seat.out, .seat.folded { filter: grayscale(1) brightness(.75); }
   .seat.folded:not(.me) > .cards::before { content: ""; width: 34px; height: 22px; margin-top: 8px; border-radius: 3px; background: #3a2a2d; border: 1px solid #77706a; transform: rotate(-14deg); }
-  .dealer { position: absolute; z-index: 3; top: 16px; right: -2px; width: 18px; height: 18px; border-radius: 50%; background: var(--ivory); color: #17150f;
+  .dealer { position: absolute; z-index: 3; top: 12px; right: -2px; width: 18px; height: 18px; border-radius: 50%; background: var(--ivory); color: #17150f;
             font-size: 11px; font-weight: 800; line-height: 18px; box-shadow: 0 2px 4px #000; }
 
   /* ---- 내 자리: 화면 아래, 손에 쥔 카드 ---- */
-  .seat.me { left: 0; right: 0; top: 368px; bottom: 0; width: auto; padding: 0; display: block; }
+  .seat.me { left: 0; right: 0; top: 392px; bottom: 0; width: auto; padding: 0; display: block; }
   .seat.me > .name, .seat.me > .stack { position: absolute; z-index: 1; left: 4px; width: auto; max-width: calc(50% - 82px); overflow: hidden; text-overflow: ellipsis;
             text-align: left; background: rgba(5, 8, 7, .88); padding: 2px 6px; white-space: nowrap; }
   .seat.me > .name { bottom: 26px; border-radius: 8px 8px 0 0; }
@@ -213,10 +234,10 @@
   .seat.me.turn .card { border: 2px solid var(--gold-light); }
   /* 올인, 큰 베팅은 글자 배지로만 알린다 */
   .badge { position: absolute; z-index: 4; top: 0; left: 50%; transform: translateX(-50%); padding: 0 7px; border-radius: 4px; white-space: nowrap;
-           font-size: 11px; font-weight: 800; line-height: 14px; background: var(--ivory); color: #17150f; }
+           font-size: 10px; font-weight: 800; line-height: 12px; background: var(--ivory); color: #17150f; }
   .seat.me .badge { left: 6px; transform: none; top: auto; bottom: 82px; }
   .seat.me .dealer { top: auto; bottom: 60px; left: 6px; right: auto; }
-  .seat.me > .status { position: absolute; top: 0; left: 0; text-shadow: 0 1px 3px #000; }
+  .seat.me > .status { position: absolute; bottom: 44px; right: 4px; left: auto; width: max-content; max-width: calc(50% - 92px); overflow: hidden; text-overflow: ellipsis; text-shadow: 0 1px 3px #000; }
   .seat.me > .cards { position: absolute; bottom: 0; left: 50%; width: 164px; height: 112px; margin-left: -82px; align-items: flex-start; gap: 0;
             cursor: pointer; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
   .seat.me .card { flex: 0 0 76px; height: 108px; border-radius: 8px; padding: 6px 7px; justify-content: flex-start; transform-origin: 50% 100%;
@@ -224,50 +245,56 @@
   .seat.me .card + .card { margin-left: -2px; transform: translateY(24px) rotate(6deg); }
   .seat.me .card span:first-child { font-size: 30px; }
   .seat.me .card span:last-child { align-self: center; font-size: 36px; }
-  .hands, .thumbs { position: absolute; bottom: 0; left: 50%; width: 270px; height: 120px; margin-left: -135px; pointer-events: none; transform-origin: 50% 100%; }
+  .hands, .thumbs { position: absolute; bottom: 0; left: 50%; width: 230px; height: 102px; margin-left: -115px; pointer-events: none; transform-origin: 50% 100%; }
   .hands { z-index: 2; } .thumbs { z-index: 4; }
   .table:not(:has(.seat.me .card)) :is(.hands, .thumbs, .peek-tip) { display: none; }
   .seat.me > .cards, .hands, .thumbs { transition: transform .18s ease-out; }
   /* 누르고 있으면 들어 올려 크게 본다 */
   .table.peek .seat.me > .cards, .table.peek .hands, .table.peek .thumbs { transform: translateY(-44px) scale(1.22); }
   .table.peek .seat.me { z-index: 5; }
-  .peek-tip { position: absolute; z-index: 5; right: 4px; bottom: 6px; padding: 1px 6px; border-radius: 6px; background: rgba(5, 8, 7, .88); color: var(--muted); font-size: 11px; pointer-events: none; }
+  .peek-tip { position: absolute; z-index: 5; right: 4px; bottom: 66px; padding: 1px 6px; border-radius: 6px; background: rgba(5, 8, 7, .88); color: var(--muted); font-size: 11px; pointer-events: none; }
 
   /* ---- 가운데: 팟과 공용 카드 ---- */
-  .mid { position: absolute; z-index: 1; left: 0; right: 0; top: 254px; display: flex; flex-wrap: wrap; justify-content: center; align-content: flex-start; align-items: flex-end; text-align: center; }
-  .pot { height: 50px; display: flex; align-items: flex-end; padding-bottom: 6px; font-family: var(--serif); font-size: 18px; font-weight: 700; color: var(--gold-light);
+  .mid { position: absolute; z-index: 1; left: 0; right: 0; top: 266px; display: flex; flex-direction: column; align-items: center; text-align: center; }
+  .pot { height: 24px; font-family: var(--serif); font-size: 18px; font-weight: 700; color: var(--gold-light);
          font-variant-numeric: lining-nums; text-shadow: 0 2px 4px #000; white-space: nowrap; }
-  .potpile { margin: 0 5px 8px 0; }
-  #board { flex-basis: 100%; min-height: 56px; align-items: flex-start; }
-  #board .card { flex-basis: 38px; height: 54px; padding: 3px 4px; }
+  .potpile { height: 32px; justify-content: center; }
+  /* 공용 카드: 5칸을 미리 그려 두고 왼쪽부터 채운다 */
+  .slots, #board { --w: 38px; --h: 54px; width: calc(var(--w) * 5 + 12px); display: flex; justify-content: flex-start; gap: 3px; }
+  .slots { margin-top: 12px; height: var(--h); }
+  .slots i { width: var(--w); height: var(--h); border-radius: 5px; border: 1px dashed rgba(232, 207, 133, .45); background: rgba(0, 0, 0, .14); }
+  #board { margin-top: calc(var(--h) * -1); height: var(--h); min-height: 0; position: relative; align-items: flex-start; }
+  #board .card { flex: 0 0 var(--w); height: var(--h); padding: 3px 4px; }
   #board .card span:first-child { font-size: 17px; }
   #board .card span:last-child { font-size: 24px; }
 
-  /* ---- 칩 더미: 기둥 하나가 요소 하나. --n은 쌓인 개수(최대 5) ---- */
-  .pile { display: flex; align-items: flex-end; gap: 1px; pointer-events: none; }
-  .pile i { --chip: #e6e0d0; --edge: #55503f; position: relative; width: 17px; height: calc(var(--n) * 3px + 9px); border-radius: 50% / 5px;
-    background: repeating-linear-gradient(0deg, rgba(0, 0, 0, .5) 0 1px, transparent 1px 3px),
-                linear-gradient(90deg, transparent 0 3px, var(--edge) 3px 5px, transparent 5px 12px, var(--edge) 12px 14px, transparent 14px),
-                var(--chip);
-    box-shadow: 0 2px 3px rgba(0, 0, 0, .75), 0 0 0 1px rgba(255, 240, 200, .28); }
-  .pile i::before { content: ""; position: absolute; left: 0; right: 0; top: -1px; height: 10px; border-radius: 50%; background: var(--chip);
-    border: 2px dashed var(--edge); box-shadow: 0 0 0 1px rgba(255, 240, 200, .35); }
-  .pile i[data-chip="red"] { --chip: #b02a3b; --edge: #f3ecd9; }
-  .pile i[data-chip="green"] { --chip: #1d8a5b; --edge: #f3ecd9; }
-  .pile i[data-chip="blue"] { --chip: #2d5aa8; --edge: #f3ecd9; }
-  .pile i[data-chip="black"] { --chip: #26262b; --edge: #e8cf85; }
-  .own { position: absolute; z-index: 3; right: -1px; bottom: 1px; }
-  .pile.own i { width: 14px; }
-  .seat.me .own { right: 8px; bottom: 30px; }
-  .seat[data-slot="4"] .own, .seat[data-slot="5"] .own { right: auto; left: -1px; }
+  /* 3) 칩  4) 잔 */
+  .seat-items { order: 3; display: flex; align-items: flex-end; justify-content: center; gap: 5px; height: 33px; width: 100%; padding-top: 2px; }
+  .seat.me > .seat-items { position: absolute; right: 4px; bottom: 6px; width: auto; justify-content: flex-end; }
+  /* 칩 더미: 기둥 하나가 요소 하나. 색 띠(--stack)와 높이(--n)는 스크립트가 정한다 */
+  .chips-art { display: flex; align-items: flex-end; justify-content: center; gap: 2px; pointer-events: none; }
+  .chips-art i { position: relative; width: 13px; height: calc(var(--n) * 3px + 7px); border-radius: 50% / 4px; background: var(--stack); transform-origin: 50% 100%;
+    box-shadow: 0 2px 3px rgba(0, 0, 0, .7), 0 0 0 1px rgba(255, 240, 200, .3); }
+  .chips-art i::before { content: ""; position: absolute; left: 0; right: 0; top: -1px; height: 8px; border-radius: 50%; background: var(--top);
+    border: 1px dashed var(--edge); }
+  .chips-art b { align-self: flex-start; font-size: 12px; line-height: 12px; color: var(--gold-light); }
+  .chips-art.none { align-items: center; gap: 3px; font-size: 11px; color: var(--muted); }
+  .chips-art.none::before { content: ""; width: 14px; height: 8px; border-radius: 50%; border: 1px dashed #77706a; }
+  .chips-art i.grow { animation: grow .5s ease-out var(--d) backwards; }
+  @keyframes grow { from { transform: scaleY(var(--from)); } }
+  @media (prefers-reduced-motion: reduce) { .chips-art i.grow { animation: none; } }
+  .glass { flex: none; width: 21px; height: 28px; overflow: visible; }
+  .seat.folded .glass { opacity: .5; }
+  .seat.out .glass { opacity: .12; }
+
   /* 이번 라운드 베팅: 좌석보다 테이블 가운데 쪽 */
   .bet { position: absolute; }
-  .seat[data-slot="1"] .bet { left: calc(100% + 2px); top: 40px; }
-  .seat[data-slot="2"] .bet { left: calc(100% - 2px); top: 104px; }
-  .seat[data-slot="3"] .bet { left: 0; right: 0; justify-content: center; top: calc(100% + 1px); }
-  .seat[data-slot="4"] .bet { right: calc(100% - 2px); top: 104px; }
-  .seat[data-slot="5"] .bet { right: calc(100% + 2px); top: 40px; }
-  .seat.me .bet { left: calc(50% - 108px); top: 0; }
+  .seat[data-slot="1"] .bet { left: calc(100% + 2px); top: 44px; }
+  .seat[data-slot="2"] .bet { left: 100%; top: 127px; }
+  .seat[data-slot="3"] .bet { left: 0; right: 0; margin: 0 auto; width: max-content; top: calc(100% + 4px); }
+  .seat[data-slot="4"] .bet { right: 100%; top: 127px; }
+  .seat[data-slot="5"] .bet { right: calc(100% + 2px); top: 44px; }
+  .seat.me .bet { left: 0; right: 0; margin: 0 auto; width: max-content; top: 0; }
 
   /* ---- 움직임: transform과 opacity만 사용. 지연 시간은 --d ---- */
   .card.deal { animation: deal .35s ease-out var(--d) backwards; }
@@ -279,12 +306,24 @@
   @media (prefers-reduced-motion: reduce) {
     .card.deal, .card.flip, .card.flip::after { animation: none; }
   }
+  /* 모바일: 말풍선은 좌우 좌석 사이의 빈 폭 안에 */
+  @media (max-width: 599px) {
+    .table .seat .bubble { font-size: 11px; padding: 4px 6px; letter-spacing: -.03em; }
+    .table .seat[data-slot="3"] .bubble { margin-left: -60px; width: 120px; font-size: 11px; padding-inline: 0; }
+  }
   /* 아주 좁은 화면(320px) */
   @media (max-width: 340px) {
-    .table { height: 512px; }
-    .status { font-size: 9.5px; letter-spacing: -.04em; }
-    .mid { top: 266px; }
-    .seat.me { top: 380px; }
+    .status { font-size: 9px; letter-spacing: -.06em; }
+    .table .seat .bubble { font-size: 9.5px; padding: 4px 2px; letter-spacing: -.08em; border-width: 1px; }
+    .table .seat[data-slot="1"] .bubble, .table .seat[data-slot="2"] .bubble { left: calc(100% + 1px); }
+    .table .seat[data-slot="4"] .bubble, .table .seat[data-slot="5"] .bubble { right: calc(100% + 1px); }
+    .table .seat[data-slot="3"] .bubble { margin-left: -50px; width: 100px; font-size: 9.5px; }
+    .slots, #board { --w: 34px; --h: 50px; }
+    .seat.me > .seat-items { gap: 2px; right: 2px; }
+    .table .chips-art.bet i { width: 10px; }
+    .seat.me > .cards { width: 138px; margin-left: -69px; }
+    .seat.me .card { flex-basis: 68px; height: 100px; }
+    .seat.me > .name, .seat.me > .stack { max-width: calc(50% - 76px); font-size: 11px; }
   }
   /* ---- 연출 층: 전부 터치를 통과시키고 transform, opacity만 움직인다 ---- */
   .fx { position: absolute; inset: 0; z-index: 6; overflow: hidden; pointer-events: none; }
@@ -305,29 +344,43 @@
   @media (prefers-reduced-motion: reduce) { .potpile.bump { animation: none; } }
 
   @media (min-width: 600px) {
-    .table { --seat-w: 132px; height: 548px; }
-    .table::before { inset: 34px 0 40px; }
-    .table::after { inset: 56px 28px 62px; }
-    .seat[data-slot="1"] { left: 1%; top: 200px; }
-    .seat[data-slot="2"] { left: 11%; top: 44px; }
-    .seat[data-slot="4"] { right: 11%; top: 44px; }
-    .seat[data-slot="5"] { right: 1%; top: 200px; }
-    .seat.me { top: 388px; }
+    .table { --seat-w: 132px; height: 590px; }
+    .table::before { inset: 22px 0 10px; }
+    .table::after { inset: 38px 26px 28px; }
+    .felt-logo { top: 176px; width: 60px; height: 72px; margin-left: -30px; }
+    .seat[data-slot="1"] { left: 1%; top: 210px; }
+    .seat[data-slot="2"] { left: 11%; top: 56px; }
+    .seat[data-slot="3"] { top: 6px; }
+    .seat[data-slot="4"] { right: 11%; top: 56px; }
+    .seat[data-slot="5"] { right: 1%; top: 210px; }
+    .seat[data-slot="1"] .bet { left: calc(100% + 8px); top: 58px; }
+    .seat[data-slot="2"] .bet { left: calc(100% + 8px); top: 50px; }
+    .seat[data-slot="3"] .bet { top: calc(100% + 6px); }
+    .seat[data-slot="4"] .bet { right: calc(100% + 8px); top: 50px; }
+    .seat[data-slot="5"] .bet { right: calc(100% + 8px); top: 58px; }
+    .table .seat[data-slot="1"] .bubble { left: calc(100% + 8px); top: 14px; }
+    .table .seat[data-slot="2"] .bubble { left: calc(100% + 8px); top: 126px; }
+    .table .seat[data-slot="3"] .bubble { top: 190px; margin-left: -75px; width: 150px; font-size: 13px; }
+    .table .seat[data-slot="4"] .bubble { right: calc(100% + 8px); top: 126px; }
+    .table .seat[data-slot="5"] .bubble { right: calc(100% + 8px); top: 14px; }
+    .mid { top: 256px; }
+    .pot { font-size: 21px; height: 28px; }
+    .slots, #board { --w: 50px; --h: 70px; }
+    #board .card span:first-child { font-size: 21px; }
+    #board .card span:last-child { font-size: 32px; }
+    .seat.me { top: 404px; }
     .seat.me > .cards { width: 200px; margin-left: -100px; height: 136px; }
     .seat.me .card { flex-basis: 92px; height: 130px; }
     .seat.me .card span:first-child { font-size: 36px; }
     .seat.me .card span:last-child { font-size: 42px; }
     .seat.me > .name, .seat.me > .stack { left: 90px; max-width: calc(50% - 200px); font-size: 14px; }
     .seat.me .dealer { left: 92px; }
-    .seat.me .bet { left: calc(50% - 130px); }
-    .seat.me .own { right: calc(50% - 215px); bottom: 24px; }
-    .hands, .thumbs { width: 330px; height: 147px; margin-left: -165px; }
-    .peek-tip { right: 60px; bottom: 4px; }
-    .mid { top: 238px; }
-    .pot { font-size: 23px; }
-    #board .card { flex-basis: 50px; height: 70px; }
-    #board .card span:first-child { font-size: 21px; }
-    #board .card span:last-child { font-size: 32px; }
+    .seat.me .bet { top: 8px; }
+    .seat.me > .seat-items { right: calc(50% - 250px); bottom: 14px; gap: 10px; }
+    .seat.me > .status { right: calc(50% - 250px); bottom: 56px; max-width: 150px; text-align: right; }
+    .table .seat.me .bubble { left: 90px; top: 30px; }
+    .hands, .thumbs { width: 300px; height: 133px; margin-left: -150px; }
+    .peek-tip { right: 60px; bottom: 90px; }
   }
 
   .panel { background: linear-gradient(rgba(22, 29, 26, .85), rgba(12, 17, 15, .9)); border: 1px solid var(--line); border-radius: 10px; padding: 10px;
@@ -359,16 +412,22 @@
   .settings-row { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 4px 18px; }
   .settings-row label { justify-content: center; font-size: 14px; color: var(--muted); }
   #screen-game .settings-row select { width: auto; min-height: 44px; font: inherit; }
-  .bubble { position: absolute; z-index: 6; left: 50%; top: 72px; transform: translateX(-50%); padding: 4px 9px; border-radius: 12px; white-space: nowrap;
+  .bubble { position: absolute; z-index: 6; width: max-content; padding: 4px 9px; border-radius: 12px; white-space: nowrap;
     font-size: 13px; font-weight: 800; background: var(--ivory); color: #17150f; border: 2px solid #8d8468; box-shadow: 0 4px 10px rgba(0, 0, 0, .7); }
   .bubble.fold { background: #44474a; color: #fff; border-color: #8b8f92; }
   .bubble.call { background: #17714b; color: #fff; border-color: #6fd0a4; }
   .bubble.raise { background: #e8cf85; border-color: #8f6f22; }
   .bubble.allin { background: #15110a; color: #ffe9b0; border: 3px double var(--gold-light); }
   .bubble.thinking { background: rgba(8, 12, 11, .95); color: var(--ivory); border-color: var(--gold); }
-  .seat.me .bubble { top: -6px; }
+  .seat[data-slot="1"] .bubble { left: calc(100% + 4px); top: 12px; }
+  .seat[data-slot="2"] .bubble { left: calc(100% + 4px); top: 156px; }
+  .seat[data-slot="3"] .bubble { left: 50%; margin-left: -60px; width: 120px; top: 194px; padding-inline: 2px; font-size: 12px; }
+  .seat[data-slot="4"] .bubble { right: calc(100% + 4px); top: 156px; }
+  .seat[data-slot="5"] .bubble { right: calc(100% + 4px); top: 12px; }
+  .seat.me .bubble { left: 4px; top: 0; }
+  .seat .bubble.raise { display: block; margin-top: 0; gap: 0; }  /* 입력줄의 .raise 격자와 이름이 겹친다 */
   .bubble.pop { animation: pop .3s ease-out var(--d) backwards; }
-  @keyframes pop { from { opacity: 0; transform: translateX(-50%) scale(.6); } }
+  @keyframes pop { from { opacity: 0; transform: scale(.6); } }
   @media (prefers-reduced-motion: reduce) { .bubble.pop { animation: none; } }
 
   /* 이번 판 결과 */
@@ -454,6 +513,11 @@
   /* 화면 안 안내 (알림창을 쓰지 않는다) */
   #error:not(:empty) { color: #ffd0c8; text-align: center; border: 1px solid #a8665c; border-radius: 10px; padding: 8px 10px; background: #1d1210; line-height: 1.5; }
   #closedNotice { display: flex; align-items: center; justify-content: space-between; gap: 10px; border: 1px solid var(--gold); border-radius: 10px; padding: 8px 10px; background: #14140e; }
+
+  /* 로고 */
+  #headLogo { display: none; flex: none; }
+  .wrap:has(#screen-home:not([hidden])) #headLogo { display: block; }
+  #storyTitle { display: flex; align-items: center; gap: 8px; }
 
   /* 초보자용 규칙 화면 */
   #screen-rules { font-size: 17px; line-height: 1.65; word-break: keep-all; }
@@ -595,6 +659,7 @@
 <body>
 <div class="wrap">
   <header>
+    <img id="headLogo" src="/favicon.svg" alt="텍사스 홀덤 연습방 로고" width="32" height="32">
     <h1>♠ 홀덤 연습</h1>
     <button type="button" id="homeBack">← 처음으로</button>
     <span id="info"></span>
@@ -881,7 +946,7 @@
 <dialog class="modal" id="story" aria-labelledby="storyTitle">
   <div class="modal-box">
     <div class="modal-head">
-      <h2 id="storyTitle">만든 이야기</h2>
+      <h2 id="storyTitle"><img src="/favicon.svg" alt="" width="28" height="28">만든 이야기</h2>
       <button type="button" class="modal-close" aria-label="닫기">✕</button>
     </div>
     <div class="modal-body">
@@ -943,8 +1008,17 @@ function cardNode(code) {
   return node;
 }
 
-// 인원수별로 사용할 자리 (0 = 아래 가운데, 시계 방향)
-const LAYOUTS = { 2: [0, 3], 3: [0, 2, 4], 4: [0, 1, 3, 5], 5: [0, 1, 2, 4, 5], 6: [0, 1, 2, 3, 4, 5] };
+// ===== 인원수별 좌석 배치 표 (여기 숫자만 바꾸면 된다) =====
+// 첫 번째가 나, 그 뒤로 시계 방향. 자리 번호:
+//   0 = 아래(나), 1 = 왼쪽 아래, 2 = 왼쪽 위, 3 = 맞은편 위, 4 = 오른쪽 위, 5 = 오른쪽 아래
+// 자리 번호별 화면 좌표는 CSS의 .seat[data-slot="N"]에 있다.
+const SEAT_LAYOUTS = {
+  2: [0, 3],
+  3: [0, 2, 4],
+  4: [0, 1, 3, 5],
+  5: [0, 1, 2, 4, 5],
+  6: [0, 1, 2, 3, 4, 5],
+};
 
 function renderSeats(players) {
   document.querySelectorAll(".seat").forEach((n) => n.remove());
@@ -957,7 +1031,7 @@ function renderSeats(players) {
     else if (p.folded) cls += " folded";
     const seat = el("div", cls);
     // 내 자리(mine)를 아래로 돌려서 배치한다.
-    seat.style.gridArea = "s" + LAYOUTS[players.length][(p.seat - mine + players.length) % players.length];
+    seat.style.gridArea = "s" + SEAT_LAYOUTS[players.length][(p.seat - mine + players.length) % players.length];
     const name = el("div", "name", p.name);
     name.append(el("span", "pos", p.position));
     seat.append(name, el("div", "", "칩 " + p.chips.toLocaleString()));
@@ -2016,7 +2090,7 @@ const FX = (() => {
   // 화면의 위치들. 좌석은 1초마다 새로 만들어지므로 쓸 때마다 다시 찾는다.
   const seatAt = (i) => table.querySelectorAll(":scope > .seat")[i];
   const potPoint = () => middle($("pot"));
-  function stackPoint(i) { const s = seatAt(i); return s && middle(s.querySelector(".own") || s.querySelector(".name")); }
+  function stackPoint(i) { const s = seatAt(i); return s && middle(s.querySelector(".chips-art") || s.querySelector(".name")); }
   function betPoint(i) {
     const s = seatAt(i);
     if (!s) return null;
@@ -2240,30 +2314,109 @@ const FX = (() => {
   const defs = el("div", "");
   defs.setAttribute("aria-hidden", "true");
   defs.innerHTML = '<svg width="0" height="0" style="position:absolute"><symbol id="oppHands" viewBox="0 0 78 22">' + oppArm
-    + '<g transform="translate(78 0) scale(-1 1)">' + oppArm + "</g></symbol></svg>";
+    + '<g transform="translate(78 0) scale(-1 1)">' + oppArm + "</g></symbol>"
+    // 좌석의 쿠페 잔: 로고와 같은 모양에서 스페이드를 빼고 단순하게
+    + '<symbol id="coupe" viewBox="0 0 40 52"><path d="M5 14C9 23 14 26 20 26S31 23 35 14Z" fill="#e8cf85" opacity=".35"/>'
+    + '<g fill="none" stroke="#c9a24b" stroke-width="2.2" stroke-linecap="round"><path d="M3 9C4 20 11 27 20 27S36 20 37 9"/><ellipse cx="20" cy="9" rx="17" ry="2.6" stroke-width="1.6"/>'
+    + '<path d="M20 27V45"/><ellipse cx="20" cy="47" rx="10" ry="2.8"/></g><path d="M5.5 14H34.5" stroke="#e8cf85" stroke-width="1"/></symbol></svg>';
 
   const potPile = el("div", "potpile");
   table.querySelector(".mid").prepend(potPile);
-  table.prepend(el("div", "vignette"));
-  table.append(defs, layer("hands", arm + palm), layer("thumbs", '<g transform="translate(0 48) scale(.74)">' + thumb + "</g>"), el("div", "peek-tip", "카드를 꾹 눌러 보기"));
+  const slots = el("div", "slots");  // 공용 카드 5칸
+  slots.setAttribute("aria-hidden", "true");
+  slots.append(...[1, 2, 3, 4, 5].map(() => el("i", "")));
+  $("board").before(slots);
+  const feltLogo = el("img", "felt-logo");
+  feltLogo.src = "/logo.svg";
+  feltLogo.alt = "";
+  table.prepend(el("div", "vignette"), feltLogo);
 
-  // 금액을 칩 기둥으로 바꾼다. 색은 빅 블라인드의 몇 배인지로 정하고, 기둥은 최대 5개 높이.
-  function pile(amount, bb, maxColumns, className) {
-    const box = el("div", "pile " + className);
-    box.setAttribute("aria-hidden", "true");
-    let rest = amount;
-    for (const [size, color] of [[50, "black"], [20, "blue"], [5, "green"], [1, "red"], [0.5, "white"]]) {
-      let count = Math.floor(rest / (size * bb));
-      if (color === "white" && rest > 0 && !box.children.length) count = Math.max(1, count);
-      if (!count || box.children.length >= maxColumns) continue;
-      rest -= count * size * bb;
-      const column = el("i", "");
-      column.dataset.chip = color;
-      column.style.setProperty("--n", Math.min(count, 5));
-      box.append(column);
+  // 펠트 구역: 인원수만큼 똑같이 나누고 밝은/어두운 톤을 번갈아 칠한다. 내 구역은 항상 아래 가운데.
+  // 홀수 인원은 두 색만으로 번갈아 칠할 수 없어서 내 구역을 중간 톤으로 둔다.
+  function sectors(count) {
+    const size = 360 / count, line = 0.7, stops = [];
+    for (let i = 0; i < count; i++) {
+      let tone = i % 2 ? "rgba(0,0,0,.24)" : "rgba(255,255,255,.09)";
+      if (count % 2 && i === 0) tone = "rgba(0,0,0,0)";
+      else if (count % 2) tone = i % 2 ? "rgba(255,255,255,.09)" : "rgba(0,0,0,.24)";
+      stops.push(tone + " " + i * size + "deg " + ((i + 1) * size - line) + "deg",
+        "rgba(201,162,75,.55) " + ((i + 1) * size - line) + "deg " + (i + 1) * size + "deg");
     }
+    return "conic-gradient(from " + (180 - size / 2) + "deg at 50% 52%, " + stops.join(", ") + ")";
+  }
+
+  // ---- 금액을 눈에 보이는 칩 더미로 (그림일 뿐, 계산에는 쓰지 않는다) ----
+  // 액면가와 색. 높은 액면부터 아래에 쌓는다.
+  const CHIP_VALUES = [[25000, "#26262b", "#e8cf85"], [5000, "#1d8a5b", "#f3ecd9"], [1000, "#2d5aa8", "#f3ecd9"], [500, "#b02a3b", "#f3ecd9"], [100, "#e6e0d0", "#55503f"]];
+  const PER_COLUMN = 7, MOST = 20;
+  let stackMemo = { code: "" };  // 높이가 바뀔 때 부드럽게 보이기 위한 이전 모양
+
+  function chipArt(amount, startChips, key, now, className, most = MOST) {
+    const box = el("div", "chips-art " + className);
+    box.setAttribute("aria-hidden", "true");
+    if (amount <= 0) {
+      box.classList.add("none");
+      box.append("0");
+      delete stackMemo[key];
+      return box;
+    }
+    // 전체 개수: 시작 칩 대비 비율의 제곱근 (시작 칩 = 10개). 20개를 넘으면 "+"
+    const size = 10 * Math.sqrt(amount / startChips);
+    const total = Math.min(most, Math.max(1, Math.round(size)));
+    // 색: 높은 액면부터 쪼개고, 각 액면이 차지하는 금액 비율대로 개수를 나눈다.
+    let rest = amount;
+    let parts = [];
+    for (const [value, color, edge] of CHIP_VALUES) {
+      const count = Math.floor(rest / value);
+      if (count) parts.push({ money: count * value, color, edge });
+      rest -= count * value;
+    }
+    if (!parts.length) parts = [{ money: amount, color: CHIP_VALUES[4][1], edge: CHIP_VALUES[4][2] }];
+    parts = parts.slice(0, total);
+    const money = parts.reduce((sum, p) => sum + p.money, 0);
+    const spare = total - parts.length;
+    let given = 0;
+    for (const part of parts) {
+      part.chips = 1 + Math.floor(spare * part.money / money);
+      given += part.chips;
+    }
+    parts[0].chips += total - given;
+    const chips = parts.flatMap((p) => Array(p.chips).fill(p));
+
+    const columns = [];
+    for (let i = 0; i < chips.length; i += PER_COLUMN) columns.push(chips.slice(i, i + PER_COLUMN));
+    const heights = columns.map((c) => c.length);
+    let memoOf = stackMemo[key];
+    if (!memoOf) memoOf = stackMemo[key] = { heights, from: heights, at: -1e9 };
+    else if (memoOf.heights.join() !== heights.join()) memoOf = stackMemo[key] = { heights, from: memoOf.heights, at: now };
+    columns.forEach((list, i) => {
+      const column = el("i", "");
+      column.style.setProperty("--n", list.length);
+      column.style.setProperty("--stack", "linear-gradient(to top, " + list.map((chip, k) =>
+        chip.color + " " + k * 3 + "px " + (k * 3 + 2) + "px, rgba(0,0,0,.6) " + (k * 3 + 2) + "px " + (k * 3 + 3) + "px").join(", ")
+        + ", " + list[list.length - 1].color + " " + list.length * 3 + "px)");
+      column.style.setProperty("--top", list[list.length - 1].color);
+      column.style.setProperty("--edge", list[list.length - 1].edge);
+      if (!FX.off() && now - memoOf.at < 500) {
+        column.style.setProperty("--from", ((memoOf.from[i] || 0) * 3 + 7) / (list.length * 3 + 7));
+        animate(column, "grow", memoOf.at - now);
+      }
+      box.append(column);
+    });
+    if (size > most + 0.5) box.append(el("b", "", "+"));
     return box;
   }
+
+  function glass() {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", "glass");
+    svg.setAttribute("aria-hidden", "true");
+    const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+    use.setAttribute("href", "#coupe");
+    svg.append(use);
+    return svg;
+  }
+  table.append(defs, layer("hands", arm + palm), layer("thumbs", '<g transform="translate(0 48) scale(.74)">' + thumb + "</g>"), el("div", "peek-tip", "꾹 눌러 보기"));
 
   function animate(node, className, delay) {
     node.classList.add(className);
@@ -2274,12 +2427,15 @@ const FX = (() => {
   function decorate() {
     if (!state || !state.hasGame || !state.players) return;
     const now = performance.now();
-    const bb = state.settings.bb;
     const key = state.code + ":" + state.handNumber;
     if (memo.key !== key) memo = { key, dealt: now, board: [], shown: {} };
 
-    potPile.replaceChildren(...pile(state.pot, bb, 4, "").children);
-    potPile.className = "potpile pile";
+    if (stackMemo.code !== state.code) stackMemo = { code: state.code };
+    const startChips = state.settings.chips;
+    const potArt = state.pot > 0 ? chipArt(state.pot, startChips, "pot", now, "potpile") : null;
+    potPile.className = potArt ? potArt.className : "potpile chips-art";
+    potPile.replaceChildren(...(potArt ? potArt.childNodes : []));
+    table.style.setProperty("--sectors", sectors(state.players.length));
 
     const seats = [...table.querySelectorAll(":scope > .seat")];
     let dealer = null;
@@ -2309,7 +2465,10 @@ const FX = (() => {
         hands.append(use);
         if (p.inHand && !p.folded) seat.querySelector(".cards").append(hands);
       }
-      if (p.chips > 0) seat.append(pile(p.chips, bb, 2, "own"));
+      // 3) 칩  4) 잔 (칩이 0이고 이번 판에도 없으면 탈락: .out이 잔을 흐리게 한다)
+      const items = el("div", "seat-items");
+      items.append(chipArt(p.chips, startChips, "seat" + p.seat, now, ""), glass());
+      seat.append(items);
       // 한 번에 한 명: 지금 행동 중인 좌석을 강조하고 "생각 중" 또는 공개된 행동을 말풍선으로
       if (i === state.actingSeat) {
         seat.classList.add("turn");
@@ -2324,8 +2483,7 @@ const FX = (() => {
         }
       }
       if (p.bet > 0) {
-        const bet = pile(p.bet, bb, 3, "bet");
-        seat.append(bet);
+        seat.append(chipArt(p.bet, startChips, "bet" + p.seat, now, "bet", 14));
       }
     });
     // 딜링: 딜러 버튼 자리에서 각 카드가 날아온다
