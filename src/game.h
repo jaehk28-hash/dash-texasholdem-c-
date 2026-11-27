@@ -1,10 +1,12 @@
 // game.h - 한 판 진행 (블라인드, 딜, 베팅 라운드, 쇼다운, 팟 분배)
 #pragma once
 
+#include <array>
 #include <functional>
 #include <memory>
 #include <random>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "card.h"

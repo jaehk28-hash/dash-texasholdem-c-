@@ -9,10 +9,18 @@
 #include <algorithm>
 #include <cerrno>
 #include <chrono>
+#include <cstddef>
 #include <cstdio>
 #include <cstring>
+#include <ctime>
+#include <exception>
 #include <fstream>
+#include <map>
+#include <mutex>
 #include <sstream>
+#include <string>
+#include <thread>
+#include <utility>
 
 #include "web_json.h"
 

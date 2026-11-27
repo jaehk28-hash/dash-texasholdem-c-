@@ -2,7 +2,12 @@
 #include "card.h"
 
 #include <algorithm>
+#include <cstddef>
+#include <random>
 #include <stdexcept>
+#include <string>
+#include <utility>
+#include <vector>
 
 namespace {
 const char kRankChars[] = "23456789TJQKA";  // 인덱스 0 -> 숫자 2

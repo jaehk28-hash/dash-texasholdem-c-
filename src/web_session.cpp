@@ -2,9 +2,22 @@
 #include "web_session.h"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
+#include <chrono>
+#include <cstddef>
 #include <cstdio>
 #include <exception>
+#include <initializer_list>
+#include <iterator>
+#include <memory>
+#include <mutex>
+#include <optional>
+#include <random>
+#include <string>
+#include <thread>
+#include <utility>
+#include <vector>
 
 #include "bots.h"
 #include "equity.h"

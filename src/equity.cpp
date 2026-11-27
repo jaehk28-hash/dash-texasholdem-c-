@@ -2,6 +2,10 @@
 #include "equity.h"
 
 #include <algorithm>
+#include <array>
+#include <random>
+#include <utility>
+#include <vector>
 
 #include "evaluator.h"
 

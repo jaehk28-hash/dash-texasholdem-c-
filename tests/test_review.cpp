@@ -1,5 +1,9 @@
 // test_review.cpp - 핸드 리뷰 생성 테스트 (승부 이유, 사이드 팟, 금액 일치, 카드 비공개)
+#include <array>
 #include <chrono>
+#include <cstddef>
+#include <cstdio>
+#include <initializer_list>
 #include <memory>
 #include <string>
 #include <thread>

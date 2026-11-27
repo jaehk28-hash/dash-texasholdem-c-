@@ -4,14 +4,18 @@
 //  1) 봇끼리 N판: 봇별 평균 칩 변화, bb/100, 이긴 판 비율
 //  2) 승률(몬테카를로) 시행 횟수 1천/1만/10만별 정확도와 소요 시간
 //  3) 족보 판정 속도 (빠른 방식 vs 전수 검사)
+#include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
+#include <random>
 #include <sstream>
 #include <string>
+#include <vector>
 
 #include "bots.h"
 #include "equity.h"

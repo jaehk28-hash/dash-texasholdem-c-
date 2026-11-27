@@ -2,7 +2,10 @@
 #include "bots.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <memory>
+#include <vector>
 
 #include "equity.h"
 #include "evaluator.h"

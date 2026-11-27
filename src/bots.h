@@ -1,6 +1,7 @@
 // bots.h - 성격이 다른 봇 5종
 #pragma once
 
+#include <array>
 #include <memory>
 #include <random>
 #include <string>

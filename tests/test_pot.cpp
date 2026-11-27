@@ -1,6 +1,11 @@
 // test_pot.cpp - 팟/사이드 팟 계산 테스트
+#include <algorithm>
+#include <cstddef>
+#include <cstdio>
+#include <initializer_list>
 #include <numeric>
 #include <random>
+#include <vector>
 
 #include "check.h"
 #include "pot.h"

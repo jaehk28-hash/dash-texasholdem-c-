@@ -14,6 +14,7 @@
 #include <array>
 #include <chrono>
 #include <condition_variable>
+#include <cstddef>
 #include <deque>
 #include <map>
 #include <memory>
@@ -22,6 +23,7 @@
 #include <random>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #include "game.h"

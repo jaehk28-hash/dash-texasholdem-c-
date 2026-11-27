@@ -3,9 +3,12 @@
 #include <unistd.h>
 
 #include <chrono>
+#include <cstddef>
+#include <cstdio>
 #include <cstdlib>
 #include <ctime>
 #include <fstream>
+#include <initializer_list>
 #include <memory>
 #include <sstream>
 #include <string>

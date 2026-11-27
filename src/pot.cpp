@@ -2,6 +2,8 @@
 #include "pot.h"
 
 #include <algorithm>
+#include <cstddef>
+#include <vector>
 
 std::vector<Pot> buildPots(const std::vector<PotEntry>& entries) {
     // 1) 폴드하지 않은 사람들이 낸 금액을 중복 없이 오름차순으로 모은다 (= 층의 높이).

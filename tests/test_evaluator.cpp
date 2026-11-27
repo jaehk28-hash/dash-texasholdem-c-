@@ -1,11 +1,15 @@
 // test_evaluator.cpp - 카드/덱/족보 판정 테스트 (단순 assert 방식)
 #include <cmath>
+#include <cstddef>
 #include <cstdio>
 #include <cstdlib>
-#include <stdexcept>
 #include <map>
 #include <random>
 #include <sstream>
+#include <stdexcept>
+#include <string>
+#include <utility>
+#include <vector>
 
 #include "card.h"
 #include "check.h"

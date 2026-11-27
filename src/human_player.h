@@ -2,6 +2,8 @@
 #pragma once
 
 #include <iosfwd>
+#include <istream>
+#include <ostream>
 #include <random>
 #include <string>
 

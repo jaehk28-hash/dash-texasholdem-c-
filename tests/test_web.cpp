@@ -1,5 +1,9 @@
 // test_web.cpp - 웹 모드 테스트 (방 정리, 잘못된 액션 거절, 남의 카드 비노출, 친구 방)
 #include <chrono>
+#include <cstddef>
+#include <cstdio>
+#include <initializer_list>
+#include <map>
 #include <set>
 #include <string>
 #include <thread>

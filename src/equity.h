@@ -1,6 +1,7 @@
 // equity.h - 몬테카를로 승률 계산
 #pragma once
 
+#include <array>
 #include <random>
 #include <vector>
 

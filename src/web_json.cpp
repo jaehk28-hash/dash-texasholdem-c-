@@ -2,7 +2,11 @@
 #include "web_json.h"
 
 #include <cctype>
+#include <cstddef>
 #include <cstdio>
+#include <initializer_list>
+#include <map>
+#include <string>
 
 std::string jsonString(const std::string& text) {
     std::string out = "\"";

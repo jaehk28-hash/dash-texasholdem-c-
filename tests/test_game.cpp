@@ -1,10 +1,17 @@
 // test_game.cpp - 한 판 진행 로직 테스트 (블라인드, 베팅 규칙, 사이드 팟, 봇끼리 대량 시뮬레이션)
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <cstddef>
+#include <cstdio>
+#include <initializer_list>
 #include <memory>
 #include <random>
 #include <set>
 #include <sstream>
+#include <string>
+#include <utility>
+#include <vector>
 
 #include "bots.h"
 #include "check.h"

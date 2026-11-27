@@ -1,6 +1,7 @@
 // card.h - 카드와 덱
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <random>
 #include <string>

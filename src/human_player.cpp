@@ -7,6 +7,8 @@
 #include <iomanip>
 #include <iostream>
 #include <sstream>
+#include <string>
+#include <utility>
 #include <vector>
 
 #include "equity.h"

@@ -2,8 +2,13 @@
 #include "game.h"
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdio>
 #include <cstdlib>
+#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
 
 #include "evaluator.h"
 
