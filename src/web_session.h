@@ -88,6 +88,7 @@ struct ActionNote {
 // 보는 사람의 지금 족보 (플랍 이후)
 struct MyHand {
     std::string name;  // "원 페어 A"
+    std::string code;  // "ONE_PAIR" (족보 패널에서 내 행을 찾는 값)
     int level = 1;     // 1 ~ 6
     bool boardOnly = false;  // 공용 카드만으로 만들어진 패 (모두가 같이 쓴다)
 };

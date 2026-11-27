@@ -62,6 +62,9 @@ struct BestHand {
     std::vector<CardGroup> groups;
 };
 
+// 족보 코드: "HIGH_CARD" ~ "ROYAL_FLUSH"
+std::string handCode(HandScore score);
+
 // 홀 카드 2장 + 공용 카드 5장에서 최종 5장과 묶음을 계산한다.
 BestHand describeBestHand(const std::array<Card, 2>& hole, const std::vector<Card>& board);
 

@@ -417,6 +417,31 @@
   html.reduce-fx :is(.star, .neon svg) { filter: none !important; }
   html.reduce-fx button:active:not(:disabled), html.reduce-fx #screen-home .neon { transform: none !important; }
 
+  /* 헤더 버튼, 족보 패널 */
+  .head-buttons { display: flex; gap: 6px; flex: none; }
+  .head-buttons button { white-space: nowrap; }
+  button.link { background: none; border: 0; box-shadow: none; color: var(--gold-light); text-decoration: underline; text-underline-offset: 3px; }
+  #hands { width: min(480px, calc(100vw - 12px)); max-height: calc(100vh - 16px); max-height: calc(100dvh - 16px); margin: auto; padding: 0; overflow: hidden;
+    border: 1px solid var(--gold); border-radius: 14px; background: #0c100e; color: var(--ink); box-shadow: 0 20px 60px rgba(0, 0, 0, .85); }
+  #hands::backdrop { background: rgba(0, 0, 0, .72); }
+  #hands[open] { animation: fade .15s ease-out; }
+  #hands.closing { animation: fade .15s ease-in reverse forwards; }
+  @keyframes fade { from { opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { #hands[open], #hands.closing { animation: none; } }
+  .hands-box { display: flex; flex-direction: column; max-height: inherit; }
+  .hands-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  .hands-head h2 { font-size: 20px; }
+  #closeHands { min-width: 44px; }
+  #handsBody { overflow-y: auto; overscroll-behavior: contain; padding: 8px; display: flex; flex-direction: column; gap: 8px; }
+  .hands-note { font-size: 13px; color: var(--gold-light); text-align: center; line-height: 1.5; }
+  .hr { border: 1px solid var(--line); border-radius: 10px; padding: 8px 6px; display: flex; flex-direction: column; gap: 5px; }
+  .hr.mine { border: 2px solid #7ff0b5; background: rgba(127, 240, 181, .1); }
+  .hr-head { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; }
+  .hr-rank { flex: none; width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--gold); color: var(--gold-light); font-size: 13px; font-weight: 800; display: grid; place-items: center; }
+  .hr-name { font-family: var(--serif); font-size: 17px; font-weight: 700; color: var(--ivory); }
+  .mine-badge { padding: 0 8px; border-radius: 4px; background: #7ff0b5; color: #072016; font-size: 12px; font-weight: 800; white-space: nowrap; }
+  .hr-desc { font-size: 13px; color: var(--muted); line-height: 1.45; }
+
   /* 지금 상황, 핸드 리뷰 */
   #now { font-size: 14px; line-height: 1.55; display: flex; flex-direction: column; gap: 4px; }
   #now h3 { font-size: 15px; margin: 0; }
@@ -498,7 +523,10 @@
     <h1>♠ 홀덤 연습</h1>
     <button type="button" id="homeBack">← 처음으로</button>
     <span id="info"></span>
-    <button id="showRules">규칙</button>
+    <div class="head-buttons">
+      <button type="button" id="showHands" aria-haspopup="dialog">족보</button>
+      <button id="showRules">규칙</button>
+    </div>
   </header>
 
   <div id="error" role="alert" style="color:#ffb4a8; text-align:center"></div>
@@ -525,20 +553,7 @@
         <li><b>올인</b>: 가진 칩 전부 걸기</li>
       </ul>
     </div>
-    <div class="panel">
-      <h3>족보 (위가 강함)</h3>
-      <ol>
-        <li>스트레이트 플러시: 같은 무늬의 연속된 5장</li>
-        <li>포카드: 같은 숫자 4장</li>
-        <li>풀하우스: 같은 숫자 3장 + 2장</li>
-        <li>플러시: 같은 무늬 5장</li>
-        <li>스트레이트: 연속된 5장 (A-2-3-4-5 포함)</li>
-        <li>트리플: 같은 숫자 3장</li>
-        <li>투 페어</li>
-        <li>원 페어</li>
-        <li>하이 카드</li>
-      </ol>
-    </div>
+    <button type="button" class="link" id="rulesToHands">족보는 상단의 족보 버튼에서 볼 수 있어요</button>
     <div class="panel">
       <h3>알아 둘 점</h3>
       <ul>
@@ -717,6 +732,17 @@
     </div>
   </section>
 </div>
+
+<!-- 족보 패널: 열어도 게임 화면과 서버 통신은 그대로 돌아간다 -->
+<dialog id="hands" aria-labelledby="handsTitle">
+  <div class="hands-box">
+    <div class="hands-head">
+      <h2 id="handsTitle"></h2>
+      <button type="button" id="closeHands" aria-label="닫기">✕</button>
+    </div>
+    <div id="handsBody"></div>
+  </div>
+</dialog>
 
 <script>
 "use strict";
@@ -1045,6 +1071,10 @@ poll();
 // ============================================================================
 const TEXTS = {
   nowTitle: "지금 상황",
+  hands: {
+    title: "족보", stronger: "위에 있을수록 강한 족보예요 ▲", mine: "지금 내 족보",
+    tie: "같은 족보면 높은 숫자가 이기고, 그래도 같으면 키커(남는 카드)로 가려요. 모두 같으면 팟을 나눠요.",
+  },
   streets: { 0: "프리플랍(카드 받고 첫 베팅)", 3: "플랍(공통 카드 3장)", 4: "턴(4번째 카드)", 5: "리버(마지막 카드)" },
   positions: {
     "BTN": "BTN(딜러 버튼. 플랍부터 마지막에 행동해서 유리한 자리)",
@@ -1327,11 +1357,12 @@ function fill(template, values) {
   const SUIT_SIGN = { s: "♠", h: "♥", d: "♦", c: "♣" };
 
   // 최종 5장: 묶음은 상자로, 묶음 밖(키커)은 흐리게
-  function bestRow(r) {
+  function bestRow(r, showHole = true) {
     const row = el("div", "b5");
     const column = (c, note) => {
       const col = el("div", "b5-col");
-      col.append(cardNode(c.card), el("span", "b5-mine" + (c.hole ? " on" : "")));
+      col.append(cardNode(c.card));
+      if (showHole) col.append(el("span", "b5-mine" + (c.hole ? " on" : "")));
       if (c.hole) col.lastChild.title = "손패";
       if (note) col.append(el("span", "b5-note", note));
       return col;
@@ -1460,7 +1491,7 @@ function fill(template, values) {
   // 스페이스 또는 Enter = 다음 단계로. 입력칸이나 다른 버튼을 쓰는 중에는 끼어들지 않는다.
   document.addEventListener("keydown", (e) => {
     if (e.key !== " " && e.key !== "Enter") return;
-    if ($("screen-game").hidden || $("gatebar").hidden || $("nextStep").hidden) return;
+    if ($("screen-game").hidden || $("gatebar").hidden || $("nextStep").hidden || $("hands").open) return;
     if (e.repeat) { e.preventDefault(); return; }  // 누르고 있어도 한 번만
     if (e.target.closest("input, select, textarea, summary") || e.target.closest("button:not(:disabled)")) return;
     e.preventDefault();
@@ -1478,12 +1509,83 @@ function fill(template, values) {
     post("/api/pace", { pace });
   };
 
+  // ---- 족보 패널 ----
+  // 예시 카드: "|"로 묶음 A, B, 키커를 나눈다 (예시 그림일 뿐 족보 계산이 아니다)
+  const HAND_EXAMPLES = [
+    ["ROYAL_FLUSH", "로열 스트레이트 플러시", "같은 무늬의 A-K-Q-J-10", "As Ks Qs Js Ts"],
+    ["STRAIGHT_FLUSH", "스트레이트 플러시", "같은 무늬의 연속된 5장", "9h 8h 7h 6h 5h"],
+    ["FOUR_OF_A_KIND", "포카드", "같은 숫자 4장", "Ks Kh Kd Kc||7d"],
+    ["FULL_HOUSE", "풀 하우스", "같은 숫자 3장 + 2장", "Qs Qh Qd|8c 8d|", ["트리플", "페어"]],
+    ["FLUSH", "플러시", "같은 무늬 5장 (숫자는 연속이 아니어도 돼요)", "Ad Jd 8d 5d 2d"],
+    ["STRAIGHT", "스트레이트", "연속된 5장 (무늬는 상관없고, A-2-3-4-5도 돼요)", "Tc 9d 8s 7h 6c"],
+    ["THREE_OF_A_KIND", "트리플", "같은 숫자 3장", "Js Jh Jd||Ac 4d"],
+    ["TWO_PAIR", "투 페어", "페어(같은 숫자 2장) 2개", "Ks Kd|5h 5c|9s"],
+    ["ONE_PAIR", "원 페어", "같은 숫자 2장", "Ah As||Kd 8c 3s"],
+    ["HIGH_CARD", "하이 카드", "아무 족보도 없을 때는 가장 높은 카드", "As||Jd 8c 5h 2d"],
+  ];
+  function exampleHand(text, labels = []) {
+    const [a, b = "", rest = ""] = text.split("|");
+    const list = (part, group) => part.split(" ").filter(Boolean).map((card) => ({ card, group, hole: false }));
+    const groups = [{ id: "A", label: labels[0] || "" }];
+    if (b) groups.push({ id: "B", label: labels[1] || "" });
+    return { groups, best5: [...list(a, "A"), ...list(b, "B"), ...list(rest, null)] };
+  }
+
+  $("handsTitle").textContent = TEXTS.hands.title;
+  const handRows = HAND_EXAMPLES.map(([code, name, desc, cardsText, labels], i) => {
+    const row = el("div", "hr");
+    row.dataset.code = code;
+    const head = el("div", "hr-head");
+    head.append(el("span", "hr-rank", String(i + 1)), el("span", "hr-name", name));
+    row.append(head, el("div", "hr-desc", desc), bestRow(exampleHand(cardsText, labels), false));
+    return row;
+  });
+  $("handsBody").append(line(TEXTS.hands.stronger, "hands-note"), ...handRows, line(TEXTS.hands.tie, "hands-note"));
+
+  // "지금 내 족보": 서버가 보내는 myHand.code만 사용한다. 프리플랍(myHand 없음)이나 폴드한 판에는 표시하지 않는다.
+  function markMyHand() {
+    const me = state && state.players && state.players.find((p) => p.isMe);
+    const code = state && state.hasGame && state.myHand && me && !me.folded ? state.myHand.code : "";
+    for (const row of handRows) {
+      const mine = row.dataset.code === code;
+      if (mine === row.classList.contains("mine")) continue;
+      row.classList.toggle("mine", mine);
+      if (mine) row.querySelector(".hr-head").append(el("span", "mine-badge", TEXTS.hands.mine));
+      else row.querySelector(".mine-badge").remove();
+    }
+  }
+
+  const dialog = $("hands");
+  const quick = window.matchMedia("(prefers-reduced-motion: reduce)");
+  function openHands() {
+    if (dialog.open) return;
+    dialog.classList.remove("closing");
+    markMyHand();
+    dialog.showModal();
+    $("handsBody").scrollTop = 0;
+  }
+  function closeHands() {
+    if (!dialog.open || dialog.classList.contains("closing")) return;
+    if (quick.matches || document.documentElement.classList.contains("reduce-fx")) { dialog.close(); return; }
+    dialog.classList.add("closing");
+    setTimeout(() => { dialog.close(); dialog.classList.remove("closing"); }, 140);
+  }
+  $("showHands").onclick = openHands;
+  $("rulesToHands").onclick = openHands;
+  $("closeHands").onclick = closeHands;
+  dialog.addEventListener("cancel", (e) => { e.preventDefault(); closeHands(); });  // Esc
+  // 바깥(어두운 부분) 클릭: 누른 곳과 뗀 곳이 모두 바깥일 때만 닫는다.
+  let downOutside = false;
+  dialog.addEventListener("pointerdown", (e) => { downOutside = e.target === dialog; });
+  dialog.addEventListener("click", (e) => { if (downOutside && e.target === dialog) closeHands(); });
+
   // 기존 화면 갱신(renderHint)이 힌트 칸을 새로 그릴 때마다 함께 갱신한다.
   new MutationObserver(() => {
     if (!state || !state.players) return;
     renderNow();
     renderResult();
     renderFlow();
+    markMyHand();  // 열어 둔 동안 카드가 더 깔리면 표시도 따라간다
   }).observe($("hint"), { childList: true });
 })();
 </script>

@@ -140,7 +140,7 @@ PORT=9000 ./build/holdem --web
 | `actionPhase`, `lastAction` | `thinking`/`revealed`, 방금 공개된 행동 `{seq,seat,text}` |
 | `waiting` | `null` 또는 `{next: flop\|turn\|river\|showdown\|nextHand, gateId, canContinue}` |
 | `canSkip`, `skipping`, `pace` | 건너뛰기 가능/진행 중, 현재 속도 |
-| `myHand` | 플랍 이후 내 족보 `{name,level(1~6),boardOnly}` |
+| `myHand` | 플랍 이후 내 족보 `{name,code,level(1~6),boardOnly}` |
 | `review.ranking[]` | 이번 판 순위: `seat, place, folded, tie, handName, cards, delta, best5, hand, label, groups` (폴드는 카드 없음) |
 | `ranking[].best5[]` | 최종 5장: `card`, `group`(`A`, `B`, 족보에 안 들어가면 `null`), `hole`(손패인지) |
 | `ranking[].hand, label, groups` | `FULL_HOUSE` 같은 코드, `풀 하우스 (2 트리플 + 8 페어)`, 묶음 이름 `[{id,label}]` |

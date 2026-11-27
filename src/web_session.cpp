@@ -345,7 +345,7 @@ std::string viewToJson(const RoomView& v) {
     }
     j += ",\"myHand\":";
     if (v.myHand) {
-        j += "{\"name\":" + jsonString(v.myHand->name) + ",\"level\":" + std::to_string(v.myHand->level) +
+        j += "{\"name\":" + jsonString(v.myHand->name) + ",\"code\":" + jsonString(v.myHand->code) + ",\"level\":" + std::to_string(v.myHand->level) +
              ",\"boardOnly\":" + boolJson(v.myHand->boardOnly) + "}";
     } else {
         j += "null";
@@ -653,6 +653,7 @@ std::optional<RoomView> Room::view(const std::string& token) const {
         const HandScore score = evaluateBest(cards);
         MyHand hand;
         hand.name = describeHand(score);
+        hand.code = handCode(score);
         hand.level = strengthLevel(score);
         hand.boardOnly = v.table.state.board.size() == 5 && evaluate5(v.table.state.board.data()) == score;
         v.myHand = hand;

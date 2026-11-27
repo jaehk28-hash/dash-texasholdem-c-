@@ -288,6 +288,14 @@ void testGates() {
         playRound();
         const RoomView v = *room.view("a");
         CHECK(v.waiting == expected[i] && v.canContinue && !room.view("b")->canContinue);
+        // 프리플랍에는 내 족보가 없고, 공용 카드가 깔리면 족보 코드를 알려 준다.
+        CHECK(v.myHand.has_value() == (boards[i] >= 3));
+        if (v.myHand) {
+            std::vector<Card> cards = v.table.state.board;
+            cards.insert(cards.end(), v.table.state.myHole.begin(), v.table.state.myHole.end());
+            CHECK(v.myHand->code == handCode(evaluateBest(cards)));
+            CHECK(viewToJson(v).find("\"code\":\"" + v.myHand->code + "\"") != std::string::npos);
+        }
         std::this_thread::sleep_for(std::chrono::milliseconds(20));
         CHECK(room.view("a")->table.state.board.size() == boards[i]);  // 누르기 전에는 그대로
         CHECK(!room.proceed("b", v.gateId, error));       // 방장이 아님
