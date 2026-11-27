@@ -958,6 +958,13 @@ void Room::run(std::vector<std::string> humanNames, int botCount, unsigned seed)
                                            : Waiting::Showdown);
         });
 
+        // 카드를 나눠 준 직후에는 로그가 없어, 따로 갱신해야 내 카드가 바로 보인다.
+        game.setDealHook([this, &snapshots] {
+            auto tables = snapshots();
+            std::lock_guard<std::mutex> lock(mutex_);
+            tables_ = std::move(tables);
+        });
+
         // 게임에서 일이 생길 때마다 로그를 남기고 화면 정보를 갱신한다.
         game.setLogger([this, &snapshots](const std::string& line) {
             auto tables = snapshots();

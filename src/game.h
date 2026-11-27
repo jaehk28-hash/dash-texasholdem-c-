@@ -86,6 +86,9 @@ public:
     // 이 함수가 돌아올 때까지 게임은 기다린다. 게임 결과에는 영향이 없다.
     void setStageHook(std::function<void(Stage)> hook) { stageHook_ = std::move(hook); }
 
+    // 홀 카드를 다 나눠 준 직후, 첫 행동을 묻기 전에 불린다. 화면 정보를 갱신할 때 쓴다.
+    void setDealHook(std::function<void()> hook) { dealHook_ = std::move(hook); }
+
     // ---- 테스트/벤치마크용 보조 기능 ----
     void setChips(int seat, int chips) { seats_[seat].chips = chips; }
     void setNextButton(int seat) { forcedButton_ = seat; }  // 다음 판의 버튼 좌석을 강제
@@ -131,6 +134,7 @@ private:
     std::mt19937 rng_;
     std::function<void(const std::string&)> logger_;
     std::function<void(Stage)> stageHook_;
+    std::function<void()> dealHook_;
 
     Deck deck_;
     std::vector<Card> board_;

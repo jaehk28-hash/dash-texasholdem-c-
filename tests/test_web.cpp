@@ -388,6 +388,19 @@ static void testHttpApi() {
     thread.join();
 }
 
+// 첫 상대가 아직 생각 중이어도, 나눠 받은 내 카드는 바로 보여야 한다
+static void testMyCardsVisibleRightAfterDeal() {
+    WebOptions options = fastOptions();
+    options.aiAction = 30000ms;  // 첫 봇이 한참 생각한다
+    Room room(options, soloSettings(), "000000", true, 1);
+    std::string error;
+    CHECK(room.join("a", "나", error) && room.start("a", error));
+    CHECK(waitFor([&] { return room.view("a")->actionPhase == "thinking"; }));
+    const RoomView v = *room.view("a");
+    CHECK(!v.myTurn && v.actingSeat != v.table.state.mySeat);  // 봇이 먼저인 판
+    CHECK(v.table.holeDealt);
+}
+
 int main() {
     testJsonParser();
     testActionValidation();
@@ -397,6 +410,7 @@ int main() {
     testJoinAndLeave();
     testNoOtherCardsBeforeShowdown();
     testTurnTimeoutAndStaleTurn();
+    testMyCardsVisibleRightAfterDeal();
     testLeaveDuringGame();
     testHttpApi();
     std::printf("%d개 검사 중 %d개 실패\n", g_checks, g_failures);

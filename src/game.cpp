@@ -422,6 +422,7 @@ HandSummary Game::playHand() {
         }
     }
     holeDealt_ = true;
+    if (dealHook_) dealHook_();
 
     // 7) 프리플랍: BB 다음(UTG)부터. 헤즈업이면 버튼(SB)이 먼저.
     bool live = bettingRound(headsUp ? button_ : nextInHand(bbSeat_), Street::Preflop);
