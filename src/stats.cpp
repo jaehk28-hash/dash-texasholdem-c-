@@ -224,6 +224,10 @@ void Stats::bump(const char* key) {
 
 void Stats::publicRoomCreated() { bump("public_rooms"); }
 void Stats::publicJoined() { bump("public_joins"); }
+void Stats::chatSent(bool firstInRoom) {
+    if (firstInRoom) bump("chat_rooms");
+    bump("chat_sends");
+}
 
 StatsSummary Stats::summary(int days) const {
     const std::time_t now = clock_();
@@ -240,6 +244,8 @@ StatsSummary Stats::summary(int days) const {
     s.roomStarts = get("room");
     s.publicRooms = get("public_rooms");
     s.publicJoins = get("public_joins");
+    s.chatRooms = get("chat_rooms");
+    s.chatSends = get("chat_sends");
     s.totalHands = get("hands");
     for (int i = days - 1; i >= 0; --i) {
         DayStats day;
@@ -445,6 +451,8 @@ std::string statsPageHtml(const StatsSummary& s) {
     html += card("친구 방 시작", std::to_string(s.roomStarts));
     html += card("공개 방 생성", std::to_string(s.publicRooms));
     html += card("공개 방 입장", std::to_string(s.publicJoins));
+    html += card("채팅 사용 방", std::to_string(s.chatRooms));
+    html += card("채팅 전송", std::to_string(s.chatSends));
     html += card("게임당 평균 판 수", average);
     html += card("가장 많은 봇 수", s.topBots < 0 ? "-" : std::to_string(s.topBots));
     html += "</div>";

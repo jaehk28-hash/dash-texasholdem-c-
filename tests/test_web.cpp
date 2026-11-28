@@ -10,6 +10,7 @@
 #include <thread>
 #include <vector>
 
+#include "chat.h"
 #include "check.h"
 #include "httplib.h"
 #include "web_json.h"
@@ -566,6 +567,147 @@ static void testMyCardsVisibleRightAfterDeal() {
     CHECK(v.table.holeDealt);
 }
 
+// ---------------------------------------------------------------------------
+// 채팅: 속도 제한, 필터, 방 권한
+// ---------------------------------------------------------------------------
+static void testChatLimiter() {
+    const ChatRules rules;
+    const auto t0 = std::chrono::steady_clock::now();
+    ChatLimiter react;
+    CHECK(react.react(t0, rules) == 0);
+    CHECK(react.react(t0 + 2999ms, rules) > 0);
+    CHECK(react.react(t0 + 3000ms, rules) == 0);
+
+    ChatLimiter text;
+    CHECK(text.text(t0, rules) == 0);
+    CHECK(text.text(t0 + 1s, rules) > 0 && text.text(t0 + 1s, rules) <= 2001);
+    CHECK(text.text(t0 + 3s, rules) == 0);
+    CHECK(text.text(t0 + 4s, rules) > 0);
+    // 10초 안에 6번째 시도: 30초 잠금
+    CHECK(text.text(t0 + 5s, rules) > 29000);
+    CHECK(text.text(t0 + 20s, rules) > 0 && text.textWait(t0 + 20s, rules) > 0);
+    CHECK(text.text(t0 + 36s, rules) == 0);
+    // 3초 간격을 지키면 계속 보낼 수 있다
+    ChatLimiter calm;
+    for (int i = 0; i < 20; ++i) CHECK(calm.text(t0 + std::chrono::seconds(3 * i), rules) == 0);
+}
+
+static void testChatFilter() {
+    std::string error;
+    for (const char* bad : {"http://a", "www.abc", "abc.com 와", "a . com", "naver.kr", "놀러와 닷컴", "me@x.com", "@insta",
+                            "010-1234-5678", "01012345678", "010 1234 5678", "1588-1234", "줄\n바꿈", "탭\t", "a\xe2\x80\xae" "b",
+                            "\xff", "", "   "}) {
+        std::string text = bad;
+        CHECK(!cleanChatText(text, error) && !error.empty());
+    }
+    for (const char* good : {"나이스!", "10000 걸었어?", "1000 2000", "콜 3번 했다", "안녕 :)", "ㅋㅋ.ㅋㅋ"}) {
+        std::string text = good;
+        CHECK(cleanChatText(text, error) && text == good);
+    }
+    std::string forty, fortyOne;
+    for (int i = 0; i < 40; ++i) forty += "가";
+    fortyOne = forty + "나";
+    CHECK(cleanChatText(forty, error));
+    CHECK(!cleanChatText(fortyOne, error));
+    std::string text = "아 씨발 진짜";
+    CHECK(cleanChatText(text, error) && text == "아 *** 진짜");
+    text = "병 신 아님 FuCk";
+    CHECK(cleanChatText(text, error) && text == "*** 아님 ***");
+    text = "<b>굵게</b>";  // HTML은 글자 그대로 전달하고, 화면은 textContent로만 넣는다
+    CHECK(cleanChatText(text, error) && text == "<b>굵게</b>");
+}
+
+static void testChatRoomRules() {
+    WebOptions options = fastOptions();
+    options.aiAction = 60000ms;  // 게임을 멈춰 두고 채팅만 본다
+    options.chat.cooldown = 0ms;
+    options.chat.burst = 1000;
+    Room room(options, friendSettings(4), "000000", false, 1);
+    std::string error;
+    int wait = 0;
+    CHECK(room.join("a", "방장", error) && room.join("b", "손님", error));
+    CHECK(!room.react("a", 0, {}, wait, error));  // 대기실에서는 보내지 않는다
+    CHECK(room.start("a", error));
+
+    CHECK(!room.react("모르는사람", 0, {}, wait, error) && !room.say("모르는사람", "안녕", wait, error));
+    CHECK(!room.view("모르는사람"));  // 방 사람이 아니면 메시지를 받지 못한다
+    CHECK(room.react("a", 0, {}, wait, error) && room.react("b", {}, 2, wait, error));
+    CHECK(!room.react("a", 6, {}, wait, error) && !room.react("a", {}, -1, wait, error));
+    CHECK(!room.react("a", 0, 0, wait, error) && !room.react("a", {}, {}, wait, error));
+    CHECK(room.say("b", "안녕하세요", wait, error));
+    RoomView v = *room.view("a");
+    CHECK(v.chat.free && v.chat.lines.size() == 3);
+    CHECK(v.chat.lines[0].entry.name == "방장" && v.chat.lines[0].entry.text == chatEmojis()[0]);
+    CHECK(v.chat.lines[1].entry.text == chatPhrases()[2] && v.chat.lines[2].entry.kind == "text");
+
+    // 방장만 켜고 끄고, 금지한다
+    CHECK(!room.setChatOn("b", false, error) && !room.mute("b", "방장", true, error));
+    CHECK(room.setChatOn("a", false, error));
+    CHECK(!room.say("b", "안녕", wait, error) && room.react("b", 1, {}, wait, error));
+    CHECK(room.setChatOn("a", true, error) && room.mute("a", "손님", true, error));
+    CHECK(!room.say("b", "안녕", wait, error) && error == "방장이 채팅을 금지했어요");
+    CHECK(room.view("b")->chat.muted && room.view("a")->members[1].muted);
+    CHECK(room.react("b", 1, {}, wait, error));  // 채팅 금지여도 이모지는 된다
+    CHECK(room.mute("a", "손님", false, error) && room.say("b", "다시", wait, error));
+    CHECK(!room.mute("a", "방장", true, error));
+
+    for (int i = 0; i < CHAT_KEEP + 10; ++i) CHECK(room.say("a", "줄 " + std::to_string(i), wait, error));
+    CHECK(room.view("a")->chat.lines.size() == static_cast<std::size_t>(CHAT_KEEP));
+    CHECK(waitFor([&] { return !room.view("a")->log.empty(); }));
+    for (const std::string& line : room.view("a")->log) CHECK(line.find("줄 ") == std::string::npos);  // 기록에 남기지 않는다
+
+    room.leave("b");
+    CHECK(!room.say("b", "나간 뒤", wait, error));
+}
+
+static void testChatNotInSoloOrPublic() {
+    WebOptions options = fastOptions();
+    options.aiAction = 60000ms;
+    std::string error;
+    int wait = 0;
+    Room solo(options, soloSettings(), "000000", true, 1);
+    CHECK(solo.join("a", "나", error) && solo.start("a", error));
+    CHECK(!solo.view("a")->chat.free && !solo.say("a", "안녕", wait, error));
+    CHECK(solo.react("a", 0, {}, wait, error));
+    CHECK(!solo.react("a", 1, {}, wait, error) && wait > 0);  // 3초에 한 번 (이모지와 한마디가 함께)
+    CHECK(!solo.react("a", {}, 1, wait, error) && wait > 0);
+
+    RoomSettings open = friendSettings(1);
+    open.isPublic = true;
+    Room room(options, open, "000001", false, 1);
+    CHECK(room.join("a", "방장", error) && room.start("a", error));
+    CHECK(!room.view("a")->chat.free && !room.say("a", "안녕", wait, error));
+    CHECK(!room.setChatOn("a", true, error));
+    CHECK(room.react("a", {}, 0, wait, error));
+}
+
+static void testBotReaction() {
+    for (const bool quiet : {false, true}) {
+        WebOptions options = fastOptions(5);
+        options.botReactionPercent = 100;
+        RoomSettings settings = soloSettings();
+        settings.config.startingChips = 5000;
+        settings.bots = 3;
+        Room room(options, settings, "000000", true, 5);
+        std::string error;
+        CHECK(room.join("a", "나", error));
+        room.setQuiet("a", quiet);
+        CHECK(room.start("a", error));
+        std::size_t most = 0;
+        for (int i = 0; i < 2000; ++i) {
+            const RoomView v = *room.view("a");
+            if (v.myTurn) room.submit("a", "allin", {}, v.turnId, error);
+            most = v.chat.lines.size();
+            // 한 판에 많아야 한 번
+            CHECK(static_cast<int>(most) <= v.table.state.handNumber);
+            if (v.phase == RoomPhase::Over || (!quiet && most > 0)) break;
+            std::this_thread::sleep_for(2ms);
+        }
+        if (quiet) CHECK(most == 0);
+        else CHECK(most >= 1);
+    }
+}
+
 int main() {
     testJsonParser();
     testActionValidation();
@@ -584,6 +726,11 @@ int main() {
     testMyCardsVisibleRightAfterDeal();
     testLeaveDuringGame();
     testHttpApi();
+    testChatLimiter();
+    testChatFilter();
+    testChatRoomRules();
+    testChatNotInSoloOrPublic();
+    testBotReaction();
     std::printf("%d개 검사 중 %d개 실패\n", g_checks, g_failures);
     return g_failures == 0 ? 0 : 1;
 }

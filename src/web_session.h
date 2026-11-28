@@ -27,6 +27,7 @@
 #include <utility>
 #include <vector>
 
+#include "chat.h"
 #include "game.h"
 #include "review.h"
 #include "stats.h"
@@ -91,6 +92,8 @@ struct WebOptions {
     int listPerMinute = LIST_PER_MINUTE;
     int joinPerMinute = JOIN_PER_MINUTE;
     int wrongCodeLimit = WRONG_CODE_LIMIT;
+    ChatRules chat;                 // 채팅 속도 제한
+    int botReactionPercent = 60;    // 큰 판이 끝났을 때 봇이 반응할 확률
     std::shared_ptr<Stats> stats;  // 없으면 통계를 세지 않는다
     std::string statsToken;        // 비어 있으면 /stats는 404
 };
@@ -128,8 +131,33 @@ bool cleanNickname(std::string& name, std::string& error);
 
 enum class RoomPhase { Lobby, Playing, Over };
 
+// 채팅 한 줄. 정해진 목록이나 사람이 직접 쓴 글만 담는다 (카드나 승률은 들어올 길이 없다).
+struct ChatEntry {
+    long long seq = 0;
+    int seat = -1;
+    std::string name;
+    std::string kind;  // "emoji", "phrase", "text"
+    std::string text;
+    std::chrono::steady_clock::time_point at;
+};
+
+struct ChatView {
+    struct Line {
+        ChatEntry entry;
+        int ageMs = 0;
+    };
+    std::vector<Line> lines;
+    bool free = false;     // 자유 입력이 있는 방인가 (비공개 친구 방)
+    bool on = true;        // 방장이 자유 입력을 켜 두었는가
+    bool muted = false;    // 내가 채팅 금지인가
+    bool quiet = false;    // 내가 봇 반응을 끄겠다고 했는가
+    int reactWaitMs = 0;
+    int textWaitMs = 0;
+};
+
 struct MemberInfo {
     std::string name;
+    bool muted = false;
     bool isHost = false;
     bool isMe = false;
 };
@@ -172,6 +200,7 @@ struct RoomView {
     bool timeExtended = false;      // 지금 연장 시간을 쓰는 중인가
     std::vector<int> extensionsLeft;  // 사람 좌석별 남은 연장 횟수
     std::vector<bool> away;           // 사람 좌석별 "자리 비움"
+    ChatView chat;
     bool meAway = false;
     int gateSeconds = 0;  // "다음"을 안 눌러도 넘어가기까지 남은 초 (0이면 계속 기다림)
     std::optional<double> equity;
@@ -242,6 +271,16 @@ public:
     // "자리 비움"에서 돌아온다.
     bool comeBack(const std::string& token, std::string& error);
 
+    // 채팅. 방 사람만, 게임이 시작된 뒤에만. 너무 빠르면 false와 함께 waitMs에 기다릴 시간.
+    // 이모지(emoji)나 빠른 말(phrase)은 목록의 번호만 받는다.
+    bool react(const std::string& token, std::optional<int> emoji, std::optional<int> phrase, int& waitMs,
+               std::string& error);
+    // 자유 채팅. 비공개 친구 방에서만.
+    bool say(const std::string& token, std::string text, int& waitMs, std::string& error);
+    bool setChatOn(const std::string& token, bool on, std::string& error);  // 방장만
+    bool mute(const std::string& token, const std::string& name, bool on, std::string& error);  // 방장만
+    void setQuiet(const std::string& token, bool quiet);  // 봇 반응 받지 않기 (효과 줄이기)
+
     // token의 시점에서 본 방. 방 사람이 아니면 빈 값.
     std::optional<RoomView> view(const std::string& token) const;
     bool empty() const;  // 남아 있는 사람이 없는가
@@ -271,6 +310,12 @@ private:
     void pause(std::chrono::milliseconds time);  // stop()이 오면 즉시 깨어나는 잠
     bool isHostLocked(const std::string& token) const;
     bool hostAwayLocked() const;
+    // 아래 둘은 mutex_를 잡은 상태에서
+    bool freeChatLocked() const { return !solo_ && !public_; }
+    void addChatLocked(int seat, const std::string& name, const std::string& kind, const std::string& text);
+    void countChatLocked();
+    // 게임 스레드: 혼자 하기에서 큰 판이 끝나면 봇 하나가 가끔 반응한다
+    void botReaction(const HandReview& review, int humans);
     void presentLocked(int seat);  // 직접 누른 사람: 자리 비움을 풀고 연속 횟수를 지운다
     bool canSkipLocked(const Member& viewer) const;
     // ---- 아래는 게임 스레드에서만 ----
@@ -296,6 +341,14 @@ private:
     std::vector<Member> members_;  // 첫 번째 사람(나가지 않은)이 방장
     bool public_ = false;
     bool everPublic_ = false;
+    std::deque<ChatEntry> chat_;  // 최근 CHAT_KEEP개. 방과 함께 사라지고 어디에도 저장하지 않는다
+    long long chatSeq_ = 0;
+    std::map<std::string, ChatLimiter> limits_;  // 접속 토큰별
+    std::set<std::string> muted_;                // 채팅 금지 토큰
+    std::set<std::string> quiet_;                // 봇 반응을 끈 토큰
+    bool chatOn_ = true;
+    bool chatCounted_ = false;  // 통계의 "채팅을 쓴 방"에 이미 셌는가
+    std::mt19937 chatRng_{std::random_device{}()};  // 게임 스레드만. 게임의 난수와 섞지 않는다
     std::set<std::string> banned_;  // 내보낸 사람의 토큰과 브라우저 식별값
     RoomPhase phase_ = RoomPhase::Lobby;
     unsigned nextSeed_;

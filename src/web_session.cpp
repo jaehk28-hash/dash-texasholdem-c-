@@ -7,6 +7,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdio>
+#include <cstdlib>
 #include <exception>
 #include <initializer_list>
 #include <iterator>
@@ -74,12 +75,8 @@ bool blockedNickname(const std::string& name) {
         else if (c != ' ' && c != '_' && c != '-') plain += c < 0x80 ? static_cast<char>(std::tolower(c)) : raw;
     }
     if (digits >= 7) return true;  // 전화번호 모양
-    for (const char* word : {"http", "www", "씨발", "시발", "씨팔", "시팔", "씨바", "ㅅㅂ", "ㅆㅂ", "병신", "ㅂㅅ", "지랄", "ㅈㄹ",
-                             "개새", "새끼", "좆", "존나", "니미", "느금", "엠창", "썅", "닥쳐", "미친놈", "미친년", "창녀", "섹스",
-                             "fuck", "shit", "bitch", "asshole", "cunt", "nigger", "porn", "sex"}) {
-        if (plain.find(word) != std::string::npos) return true;
-    }
-    return false;
+    if (plain.find("http") != std::string::npos || plain.find("www") != std::string::npos) return true;
+    return hasBadWord(plain);
 }
 
 }  // namespace
@@ -386,7 +383,8 @@ std::string viewToJson(const RoomView& v) {
         j += i ? "," : "";
         j += "{\"name\":" + jsonString(v.members[i].name);
         j += std::string(",\"isHost\":") + boolJson(v.members[i].isHost);
-        j += std::string(",\"isMe\":") + boolJson(v.members[i].isMe) + "}";
+        j += std::string(",\"isMe\":") + boolJson(v.members[i].isMe);
+        j += std::string(",\"muted\":") + boolJson(v.members[i].muted) + "}";
     }
     j += "]";
 
@@ -502,6 +500,24 @@ std::string viewToJson(const RoomView& v) {
     } else {
         j += "null";
     }
+
+    const ChatView& chat = v.chat;
+    j += std::string(",\"chat\":{\"free\":") + boolJson(chat.free) + ",\"on\":" + boolJson(chat.on) +
+         ",\"muted\":" + boolJson(chat.muted) + ",\"quiet\":" + boolJson(chat.quiet) +
+         ",\"reactWaitMs\":" + std::to_string(chat.reactWaitMs) + ",\"textWaitMs\":" + std::to_string(chat.textWaitMs);
+    j += ",\"emojis\":[";
+    for (std::size_t i = 0; i < chatEmojis().size(); ++i) j += (i ? "," : "") + jsonString(chatEmojis()[i]);
+    j += "],\"phrases\":[";
+    for (std::size_t i = 0; i < chatPhrases().size(); ++i) j += (i ? "," : "") + jsonString(chatPhrases()[i]);
+    j += "],\"lines\":[";
+    for (std::size_t i = 0; i < chat.lines.size(); ++i) {
+        const ChatEntry& e = chat.lines[i].entry;
+        j += i ? "," : "";
+        j += "{\"seq\":" + std::to_string(e.seq) + ",\"seat\":" + std::to_string(e.seat) +
+             ",\"name\":" + jsonString(e.name) + ",\"kind\":" + jsonString(e.kind) +
+             ",\"text\":" + jsonString(e.text) + ",\"ageMs\":" + std::to_string(chat.lines[i].ageMs) + "}";
+    }
+    j += "]}";
 
     j += ",\"log\":[";
     bool first = true;
@@ -779,10 +795,23 @@ std::optional<RoomView> Room::view(const std::string& token) const {
     v.solo = solo_;
     v.isPublic = public_;
     v.settings = settings_;
+    v.chat.free = freeChatLocked();
+    v.chat.on = chatOn_;
+    v.chat.muted = muted_.count(token) > 0;
+    v.chat.quiet = quiet_.count(token) > 0;
+    const auto now = std::chrono::steady_clock::now();
+    if (const auto limit = limits_.find(token); limit != limits_.end()) {
+        v.chat.reactWaitMs = limit->second.reactWait(now, options_.chat);
+        v.chat.textWaitMs = limit->second.textWait(now, options_.chat);
+    }
+    for (const ChatEntry& e : chat_) {
+        const auto age = std::chrono::duration_cast<std::chrono::milliseconds>(now - e.at).count();
+        v.chat.lines.push_back(ChatView::Line{e, static_cast<int>(std::min<long long>(age, 1000000))});
+    }
     bool first = true;
     for (const Member& m : members_) {
         if (m.left) continue;
-        v.members.push_back(MemberInfo{m.name, first, m.token == token});
+        v.members.push_back(MemberInfo{m.name, muted_.count(m.token) > 0, first, m.token == token});
         if (first && m.token == token) v.isHost = true;
         first = false;
     }
@@ -1054,6 +1083,128 @@ bool Room::comeBack(const std::string& token, std::string& error) {
     return true;
 }
 
+// ---------------------------------------------------------------------------
+// Room: 채팅. 메시지는 메모리에만 두고 로그나 파일에 남기지 않는다.
+// ---------------------------------------------------------------------------
+void Room::addChatLocked(int seat, const std::string& name, const std::string& kind, const std::string& text) {
+    chat_.push_back(ChatEntry{++chatSeq_, seat, name, kind, text, std::chrono::steady_clock::now()});
+    while (chat_.size() > static_cast<std::size_t>(CHAT_KEEP)) chat_.pop_front();
+}
+
+void Room::countChatLocked() {
+    if (options_.stats) options_.stats->chatSent(!chatCounted_);
+    chatCounted_ = true;
+}
+
+bool Room::react(const std::string& token, std::optional<int> emoji, std::optional<int> phrase, int& waitMs,
+                 std::string& error) {
+    waitMs = 0;
+    std::lock_guard<std::mutex> lock(mutex_);
+    const Member* me = findMember(token);
+    if (stopping_ || !me || phase_ == RoomPhase::Lobby) {
+        error = "게임 중인 방에서만 보낼 수 있어요";
+        return false;
+    }
+    const std::vector<std::string>& list = emoji ? chatEmojis() : chatPhrases();
+    const std::optional<int> index = emoji ? emoji : phrase;
+    if (!index || (emoji && phrase) || *index < 0 || *index >= static_cast<int>(list.size())) {
+        error = "그런 반응은 없어요";
+        return false;
+    }
+    waitMs = limits_[token].react(std::chrono::steady_clock::now(), options_.chat);
+    if (waitMs > 0) {
+        error = "잠깐만요, 조금 뒤에 보낼 수 있어요";
+        return false;
+    }
+    addChatLocked(me->seat, me->name, emoji ? "emoji" : "phrase", list[static_cast<std::size_t>(*index)]);
+    countChatLocked();
+    return true;
+}
+
+bool Room::say(const std::string& token, std::string text, int& waitMs, std::string& error) {
+    waitMs = 0;
+    std::lock_guard<std::mutex> lock(mutex_);
+    const Member* me = findMember(token);
+    if (stopping_ || !me || phase_ == RoomPhase::Lobby) {
+        error = "게임 중인 방에서만 보낼 수 있어요";
+        return false;
+    }
+    if (!freeChatLocked()) {
+        error = "이 방에서는 이모지와 한마디만 보낼 수 있어요";
+        return false;
+    }
+    if (!chatOn_) {
+        error = "방장이 채팅 입력을 껐어요";
+        return false;
+    }
+    if (muted_.count(token)) {
+        error = "방장이 채팅을 금지했어요";
+        return false;
+    }
+    waitMs = limits_[token].text(std::chrono::steady_clock::now(), options_.chat);
+    if (waitMs > 0) {
+        error = "너무 빨라요. " + std::to_string((waitMs + 999) / 1000) + "초 뒤에 보낼 수 있어요";
+        return false;
+    }
+    if (!cleanChatText(text, error)) return false;
+    addChatLocked(me->seat, me->name, "text", text);
+    countChatLocked();
+    return true;
+}
+
+bool Room::setChatOn(const std::string& token, bool on, std::string& error) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (stopping_ || !findMember(token) || !isHostLocked(token) || !freeChatLocked()) {
+        error = "비공개 방의 방장만 바꿀 수 있어요";
+        return false;
+    }
+    chatOn_ = on;
+    return true;
+}
+
+bool Room::mute(const std::string& token, const std::string& name, bool on, std::string& error) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (stopping_ || !findMember(token) || !isHostLocked(token) || !freeChatLocked()) {
+        error = "비공개 방의 방장만 할 수 있어요";
+        return false;
+    }
+    for (const Member& m : members_) {
+        if (m.left || m.name != name || m.token == token) continue;
+        if (on) muted_.insert(m.token);
+        else muted_.erase(m.token);
+        return true;
+    }
+    error = "그런 참가자가 없습니다.";
+    return false;
+}
+
+void Room::setQuiet(const std::string& token, bool quiet) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!findMember(token)) return;
+    if (quiet) quiet_.insert(token);
+    else quiet_.erase(token);
+}
+
+void Room::botReaction(const HandReview& review, int humans) {
+    if (!solo_) return;
+    // 모두가 본 칩의 오르내림만 보고 정한다. 카드는 보지 않는다.
+    int seat = -1, delta = 0;
+    for (const HandRankRow& row : review.ranking) {
+        if (row.seat >= humans && std::abs(row.delta) > std::abs(delta)) seat = row.seat, delta = row.delta;
+    }
+    if (seat < 0 || std::abs(delta) < settings_.config.bigBlind * 10) return;  // 작은 판에는 조용히
+    std::uniform_int_distribution<int> percent(0, 99), pick(0, 1);
+    if (percent(chatRng_) >= options_.botReactionPercent) return;
+    const bool emoji = pick(chatRng_) == 0;
+    const std::string text = delta > 0 ? (emoji ? chatEmojis()[0] : chatPhrases()[2])   // 😎, 이번 판은 내가 접수
+                                       : (emoji ? chatEmojis()[2] : chatPhrases()[1]);  // 😭, 아깝다...
+    std::lock_guard<std::mutex> lock(mutex_);
+    for (const Member& m : members_) {
+        if (!m.left && quiet_.count(m.token)) return;
+    }
+    if (seat < static_cast<int>(seatNames_.size())) addChatLocked(seat, seatNames_[seat], emoji ? "emoji" : "phrase", text);
+}
+
 bool Room::canSkipLocked(const Member& viewer) const {
     if (phase_ != RoomPhase::Playing || handOver_ || skip_) return false;
     auto canStillAct = [this](int seat) {
@@ -1117,6 +1268,7 @@ void Room::publishReview(const HandSummary& hand, const std::vector<std::string>
     auto review = std::make_shared<const HandReview>(buildHandReview(hand, names, previousRanks));
     previousRanks.assign(names.size(), 0);
     for (const StandingRow& row : review->standings) previousRanks[row.seat] = row.rank;
+    botReaction(*review, humans);
     std::vector<std::optional<ReviewFlow>> flows;
     for (int seat = 0; seat < humans; ++seat) flows.push_back(buildReviewFlow(*review, seat));
     {

@@ -31,6 +31,8 @@ struct StatsSummary {
     long long roomStarts = 0;
     long long publicRooms = 0;  // 공개 방 생성 수
     long long publicJoins = 0;  // 공개 방 입장 수
+    long long chatRooms = 0;    // 채팅(이모지, 한마디, 글)을 쓴 방 수
+    long long chatSends = 0;    // 사람이 보낸 횟수 (내용은 저장하지 않는다)
     long long totalHands = 0;
     long long todayHands = 0;
     double handsPerGame = 0;
@@ -57,6 +59,7 @@ public:
     void handFinished();
     void publicRoomCreated();
     void publicJoined();
+    void chatSent(bool firstInRoom);
     StatsSummary summary(int days = 14) const;
 
     bool flush();  // 지금 바로 파일에 쓴다. 실패하면 false

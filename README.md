@@ -69,7 +69,7 @@ CMake가 없을 때는 컴파일러로 바로 빌드할 수 있습니다 (macOS/
 ```bash
 mkdir -p build
 CORE=(src/card.cpp src/evaluator.cpp src/pot.cpp src/review.cpp src/game.cpp src/equity.cpp src/bots.cpp src/human_player.cpp)
-WEB=(src/web_json.cpp src/web_session.cpp src/web_server.cpp src/stats.cpp src/ledger.cpp src/sha256.cpp)
+WEB=(src/web_json.cpp src/web_session.cpp src/web_server.cpp src/stats.cpp src/ledger.cpp src/sha256.cpp src/chat.cpp)
 WEBFLAGS=(-isystem third_party -pthread -DHOLDEM_WEB_DIR="\"$PWD/web\"")
 c++ -std=c++17 -O2 -Wall -Wextra -Isrc "${WEBFLAGS[@]}" "${CORE[@]}" "${WEB[@]}" src/main.cpp -o build/holdem
 c++ -std=c++17 -O2 -Wall -Wextra -Isrc "${CORE[@]}" src/bench.cpp -o build/holdem_bench
@@ -169,6 +169,16 @@ PORT=9000 ./build/holdem --web
 - 방장이 나가면 다음으로 들어온 사람이 방장이 됩니다.
 - 브라우저 하나가 한 사람입니다(쿠키). 한 컴퓨터에서 두 명을 시험하려면 시크릿 창이나 다른 브라우저를 쓰세요.
 
+### 채팅
+
+- 게임 화면에 채팅 패널이 있습니다. 화면 폭이 1180px 이상이면 오른쪽 패널, 좁으면 아래에서 올라오는 시트입니다.
+- **이모지 6개와 정해진 한마디**는 모든 방에서 쓸 수 있고, 3초에 한 번입니다(둘이 함께).
+- **자유 입력**은 비공개 친구 방에서만 됩니다. 1~40자, 3초에 한 번이며 10초에 5번 넘게 시도하면 30초 잠깁니다.
+- 링크, 전화번호, 이메일 모양은 거절하고, 작은 내장 목록의 욕설은 `***`로 바꿉니다.
+- 방장은 자유 입력을 켜고 끄거나, 한 사람을 "채팅 금지"할 수 있습니다. 누구든 이름표를 눌러 한 사람을 자기 화면에서 숨길 수 있습니다.
+- 혼자 하기에서는 큰 판이 끝나면 봇이 가끔 반응합니다. "효과 줄이기"를 켜면 보내지 않습니다.
+- 최근 50개만 서버 메모리에 두고 방과 함께 사라집니다. 파일이나 로그에는 남기지 않고, 통계에는 사용한 방 수와 보낸 횟수만 셉니다.
+
 ### 공통
 
 - `--chips`, `--sb`, `--bb`는 설정 화면의 기본값이 되고, `--no-hint`는 혼자 하기의 힌트를 끕니다.
@@ -197,6 +207,10 @@ PORT=9000 ./build/holdem --web
 | `POST /api/room/leave` | 방 나가기 |
 | `POST /api/continue` | 방장만. 기다리는 단계 넘기기. 선택: `gateId` |
 | `POST /api/skip` | 방장만. 더 행동할 사람이 없을 때 이번 판 빠르게 진행 |
+| `POST /api/chat/react` | `{"emoji":0~5}` 또는 `{"phrase":0~8}` (번호만) |
+| `POST /api/chat/say` | `{"text":"..."}` 비공개 친구 방에서만 |
+| `POST /api/chat/enable`, `/api/chat/mute` | 방장만. `{"on":bool}`, `{"name":"...","on":bool}` |
+| `POST /api/chat/quiet` | 봇 반응 받지 않기 `{"quiet":bool}` |
 | `POST /api/pace` | 방장만. `pace`: `slow`, `normal`, `fast` (`/api/new`, `/api/room/create`에서도 선택) |
 | `GET /api/state` | 내 시점의 상태. 방이 없으면 `{"hasGame":false, ...}` |
 | `POST /api/action` | `{"action":"fold\|check\|call\|raise\|allin","amount":N,"turnId":T}`. `amount`는 `raise`의 이번 라운드 **총액**, `turnId`는 선택 |

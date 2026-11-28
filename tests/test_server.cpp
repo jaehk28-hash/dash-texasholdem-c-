@@ -16,6 +16,7 @@
 #include <thread>
 #include <vector>
 
+#include "chat.h"
 #include "check.h"
 #include "httplib.h"
 #include "ledger.h"
@@ -599,6 +600,41 @@ void testPublicHttpAndLimits() {
     CHECK(last == 429);
 }
 
+void testChatHttp() {
+    const std::string folder = tempFolder();
+    WebOptions options = fastOptions();
+    options.aiAction = 60000ms;
+    options.stats = std::make_shared<Stats>(folder + "/stats.json");
+    TestServer s(options);
+    httplib::Client client("127.0.0.1", s.port);
+    auto made = client.Post("/api/room/create", R"({"name":"방장","bots":2})", "application/json");
+    CHECK(made && made->status == 200);
+    const std::string cookie = made->get_header_value("Set-Cookie");
+    const httplib::Headers me{{"Cookie", cookie.substr(0, cookie.find(';'))}};
+    CHECK(client.Post("/api/room/start", me, "{}", "application/json")->status == 200);
+
+    auto post = [&](const char* path, const std::string& body, const httplib::Headers& who) {
+        return client.Post(path, who, body, "application/json");
+    };
+    CHECK(post("/api/chat/say", R"({"text":"안녕"})", {})->status == 400);  // 방 사람이 아니다
+    CHECK(post("/api/chat/react", R"({"emoji":0})", {})->status == 400);
+    CHECK(post("/api/chat/react", R"({"emoji":"😎"})", me)->status == 400);  // 번호만 받는다
+    CHECK(post("/api/chat/react", R"({"emoji":4})", me)->status == 200);
+    const auto fast = post("/api/chat/react", R"({"phrase":1})", me);
+    CHECK(fast && fast->status == 429 && has(fast->body, "waitMs"));
+    CHECK(post("/api/chat/say", "{\"text\":\"a\\nb\"}", me)->status == 400);  // 줄바꿈
+    const auto link = post("/api/chat/say", R"({"text":"www.abc.com"})", me);
+    CHECK(link && link->status == 400 && has(link->body, CHAT_BLOCKED_MESSAGE));
+    const auto soon = post("/api/chat/say", R"({"text":"안녕"})", me);
+    CHECK(soon && soon->status == 429);  // 거절된 시도 뒤 3초 안
+
+    const auto state = client.Get("/api/state", me);
+    CHECK(state && has(state->body, "\"chat\":{\"free\":true") && has(state->body, chatEmojis()[4]));
+    CHECK(!has(state->body, "www.abc"));
+    CHECK(options.stats->summary().chatRooms == 1 && options.stats->summary().chatSends == 1);
+    CHECK(options.stats->flush() && !has(readAll(folder + "/stats.json"), chatEmojis()[4]));  // 내용은 저장하지 않는다
+}
+
 }  // namespace
 
 int main() {
@@ -621,6 +657,7 @@ int main() {
     testKickAndHostHandover();
     testAbandonedPublicRoomCloses();
     testPublicHttpAndLimits();
+    testChatHttp();
     std::printf("%d개 검사 중 %d개 실패\n", g_checks, g_failures);
     return g_failures == 0 ? 0 : 1;
 }

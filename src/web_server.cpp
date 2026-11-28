@@ -354,6 +354,85 @@ void setupRoutes(httplib::Server& server, RoomManager& rooms, const std::string&
         res.set_content(publicRoomsJson(rooms.publicRooms()), kJson);
     });
 
+    // ---- 채팅 (속도 제한과 검사는 모두 Room이 한다. 내용은 어디에도 기록하지 않는다) ----
+    auto chatResult = [&rooms](httplib::Response& res, const std::string& token, bool ok, int waitMs,
+                               const std::string& error) {
+        if (ok) {
+            rooms.touch(token);
+            res.set_content("{\"ok\":true}", kJson);
+            return;
+        }
+        res.status = waitMs > 0 ? 429 : 400;
+        res.set_content("{\"error\":" + jsonString(error) + ",\"waitMs\":" + std::to_string(waitMs) + "}", kJson);
+    };
+    server.Post("/api/chat/react", [&rooms, chatResult](const httplib::Request& req, httplib::Response& res) {
+        const std::string token = sessionToken(req);
+        Body body;
+        if (!readBody(req, res, body)) return;
+        int emoji = 0, phrase = 0;
+        if (!getInt(body, "emoji", emoji) || !getInt(body, "phrase", phrase)) {
+            sendError(res, 400, "번호만 보낼 수 있습니다.");
+            return;
+        }
+        const auto room = rooms.find(token);
+        int waitMs = 0;
+        std::string error = "들어가 있는 방이 없습니다.";
+        const bool ok = room && room->react(token, body.count("emoji") ? std::optional<int>(emoji) : std::nullopt,
+                                            body.count("phrase") ? std::optional<int>(phrase) : std::nullopt,
+                                            waitMs, error);
+        chatResult(res, token, ok, waitMs, error);
+    });
+    server.Post("/api/chat/say", [&rooms, chatResult](const httplib::Request& req, httplib::Response& res) {
+        const std::string token = sessionToken(req);
+        Body body;
+        std::string text;
+        // 줄바꿈 같은 제어 문자가 든 요청은 JSON을 읽는 단계에서 거절된다.
+        if (!parseFlatJsonObject(req.body, body) || !getString(body, "text", text)) {
+            sendError(res, 400, CHAT_BLOCKED_MESSAGE);
+            return;
+        }
+        const auto room = rooms.find(token);
+        int waitMs = 0;
+        std::string error = "들어가 있는 방이 없습니다.";
+        const bool ok = room && room->say(token, text, waitMs, error);
+        chatResult(res, token, ok, waitMs, error);
+    });
+    server.Post("/api/chat/enable", [&rooms, chatResult](const httplib::Request& req, httplib::Response& res) {
+        const std::string token = sessionToken(req);
+        Body body;
+        if (!readBody(req, res, body)) return;
+        bool on = true;
+        const auto room = rooms.find(token);
+        std::string error = "요청이 잘못되었습니다.";
+        const bool ok = room && body.count("on") && getBool(body, "on", on) && room->setChatOn(token, on, error);
+        chatResult(res, token, ok, 0, error);
+    });
+    server.Post("/api/chat/mute", [&rooms, chatResult](const httplib::Request& req, httplib::Response& res) {
+        const std::string token = sessionToken(req);
+        Body body;
+        if (!readBody(req, res, body)) return;
+        std::string name;
+        bool on = true;
+        const auto room = rooms.find(token);
+        std::string error = "요청이 잘못되었습니다.";
+        const bool ok = room && getString(body, "name", name) && getBool(body, "on", on) && room->mute(token, name, on, error);
+        chatResult(res, token, ok, 0, error);
+    });
+    // 봇 반응 받지 않기 ("효과 줄이기"를 켠 사람)
+    server.Post("/api/chat/quiet", [&rooms](const httplib::Request& req, httplib::Response& res) {
+        const std::string token = sessionToken(req);
+        Body body;
+        if (!readBody(req, res, body)) return;
+        bool quiet = false;
+        const auto room = rooms.find(token);
+        if (!room || !getBool(body, "quiet", quiet)) {
+            sendError(res, 400, "요청이 잘못되었습니다.");
+            return;
+        }
+        room->setQuiet(token, quiet);
+        res.set_content("{\"ok\":true}", kJson);
+    });
+
     // 방장만, 대기실에서: 참가자 내보내기
     server.Post("/api/room/kick", [&rooms](const httplib::Request& req, httplib::Response& res) {
         const std::string token = sessionToken(req);
