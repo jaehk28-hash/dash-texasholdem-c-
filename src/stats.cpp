@@ -711,6 +711,16 @@ std::string percent(long long part, long long whole) {
 
 const char* const kBucketNames[kTimeBuckets] = {"1분 미만", "1~5분", "5~15분", "15~30분", "30분 이상"};
 
+// 데이터가 없는 것과 기능이 없는 것을 구분할 수 있게, 제목은 두고 이 문구를 보여 준다.
+const char* const kNoRecord = "아직 기록이 없어요";
+const char* const kNoRecordCard = "<small>아직 기록이 없어요</small>";
+
+std::string emptyNote() { return std::string("<p class=\"empty\">") + kNoRecord + "</p>"; }
+
+std::string emptyRow(int columns) {
+    return "<tr><td colspan=\"" + std::to_string(columns) + "\" class=\"empty\">" + kNoRecord + "</td></tr>";
+}
+
 }  // namespace
 
 std::string statsJson(const StatsSummary& s, int playingGames, int openRooms) {
@@ -764,7 +774,12 @@ std::string statsPageHtml(const StatsSummary& s, int playingGames, int openRooms
     };
     auto chart = [&s](const std::string& title, long long DayStats::*field) {
         long long top = 1;
-        for (const DayStats& d : s.days) top = std::max(top, d.*field);
+        bool any = false;
+        for (const DayStats& d : s.days) {
+            top = std::max(top, d.*field);
+            any = any || d.*field > 0;
+        }
+        if (!any) return "<h2>" + title + "</h2>" + emptyNote();
         std::string html = "<h2>" + title + "</h2><div class=\"chart\">";
         for (const DayStats& d : s.days) {
             const long long value = d.*field;
@@ -801,6 +816,8 @@ std::string statsPageHtml(const StatsSummary& s, int playingGames, int openRooms
         ".wide{overflow-x:auto}.wide table{white-space:nowrap}"
         ".rate{display:inline-block;width:44px;height:6px;margin-left:6px;background:#332f22;vertical-align:middle}"
         ".rate span{display:block;height:100%;background:#c9a24b}"
+        ".card b small{font-size:13px;font-weight:400;color:#b9b4a4}"
+        "p.empty,td.empty{color:#b9b4a4;font-size:13px;text-align:center!important;padding:10px}"
         "</style></head><body><main><h1>사용 통계</h1>";
     html += "<p class=\"now\">지금 접속 중 <strong>" + std::to_string(s.online) + "명</strong> / 진행 중인 게임 <strong>" +
             std::to_string(playingGames) + "개</strong> / 열린 방 <strong>" + std::to_string(openRooms) + "개</strong></p>";
@@ -809,8 +826,8 @@ std::string statsPageHtml(const StatsSummary& s, int playingGames, int openRooms
                 "줄이 사라졌습니다. 공개 저장소의 기록과 비교하세요. 해결될 때까지 새 줄을 덧붙이지 않습니다.</p>";
     }
     html += "<div class=\"cards\">";
-    html += card("오늘 평균 플레이 시간(분)", minutes(s.todayAvgPlaySec));
-    html += card("오늘 가장 긴 세션(분)", minutes(s.todayLongestSec));
+    html += card("오늘 평균 플레이 시간(분)", s.todayAvgPlaySec > 0 ? minutes(s.todayAvgPlaySec) : kNoRecordCard);
+    html += card("오늘 가장 긴 세션(분)", s.todayLongestSec > 0 ? minutes(s.todayLongestSec) : kNoRecordCard);
     html += card("오늘 활성 플레이어", std::to_string(s.todayActive));
     html += card("다시 한 사람", std::to_string(s.returningPlayers));
     html += card("봇 접속", std::to_string(s.botHits));
@@ -833,7 +850,9 @@ std::string statsPageHtml(const StatsSummary& s, int playingGames, int openRooms
     long long top = 1;
     for (const DayStats& d : s.days) top = std::max({top, d.visitors, d.active});
     html += "<h2>최근 14일 방문자와 활성 플레이어</h2><p><span class=\"key\"></span>방문자"
-            "<span class=\"key b\"></span>활성 플레이어 (한 판 이상 끝냄)</p><div class=\"chart\">";
+            "<span class=\"key b\"></span>활성 플레이어 (한 판 이상 끝냄)</p>";
+    const bool anyVisit = std::any_of(s.days.begin(), s.days.end(), [](const DayStats& d) { return d.visitors > 0 || d.active > 0; });
+    html += anyVisit ? "<div class=\"chart\">" : emptyNote() + "<div hidden>";
     auto bar = [top](long long value, const char* cls) {
         return std::string("<i class=\"") + cls + "\" style=\"height:" + std::to_string(value * 100 / top) + "%\"></i>";
     };
@@ -845,7 +864,10 @@ std::string statsPageHtml(const StatsSummary& s, int playingGames, int openRooms
     }
     html += "</div><h2>일별 동시 접속 최고치와 플레이 시간</h2><div class=\"wide\"><table><tr><th>날짜</th><th>최고</th>"
             "<th>시각(한국)</th><th>평균 플레이(분)</th><th>가장 긴 세션(분)</th></tr>";
-    for (auto d = s.days.rbegin(); d != s.days.rend(); ++d) {
+    const bool anyDay = std::any_of(s.days.begin(), s.days.end(),
+                                    [](const DayStats& d) { return d.peak > 0 || d.playSec > 0 || d.longestSec > 0; });
+    if (!anyDay) html += emptyRow(5);
+    for (auto d = s.days.rbegin(); anyDay && d != s.days.rend(); ++d) {
         char at[16] = "-";
         if (d->peak > 0) {
             std::snprintf(at, sizeof(at), "%02d:%02d", static_cast<int>(d->peakMinute / 60),
@@ -860,7 +882,10 @@ std::string statsPageHtml(const StatsSummary& s, int playingGames, int openRooms
     long long most = 1;
     for (int i = 0; i < kTimeBuckets; ++i) most = std::max({most, s.playHist[i], s.stayHist[i]});
     html += "<h2>세션 길이 분포 (세션 수)</h2><p><span class=\"key\"></span>플레이 시간<span class=\"key b\"></span>"
-            "체류 시간</p><div class=\"chart\">";
+            "체류 시간</p>";
+    bool anySession = false;
+    for (int i = 0; i < kTimeBuckets; ++i) anySession = anySession || s.playHist[i] > 0 || s.stayHist[i] > 0;
+    html += anySession ? "<div class=\"chart\">" : emptyNote() + "<div hidden>";
     for (int i = 0; i < kTimeBuckets; ++i) {
         auto column = [most](long long value, const char* cls) {
             return std::string("<i class=\"") + cls + "\" style=\"height:" + std::to_string(value * 100 / most) + "%\"></i>";
@@ -871,7 +896,10 @@ std::string statsPageHtml(const StatsSummary& s, int playingGames, int openRooms
     }
     html += "</div><h2>브라우저 종류별</h2><div class=\"wide\"><table><tr><th>종류</th><th>방문</th><th>브라우저</th>"
             "<th>한 판 완료</th><th>첫 판 완료율</th><th>평균 플레이(분)</th><th>평균 세션(분)</th></tr>";
-    for (int k = 0; k < kBrowserKinds; ++k) {
+    const bool anyBrowser = std::any_of(s.kinds, s.kinds + kBrowserKinds,
+                                        [](const KindStats& k) { return k.visits > 0 || k.browsers > 0; });
+    if (!anyBrowser) html += emptyRow(7);
+    for (int k = 0; anyBrowser && k < kBrowserKinds; ++k) {
         const KindStats& b = s.kinds[k];
         const long long rate = b.browsers > 0 ? b.done * 100 / b.browsers : 0;
         html += std::string("<tr><td>") + browserKindName(k) + "</td><td>" + std::to_string(b.visits) + "</td><td>" +
@@ -881,6 +909,7 @@ std::string statsPageHtml(const StatsSummary& s, int playingGames, int openRooms
     }
     html += "</table></div><h2>플레이 시간이 긴 방문자 (상위 20)</h2><div class=\"wide\"><table><tr><th>방문자</th>"
             "<th>첫 방문</th><th>마지막</th><th>플레이(분)</th><th>세션</th><th>완료 판</th><th>기기</th></tr>";
+    if (s.top.empty()) html += emptyRow(7);
     for (std::size_t i = 0; i < s.top.size(); ++i) {
         const VisitorStats& v = s.top[i];
         html += "<tr><td>방문자 " + std::to_string(i + 1) + "</td><td>" + v.firstDate + "</td><td>" + v.lastDate + "</td><td>" +

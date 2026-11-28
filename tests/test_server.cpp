@@ -866,6 +866,34 @@ void testPlayTimeRules() {
     CHECK(again.summary().top.size() == 2 && again.summary().top[0].playSec == 205);
 }
 
+// 데이터가 없어도 제목은 보이고 "아직 기록이 없어요"가 붙는다
+void testEmptyStatsPage() {
+    const std::string folder = tempFolder();
+    std::time_t now = at(10, 12, 0, 0);
+    Stats stats(folder + "/stats.json", [&now] { return now; });
+    auto count = [](const std::string& text, const std::string& part) {
+        int n = 0;
+        for (std::size_t at = text.find(part); at != std::string::npos; at = text.find(part, at + 1)) ++n;
+        return n;
+    };
+    const char* titles[] = {"오늘 평균 플레이 시간", "오늘 가장 긴 세션", "최근 14일 판 수", "최근 14일 방문자와 활성 플레이어",
+                            "일별 동시 접속 최고치와 플레이 시간", "세션 길이 분포", "브라우저 종류별", "플레이 시간이 긴 방문자"};
+    const std::string empty = statsPageHtml(stats.summary());
+    for (const char* title : titles) CHECK(has(empty, title));
+    CHECK(count(empty, "아직 기록이 없어요") == 8);  // 카드 2 + 그래프와 표 6
+
+    stats.visit("1111111111111111", "", 0, 0);
+    stats.beat(beatOf("1111111111111111", 0));
+    now += 60;
+    stats.beat(beatOf("1111111111111111", 60));
+    stats.handFinished();
+    stats.heartbeat("1111111111111111");
+    const std::string filled = statsPageHtml(stats.summary());
+    for (const char* title : titles) CHECK(has(filled, title));
+    CHECK(count(filled, "아직 기록이 없어요") == 0);
+    CHECK(has(filled, "<td>Chrome</td>") && has(filled, "방문자 1"));
+}
+
 void testBrowserKinds() {
     const std::string webkit = "AppleWebKit/537.36 (KHTML, like Gecko) ";
     const std::pair<std::string, const char*> cases[] = {
@@ -954,6 +982,7 @@ int main() {
     testBotsAndOwnerExcluded();
     testActivePlayerFromGame();
     testPlayTimeRules();
+    testEmptyStatsPage();
     testBrowserKinds();
     testBeatHttp();
     std::printf("%d개 검사 중 %d개 실패\n", g_checks, g_failures);
