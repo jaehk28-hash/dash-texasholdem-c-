@@ -14,6 +14,7 @@
 #include <sstream>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #include "chat.h"
@@ -760,6 +761,171 @@ void testChatHttp() {
     CHECK(options.stats->flush() && !has(readAll(folder + "/stats.json"), chatEmojis()[4]));  // 내용은 저장하지 않는다
 }
 
+// ---------------------------------------------------------------------------
+// 플레이 시간
+// ---------------------------------------------------------------------------
+Beat beatOf(const std::string& id, long long play, long long stay = 0, bool final = false) {
+    Beat b;
+    b.id = id;
+    b.playSec = play;
+    b.staySec = stay;
+    b.final = final;
+    b.game = play > 0;
+    b.kind = 0;
+    b.device = 0;
+    return b;
+}
+
+void testPlayTimeRules() {
+    const std::string folder = tempFolder();
+    const std::string path = folder + "/stats.json";
+    std::ofstream(path) << "{\"hands\":9,\"visits\":4}";  // 예전 형식의 파일
+    std::time_t now = at(10, 20, 0, 0);
+    const auto clock = [&now] { return now; };
+    const std::string me = "1111111111111111";
+    auto played = [](const Stats& stats) { return stats.summary().top.at(0).playSec; };
+    {
+        Stats stats(path, clock);
+        stats.visit(me, "", 0, 0);
+        stats.beat(beatOf(me, 30));  // 첫 신호는 기준점
+        CHECK(stats.summary().top.size() == 1 && played(stats) == 0 && stats.summary().top[0].sessions == 1);
+        now += 30;
+        stats.beat(beatOf(me, 30));
+        CHECK(played(stats) == 30);
+
+        // 15초 안에 온 신호는 버린다. 많이 보내도 늘지 않는다
+        now += 10;
+        for (int i = 0; i < 100; ++i) stats.beat(beatOf(me, 10));
+        CHECK(played(stats) == 30);
+        now += 20;  // 마지막으로 받은 지 30초
+        stats.beat(beatOf(me, 500));  // 부풀린 값은 실제 흐른 시간까지만
+        CHECK(played(stats) == 60);
+
+        // 자리 비움(조작 없음): 브라우저가 0초를 보내므로 늘지 않는다
+        for (int i = 0; i < 4; ++i) {
+            now += 30;
+            stats.beat(beatOf(me, 0, 0));
+        }
+        CHECK(played(stats) == 60);
+
+        // 90초 넘게 벌어진 구간은 통째로 뺀다
+        now += 91;
+        stats.beat(beatOf(me, 30));
+        CHECK(played(stats) == 60);
+        now += 90;
+        stats.beat(beatOf(me, 90));
+        CHECK(played(stats) == 150);
+
+        // 떠날 때의 신호는 15초 안이어도 받되, 흐른 시간까지만. 반복해도 늘지 않는다
+        now += 5;
+        for (int i = 0; i < 50; ++i) stats.beat(beatOf(me, 100, 100, true));
+        CHECK(played(stats) == 155);
+
+        // 체류 시간은 따로. 플레이와 체류의 합도 흐른 시간을 넘지 않는다
+        now += 60;
+        stats.beat(beatOf(me, 20, 100));
+        StatsSummary s = stats.summary();
+        CHECK(s.top[0].playSec == 175 && s.kinds[0].totalSec == 175 + 40);
+        CHECK(s.playHist[1] == 1 && s.playHist[0] == 0 && s.stayHist[0] == 1);  // 플레이 175초, 체류 40초
+        CHECK(s.todayLongestSec == 215 && s.todayAvgPlaySec == 175);
+
+        // 30분 넘게 조용하면 새 세션
+        now += 1801;
+        stats.beat(beatOf(me, 30));
+        now += 30;
+        stats.beat(beatOf(me, 30));
+        s = stats.summary();
+        CHECK(s.top[0].sessions == 2 && s.top[0].playSec == 205 && s.playHist[0] == 1 && s.playHist[1] == 1);
+        CHECK(s.todayLongestSec == 215 && s.kinds[0].sessions == 2);
+
+        // 한 판 완료와 첫 판 완료율
+        stats.visit("2222222222222222", "", 0, 2);
+        stats.handPlayed(me);
+        stats.handPlayed(me);
+        s = stats.summary();
+        CHECK(s.kinds[0].browsers == 2 && s.kinds[0].done == 1 && s.kinds[0].visits == 2 && s.top[0].hands == 2);
+        CHECK(s.totalHands == 9 && s.totalVisits == 6);  // 예전 숫자를 이어서
+        CHECK(stats.flush());
+    }
+    Stats again(path, clock);
+    const StatsSummary s = again.summary();
+    CHECK(s.top.size() == 2 && s.top[0].playSec == 205 && s.top[0].sessions == 2 && s.top[0].hands == 2);
+    CHECK(s.top[0].firstDate == "2026-11-10" && s.top[0].device == 0 && s.top[1].device == 2);
+    const std::string json = statsJson(s), page = statsPageHtml(s);
+    CHECK(has(json, "방문자 1") && has(page, "방문자 2") && has(page, "첫 판 완료율") && has(page, "50%"));
+    CHECK(!has(json, "1111111111111111") && !has(page, "1111111111111111") && !has(json, "2222222222222222"));
+    CHECK(has(page, "조작이 있었던 시간만 센 추정치"));
+
+    // 운영자로 표시되면 목록에서 감추고 더 세지 않는다. 풀면 다시 센다
+    again.exclude(me);
+    CHECK(again.summary().top.size() == 1);
+    now += 30;
+    again.beat(beatOf(me, 30));
+    CHECK(again.summary().top.size() == 1);
+    again.visit(me, "", 0, 0);
+    CHECK(again.summary().top.size() == 2 && again.summary().top[0].playSec == 205);
+}
+
+void testBrowserKinds() {
+    const std::string webkit = "AppleWebKit/537.36 (KHTML, like Gecko) ";
+    const std::pair<std::string, const char*> cases[] = {
+        {"Mozilla/5.0 (Windows NT 10.0) " + webkit + "Chrome/130.0 Safari/537.36", "Chrome"},
+        {"Mozilla/5.0 (iPhone) AppleWebKit/605.1.15 CriOS/130.0 Mobile/15E148 Safari/604.1", "Chrome"},
+        {"Mozilla/5.0 (Macintosh) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15", "Safari"},
+        {"Mozilla/5.0 " + webkit + "Chrome/130.0 Safari/537.36 Edg/130.0", "Edge"},
+        {"Mozilla/5.0 (Windows NT 10.0; rv:130.0) Gecko/20100101 Firefox/130.0", "Firefox"},
+        {"Mozilla/5.0 (Linux; Android 14; SM-S911N) " + webkit + "SamsungBrowser/25.0 Chrome/121.0 Mobile Safari/537.36", "삼성 인터넷"},
+        {"Mozilla/5.0 " + webkit + "Chrome/130.0 Whale/4.29 Safari/537.36", "웨일"},
+        {"Mozilla/5.0 (iPhone) AppleWebKit/605.1.15 Mobile/15E148 KAKAOTALK 10.4.0", "카카오톡 인앱"},
+        {"Mozilla/5.0 (iPhone) AppleWebKit/605.1.15 Mobile/15E148 Instagram 300.0", "인스타그램 인앱"},
+        {"Mozilla/5.0 (Linux; Android 14; wv) " + webkit + "Version/4.0 Chrome/130.0 Mobile Safari/537.36", "기타"},
+        {"Mozilla/5.0 " + webkit + "Chrome/130.0 Safari/537.36 NAVER(inapp; search)", "기타"},
+        {"curl/8.0", "기타"},
+    };
+    for (const auto& [agent, expected] : cases) CHECK(std::string(browserKindName(browserKind(agent))) == expected);
+    CHECK(deviceKind("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0) Mobile/15E148", false) == 0);
+    CHECK(deviceKind("Mozilla/5.0 (Linux; Android 14; SM-S911N) Mobile Safari", false) == 0);
+    CHECK(deviceKind("Mozilla/5.0 (iPad; CPU OS 17_0)", false) == 1);
+    CHECK(deviceKind("Mozilla/5.0 (Linux; Android 14; SM-X700) Safari", false) == 1);
+    CHECK(deviceKind("Mozilla/5.0 (Macintosh; Intel Mac OS X)", true) == 1);  // iPadOS
+    CHECK(deviceKind("Mozilla/5.0 (Macintosh; Intel Mac OS X)", false) == 2);
+    CHECK(timeBucket(59) == 0 && timeBucket(60) == 1 && timeBucket(300) == 2 && timeBucket(900) == 3 && timeBucket(1800) == 4);
+}
+
+void testBeatHttp() {
+    const std::string folder = tempFolder();
+    WebOptions options = fastOptions();
+    options.statsToken = "secret-token";
+    options.stats = std::make_shared<Stats>(folder + "/stats.json");
+    TestServer s(options);
+    httplib::Client client("127.0.0.1", s.port);
+    const std::string agent = "Mozilla/5.0 (iPhone) Mobile/15E148 KAKAOTALK 10.4.0";
+    const httplib::Headers person{{"X-Client-Id", "aaaaaaaaaaaaaaaa"}, {"User-Agent", agent}};
+    const httplib::Headers owner{{"X-Client-Id", "bbbbbbbbbbbbbbbb"}, {"X-No-Stats", "1"}, {"User-Agent", agent}};
+    for (const auto& who : {person, owner}) {
+        CHECK(client.Post("/api/visit", who, "{}", "application/json")->status == 200);
+        CHECK(client.Post("/api/beat", who, R"({"play":0,"stay":0,"game":true})", "application/json")->status == 200);
+    }
+    // sendBeacon: 헤더 없이 본문의 식별값
+    CHECK(client.Post("/api/beat", httplib::Headers{{"User-Agent", agent}},
+                      R"({"play":0,"stay":0,"game":false,"final":false,"id":"cccccccccccccccc"})",
+                      "text/plain")->status == 200);
+    CHECK(client.Post("/api/beat", person, "이상한 본문", "text/plain")->status == 200);
+    const StatsSummary sum = options.stats->summary();
+    CHECK(sum.top.size() == 2 && sum.kinds[6].browsers == 2 && sum.online == 1);
+
+    CHECK(client.Get("/stats?format=json")->status == 404);
+    CHECK(client.Get("/stats?token=wrong&format=json")->status == 404);
+    const auto json = client.Get("/stats?token=secret-token&format=json");
+    CHECK(json && json->status == 200 && has(json->get_header_value("Content-Type"), "application/json"));
+    CHECK(has(json->get_header_value("X-Robots-Tag"), "noindex"));
+    CHECK(has(json->body, "\"top_visitors\"") && has(json->body, "카카오톡 인앱") && has(json->body, "\"session_buckets\""));
+    for (const char* secret : {"aaaaaaaaaaaaaaaa", "bbbbbbbbbbbbbbbb", "cccccccccccccccc", "iPhone", "secret-token"}) {
+        CHECK(!has(json->body, secret));
+    }
+    CHECK(options.stats->flush() && !has(readAll(folder + "/stats.json"), "iPhone"));  // User-Agent는 저장하지 않는다
+}
+
 }  // namespace
 
 int main() {
@@ -787,6 +953,9 @@ int main() {
     testDailyActivePlayers();
     testBotsAndOwnerExcluded();
     testActivePlayerFromGame();
+    testPlayTimeRules();
+    testBrowserKinds();
+    testBeatHttp();
     std::printf("%d개 검사 중 %d개 실패\n", g_checks, g_failures);
     return g_failures == 0 ? 0 : 1;
 }

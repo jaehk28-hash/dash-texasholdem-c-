@@ -577,15 +577,45 @@ void setupRoutes(httplib::Server& server, RoomManager& rooms, const std::string&
             const auto found = body.find("src");
             if (found != body.end() && found->second.type == JsonValue::Type::String) src = found->second.text;
         }
-        if (stats && counted(req)) stats->visit(clientId(req), src);
+        const std::string agent = req.get_header_value("User-Agent");
+        if (stats && counted(req)) {
+            const auto touch = body.find("touch");
+            stats->visit(clientId(req), src, browserKind(agent),
+                         deviceKind(agent, touch != body.end() && touch->second.flag));
+        } else if (stats && !isBotAgent(agent)) {
+            stats->exclude(clientId(req));
+        }
         res.set_content("{\"ok\":true}", kJson);
     });
 
-    // "게임 화면이 열려 있다"는 신호 (30초마다). 방 활동으로는 치지 않는다.
+    // 화면이 보이는 동안 30초마다 오는 신호. 방 활동으로는 치지 않는다.
+    // 떠날 때의 신호(sendBeacon)는 헤더를 못 붙이므로 식별값을 본문으로도 받는다.
     server.Post("/api/beat", [&rooms](const httplib::Request& req, httplib::Response& res) {
-        const auto& stats = rooms.options().stats;
-        if (stats && counted(req)) stats->heartbeat(clientId(req));
         res.set_content("{\"ok\":true}", kJson);
+        const auto& stats = rooms.options().stats;
+        const std::string agent = req.get_header_value("User-Agent");
+        if (!stats || isBotAgent(agent)) return;
+        Body body;
+        if (!req.body.empty() && !parseFlatJsonObject(req.body, body)) return;
+        Beat beat;
+        beat.id = clientId(req);
+        int play = 0, stay = 0;
+        bool touch = false;
+        std::string id;
+        if (!getInt(body, "play", play) || !getInt(body, "stay", stay) || !getBool(body, "game", beat.game) ||
+            !getBool(body, "final", beat.final) || !getBool(body, "touch", touch) || !getString(body, "id", id)) {
+            return;
+        }
+        if (beat.id.empty() && Stats::validIdHash(id)) beat.id = id;
+        if (req.get_header_value("X-No-Stats") == "1") {
+            stats->exclude(beat.id);
+            return;
+        }
+        beat.playSec = play;
+        beat.staySec = stay;
+        beat.kind = browserKind(agent);
+        beat.device = deviceKind(agent, touch);
+        stats->beat(beat);
     });
 
     // 사용 통계 화면. STATS_TOKEN이 없거나 틀리면 없는 주소처럼 404.
@@ -600,6 +630,10 @@ void setupRoutes(httplib::Server& server, RoomManager& rooms, const std::string&
         res.set_header("Cache-Control", "no-store");
         res.set_header("Referrer-Policy", "no-referrer");
         const auto [playing, open] = rooms.activity();
+        if (req.get_param_value("format") == "json") {
+            res.set_content(statsJson(options.stats->summary(), playing, open), "application/json; charset=utf-8");
+            return;
+        }
         res.set_content(statsPageHtml(options.stats->summary(), playing, open), "text/html; charset=utf-8");
     });
 

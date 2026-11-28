@@ -1799,18 +1799,56 @@ if (location.hash) history.replaceState(null, "", location.pathname + location.s
 render();
 poll();
 // 방문 1회 알림. 저장이 막힌 브라우저는 새로고침마다 새 사람이 되므로 세지 않는다.
-// "지금 접속 중" 신호: 게임 화면이 보이는 동안만 30초마다. 탭을 안 보고 있으면 보내지 않는다.
-let beatAt = 0;
-setInterval(() => {
-  if (document.hidden || $("screen-game").hidden || Date.now() - beatAt < 30000) return;
-  beatAt = Date.now();
-  fetch("/api/beat", { method: "POST", headers: POST_HEADERS, body: "{}" }).catch(() => {});
-}, 1000);
+// ---- 이용 시간 신호: 화면이 보이는 동안 30초마다. 탭을 안 보고 있으면 보내지 않는다 ----
+// 플레이 = 게임 화면을 보는 시간, 체류 = 그 밖의 화면(시작, 설정, 대기실, 규칙, 족보, 이야기).
+// 2분 넘게 터치·클릭·키 입력이 없으면 자리 비움으로 보고 세지 않는다.
+(() => {
+  if (!CLIENT.stored) return;  // 저장이 막힌 브라우저는 매번 새 사람이 되므로 세지 않는다
+  const touch = navigator.maxTouchPoints > 1;
+  let lastInput = performance.now(), lastTick = performance.now(), sentAt = 0;
+  let play = 0, stay = 0;  // 아직 보내지 않은 시간(ms)
+  for (const type of ["pointerdown", "keydown", "touchstart"]) {
+    window.addEventListener(type, () => { lastInput = performance.now(); }, { passive: true, capture: true });
+  }
+  const gameShown = () => !$("screen-game").hidden;
+  const playing = () => gameShown() && !document.querySelector("dialog[open]");
+  function tick() {
+    const now = performance.now();
+    const passed = Math.min(2000, now - lastTick);  // 멈춰 있던 타이머가 한꺼번에 더하지 않게
+    lastTick = now;
+    if (document.hidden || now - lastInput >= 120000) return;
+    if (playing()) play += passed; else stay += passed;
+  }
+  function payload(final) {
+    const data = { play: Math.round(play / 1000), stay: Math.round(stay / 1000), game: gameShown(), final, touch, id: CLIENT.hash };
+    play = stay = 0;
+    sentAt = Date.now();
+    return JSON.stringify(data);
+  }
+  function send() {
+    fetch("/api/beat", { method: "POST", headers: POST_HEADERS, body: payload(false) }).catch(() => {});
+  }
+  // 떠날 때(탭 닫기, 다른 탭으로 가기)는 sendBeacon으로 남은 시간을 보낸다. 운영자 브라우저는 보내지 않는다.
+  function leave() {
+    tick();
+    if (!POST_HEADERS["X-No-Stats"] && navigator.sendBeacon) navigator.sendBeacon("/api/beat", payload(true));
+  }
+  setInterval(() => {
+    tick();
+    if (!document.hidden && Date.now() - sentAt >= 30000) send();
+  }, 1000);
+  window.addEventListener("pagehide", leave);
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) leave();
+    else { lastTick = performance.now(); if (Date.now() - sentAt >= 15000) send(); }
+  });
+  send();  // 기준점
+})();
 
 // 링크에 ?src=instagram 같은 유입 경로가 있으면 함께 보낸다 (서버는 정해 둔 이름만 센다).
 if (CLIENT.stored) {
   const src = (new URLSearchParams(location.search).get("src") || "").slice(0, 16);
-  fetch("/api/visit", { method: "POST", headers: POST_HEADERS, body: JSON.stringify({ src }) }).catch(() => {});
+  fetch("/api/visit", { method: "POST", headers: POST_HEADERS, body: JSON.stringify({ src, touch: navigator.maxTouchPoints > 1 }) }).catch(() => {});
 }
 </script>
 
