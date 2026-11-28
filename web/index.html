@@ -612,22 +612,29 @@
   #tipPop small { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; }
 
   /* ===== 서부 술집 외관 (시작 화면) ===== */
-  #screen-home .saloon { position: relative; width: 84%; max-width: 520px; margin: 14px auto 0; }
-  /* 위가 사각으로 솟은 가짜 정면 지붕: 그 위에 전구 간판을 건다 */
-  .false-front { position: relative; z-index: 1; padding: 22px 7px 8px; background:
+  /* 건물 크기는 화면 높이에 맞춘다. 건물 안의 모든 크기는 건물 너비에 비례(cqw)하므로 높이 = 너비 x 약 1.17.
+     --home-top: 건물 위(여백, 머리글), --home-signs: 아래 네온 버튼들의 높이 */
+  #screen-home { --home-top: 72px; --home-signs: 200px; --side: 84%; }
+  #screen-home .saloon { position: relative; container-type: inline-size; margin: 6px auto 0;
+    width: var(--side); max-width: 520px;
+    width: clamp(200px, min(var(--side), calc((100vh - var(--home-top) - var(--home-signs)) / 1.17)), 520px);
+    width: clamp(200px, min(var(--side), calc((100svh - var(--home-top) - var(--home-signs)) / 1.17)), 520px); }
+  /* 위가 사각으로 솟은 가짜 정면 지붕. 계단 모양은 뒤에 깔린 층(::before)만 자르므로 간판은 잘리지 않는다 */
+  .false-front { position: relative; z-index: 2; padding: 7.2cqw 1.6cqw 1.8cqw; }
+  .false-front::before { content: ""; position: absolute; inset: 0; z-index: -1; background:
       repeating-linear-gradient(90deg, transparent 0 17px, rgba(0, 0, 0, .55) 17px 19px),
       repeating-linear-gradient(90deg, rgba(255, 220, 170, .05) 0 3px, transparent 3px 11px),
       linear-gradient(#6f472b, #54331d);
-    clip-path: polygon(0 26px, 13% 26px, 13% 8px, 24% 8px, 24% 0, 76% 0, 76% 8px, 87% 8px, 87% 26px, 100% 26px, 100% 100%, 0 100%); }
-  .saloon .marquee { margin-top: 0; padding: 20px 16px; border-radius: 12px; }
-  .saloon .star { width: 11px; height: 11px; }
-  .saloon .star.tl, .saloon .star.bl { left: 15px; } .saloon .star.tr, .saloon .star.br { right: 15px; }
-  .saloon .star.tl, .saloon .star.tr { top: 14px; } .saloon .star.bl, .saloon .star.br { bottom: 14px; }
-  .saloon .bulbs.left, .saloon .bulbs.right { top: 18px; bottom: 18px; }
-  .saloon .bulb { width: 6px; height: 6px; }
-  .screen .saloon .marquee-title { font-size: clamp(19px, 7.2vw, 46px); }
-  .saloon .marquee-sub { font-size: clamp(10px, 3vw, 16px); margin-top: 3px; }
-  .saloon .marquee-slogan { font-size: clamp(10.5px, 3vw, 14px); margin-top: 4px; }
+    clip-path: polygon(0 5.4cqw, 13% 5.4cqw, 13% 2.4cqw, 24% 2.4cqw, 24% 0, 76% 0, 76% 2.4cqw, 87% 2.4cqw, 87% 5.4cqw, 100% 5.4cqw, 100% 100%, 0 100%); }
+  .saloon .marquee { margin-top: 0; padding: 3.6cqw 3cqw; border-radius: 3cqw; }
+  .saloon .star { width: 3cqw; height: 3cqw; }
+  .saloon .star.tl, .saloon .star.bl { left: 3.4cqw; } .saloon .star.tr, .saloon .star.br { right: 3.4cqw; }
+  .saloon .star.tl, .saloon .star.tr { top: 3cqw; } .saloon .star.bl, .saloon .star.br { bottom: 3cqw; }
+  .saloon .bulbs.left, .saloon .bulbs.right { top: 4cqw; bottom: 4cqw; }
+  .saloon .bulb { width: clamp(4px, 1.5cqw, 8px); height: clamp(4px, 1.5cqw, 8px); }
+  .screen .saloon .marquee-title { font-size: 8.7cqw; }
+  .saloon .marquee-sub { font-size: 3.2cqw; margin-top: .6cqw; }
+  .saloon .marquee-slogan { font-size: max(9.5px, 3cqw); margin-top: .8cqw; }
   .facade { display: block; width: 100%; height: auto; position: relative; z-index: 1; }
   /* 흙길: 아래로 갈수록 어두운 갈색으로 */
   #screen-home .saloon::after { content: ""; position: absolute; z-index: 0; left: -12%; right: -12%; bottom: -34px; height: 52px; border-radius: 50% 50% 0 0 / 30% 30% 0 0;
@@ -685,14 +692,36 @@
   @media (prefers-reduced-motion: reduce) { #sky .cloud, #sky .shoot, .dust { display: none; } .stars i.twinkle { animation: none; } }
   html.reduce-fx #sky .cloud, html.reduce-fx #sky .shoot, html.reduce-fx .dust { display: none; }
   @media (min-width: 700px) {
-    .saloon .marquee { padding: 26px 30px; }
-    .saloon .star { width: 16px; height: 16px; } .saloon .bulb { width: 8px; height: 8px; }
     .far { width: 17%; } .far-left { right: 101%; } .far-right { left: 101%; }
-    #screen-home .saloon { width: min(520px, 62%, calc((100vh - 360px) * 1.31)); min-width: 380px; }
+    #screen-home { --side: 62%; --home-signs: 108px; }
     .porch-signs .sign-stack { flex-direction: row; justify-content: center; align-items: stretch; }
     #screen-home .neon-title { font-size: 26px; }
     .porch-signs .sign-stack[hidden] { display: none; }
     #screen-home .porch-signs .neon { width: 344px; }
+  }
+  /* 낮은 화면(600px 이하): 장식을 덜고 버튼을 작게 해서 간판과 버튼이 한 화면에 보이게 */
+  @media (max-height: 600px) {
+    #screen-home { --home-signs: 150px; }
+    .saloon .star, .saloon .marquee-slogan { display: none; }
+    #screen-home .porch-signs { margin-top: 6px; padding-bottom: 4px; }
+    #screen-home .sign-stack { gap: 8px; }
+    #screen-home .sign-stack[hidden] { display: none; }
+    #screen-home .porch-signs .neon { min-height: 58px; padding: 4px 10px; }
+    #screen-home .neon svg { width: 32px; height: 32px; }
+    #screen-home .neon-title { font-size: 20px; }
+    #screen-home .neon-text { gap: 2px; }
+  }
+  /* 낮고 가로로 긴 화면: 건물은 왼쪽, 버튼은 오른쪽 */
+  @media (max-height: 600px) and (orientation: landscape) and (min-width: 640px) {
+    #screen-home { --home-signs: 14px; --side: 100%; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 16px; align-items: center; }
+    #screen-home .saloon { width: clamp(180px, calc((100vh - var(--home-top) - var(--home-signs)) / 1.17), 440px);
+      width: clamp(180px, calc((100svh - var(--home-top) - var(--home-signs)) / 1.17), 440px); margin: 6px 0 0 8%; }
+    #screen-home .far { display: none; }
+    #screen-home .saloon::after { bottom: -10px; height: 28px; }
+    #screen-home .porch-signs .sign-stack { flex-direction: column; align-items: center; }
+    #screen-home .porch-signs .sign-stack[hidden] { display: none; }
+    #screen-home .porch-signs .neon { width: min(100%, 300px); }
+    #screen-home .neon::before, #screen-home .neon::after { display: none; }
   }
 
   /* ===== 술집 내부: class="indoor"인 화면(설정, 코드 입력, 대기실)이 함께 쓴다 =====
