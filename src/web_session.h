@@ -244,7 +244,11 @@ public:
     Room& operator=(const Room&) = delete;
 
     // 로비에 있는 방에 들어온다. 첫 번째로 들어온 사람이 방장.
-    bool join(const std::string& token, std::string name, std::string& error, const std::string& clientId = "");
+    // counted가 false인 사람(운영자, 봇)은 통계에 세지 않는다.
+    bool join(const std::string& token, std::string name, std::string& error, const std::string& clientId = "",
+              bool counted = true);
+    bool counted() const;  // 통계에 세는 사람이 한 명이라도 남아 있는 방인가
+    RoomPhase phase() const;
     // 방장만, 대기실에서만. 이름의 참가자를 내보내고 그 접속 토큰을 kicked에 담는다.
     bool kick(const std::string& token, const std::string& name, std::string& kicked, std::string& error);
     // 내보낸 적이 있는 접속 토큰이나 브라우저인가
@@ -298,7 +302,8 @@ private:
         std::string name;
         int seat = -1;      // 게임 시작 전에는 -1
         bool left = false;  // 게임 중에 나간 사람
-        std::string client;  // 브라우저 식별값 (내보내기에만 쓰고, 메모리에만 둔다)
+        std::string client;  // 브라우저 식별값 (내보내기와 "활성 플레이어" 세기에 쓴다. 방과 함께 사라진다)
+        bool counted = true;  // 통계에 세는 사람인가
     };
 
     // 아래 두 함수는 mutex_를 잡은 상태에서 부른다.
@@ -313,7 +318,8 @@ private:
     // 아래 둘은 mutex_를 잡은 상태에서
     bool freeChatLocked() const { return !solo_ && !public_; }
     void addChatLocked(int seat, const std::string& name, const std::string& kind, const std::string& text);
-    void countChatLocked();
+    void countChatLocked(const Member& sender);
+    bool countedLocked() const;
     // 게임 스레드: 혼자 하기에서 큰 판이 끝나면 봇 하나가 가끔 반응한다
     void botReaction(const HandReview& review, int humans);
     void presentLocked(int seat);  // 직접 누른 사람: 자리 비움을 풀고 연속 횟수를 지운다
@@ -404,16 +410,16 @@ public:
     // clientId는 브라우저가 보낸 식별값. 비어 있으면 브라우저별 제한 없이 전체 한도만 적용한다.
     std::string create(const std::string& token, const std::string& name, const RoomSettings& settings,
                        bool solo, std::string& error, CreateFail& fail, const std::string& clientId = "",
-                       Clock::time_point now = Clock::now());
+                       Clock::time_point now = Clock::now(), bool counted = true);
 
     // 코드로 방에 들어간다. 성공하면 접속 토큰. unknownCode는 "그런 방이 없어서" 실패했는지.
     std::string join(const std::string& token, const std::string& code, const std::string& name,
                      std::string& error, bool& unknownCode, Clock::time_point now = Clock::now(),
-                     const std::string& clientId = "");
+                     const std::string& clientId = "", bool counted = true);
     // 공개 방 목록의 식별자로 들어간다. 비공개가 된 방은 없는 방으로 대한다.
     std::string joinPublic(const std::string& token, const std::string& id, const std::string& name,
                            std::string& error, const std::string& clientId = "",
-                           Clock::time_point now = Clock::now());
+                           Clock::time_point now = Clock::now(), bool counted = true);
     // 공개 방만. 들어갈 수 있는 방이 앞에 온다.
     std::vector<PublicRoom> publicRooms() const;
     bool kick(const std::string& token, const std::string& name, std::string& error,
@@ -421,6 +427,8 @@ public:
     bool setPublic(const std::string& token, bool open, std::string& error);
     // 그 방의 누군가가 화면을 보고 있다 (빈 공개 방을 가리는 데만 쓴다)
     void seen(const std::string& token, Clock::time_point now = Clock::now());
+    // 통계 화면용: {진행 중인 게임 수, 열린 방 수}. 통계에 세지 않는 사람만 있는 방은 뺀다.
+    std::pair<int, int> activity() const;
     // 방이 없어진 사람에게 보여 줄 안내. 없으면 빈 문자열.
     std::string closedMessage(const std::string& token) const;
 
@@ -452,7 +460,7 @@ private:
     // mutex_를 잡은 상태에서: 이미 찾은 방에 들어간다. 성공하면 접속 토큰.
     std::string enterLocked(const std::string& token, std::map<std::string, Entry>::iterator it,
                             const std::string& name, std::string& error, const std::string& clientId,
-                            Clock::time_point now, std::vector<std::shared_ptr<Room>>& removed);
+                            Clock::time_point now, std::vector<std::shared_ptr<Room>>& removed, bool counted);
 
     // mutex_를 잡은 상태에서 부른다. 방이 비면 removed로 옮긴다
     // (방은 mutex를 푼 뒤에 없어져야 한다. 소멸자가 게임 스레드를 기다리기 때문).

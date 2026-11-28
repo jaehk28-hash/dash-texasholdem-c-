@@ -43,6 +43,11 @@ std::string clientId(const httplib::Request& req) {
     return Stats::validIdHash(id) ? id : "";
 }
 
+// 통계에서 빼는 요청: 운영자가 표시한 브라우저(?owner=1)와 봇. 값은 저장하지 않는다.
+bool counted(const httplib::Request& req) {
+    return req.get_header_value("X-No-Stats") != "1" && !isBotAgent(req.get_header_value("User-Agent"));
+}
+
 // 토큰 비교에 걸리는 시간으로 값을 짐작할 수 없게, 끝까지 비교한다.
 bool sameSecret(const std::string& given, const std::string& expected) {
     unsigned char diff = given.size() == expected.size() ? 0 : 1;
@@ -246,7 +251,8 @@ void createRoom(const httplib::Request& req, httplib::Response& res, RoomManager
     std::string error;
     CreateFail fail = CreateFail::None;
     const std::string token =
-        rooms.create(sessionToken(req), name, settings, solo, error, fail, clientId(req));
+        rooms.create(sessionToken(req), name, settings, solo, error, fail, clientId(req), RoomManager::Clock::now(),
+                     counted(req));
     if (token.empty()) {
         if (fail == CreateFail::RoomsFull) sendLimit(res, "ROOMS_FULL", error);
         else if (fail == CreateFail::ClientFull) sendLimit(res, "CLIENT_ROOMS_FULL", error);
@@ -282,7 +288,9 @@ void setupRoutes(httplib::Server& server, RoomManager& rooms, const std::string&
             sendError(res, 500, "서버 내부 오류");
         });
 
-    server.Get("/", [indexHtml](const httplib::Request&, httplib::Response& res) {
+    server.Get("/", [indexHtml, &rooms](const httplib::Request& req, httplib::Response& res) {
+        // 링크 미리보기 봇은 스크립트를 실행하지 않으므로 첫 화면 요청에서 센다 (방문에는 넣지 않는다).
+        if (rooms.options().stats && isBotAgent(req.get_header_value("User-Agent"))) rooms.options().stats->botHit();
         res.set_content(indexHtml, "text/html; charset=utf-8");
     });
 
@@ -317,7 +325,7 @@ void setupRoutes(httplib::Server& server, RoomManager& rooms, const std::string&
         std::string error;
         std::string token;
         if (!id.empty()) {  // 공개 방 목록에서 고른 방
-            token = rooms.joinPublic(sessionToken(req), id, name, error, client);
+            token = rooms.joinPublic(sessionToken(req), id, name, error, client, RoomManager::Clock::now(), counted(req));
         } else {
             // 코드를 마구 대입하지 못하게: IP별 합계와 브라우저별 연속 실패를 함께 본다.
             if (limiter->blocked(req.remote_addr) || (!client.empty() && guard->blocked(client, options.wrongCodeLimit))) {
@@ -325,7 +333,8 @@ void setupRoutes(httplib::Server& server, RoomManager& rooms, const std::string&
                 return;
             }
             bool unknownCode = false;
-            token = rooms.join(sessionToken(req), code, name, error, unknownCode, RoomManager::Clock::now(), client);
+            token = rooms.join(sessionToken(req), code, name, error, unknownCode, RoomManager::Clock::now(), client,
+                               counted(req));
             if (unknownCode) {
                 limiter->fail(req.remote_addr);
                 if (!client.empty()) guard->fail(client);
@@ -556,7 +565,14 @@ void setupRoutes(httplib::Server& server, RoomManager& rooms, const std::string&
             const auto found = body.find("src");
             if (found != body.end() && found->second.type == JsonValue::Type::String) src = found->second.text;
         }
-        if (stats) stats->visit(clientId(req), src);
+        if (stats && counted(req)) stats->visit(clientId(req), src);
+        res.set_content("{\"ok\":true}", kJson);
+    });
+
+    // "게임 화면이 열려 있다"는 신호 (30초마다). 방 활동으로는 치지 않는다.
+    server.Post("/api/beat", [&rooms](const httplib::Request& req, httplib::Response& res) {
+        const auto& stats = rooms.options().stats;
+        if (stats && counted(req)) stats->heartbeat(clientId(req));
         res.set_content("{\"ok\":true}", kJson);
     });
 
@@ -571,7 +587,8 @@ void setupRoutes(httplib::Server& server, RoomManager& rooms, const std::string&
         res.set_header("X-Robots-Tag", "noindex, nofollow");
         res.set_header("Cache-Control", "no-store");
         res.set_header("Referrer-Policy", "no-referrer");
-        res.set_content(statsPageHtml(options.stats->summary()), "text/html; charset=utf-8");
+        const auto [playing, open] = rooms.activity();
+        res.set_content(statsPageHtml(options.stats->summary(), playing, open), "text/html; charset=utf-8");
     });
 
     server.Post("/api/room/leave", [&rooms](const httplib::Request& req, httplib::Response& res) {

@@ -7,6 +7,7 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <cctype>
 #include <cerrno>
 #include <chrono>
 #include <cstddef>
@@ -143,6 +144,8 @@ void Stats::load() {
     for (const auto& [key, value] : values) {
         if (key.rfind("seen.", 0) == 0 && value.type == JsonValue::Type::String) {
             seen_[key.substr(5)] = value.text;
+        } else if (key.rfind("play.", 0) == 0 && value.type == JsonValue::Type::String) {
+            played_[key.substr(5)] = value.text;
         } else if (key == "ledger.from" && value.type == JsonValue::Type::String) {
             ledgerFrom_ = value.text;
         } else if (key == "ledger.head" && value.type == JsonValue::Type::String) {
@@ -229,6 +232,69 @@ void Stats::chatSent(bool firstInRoom) {
     bump("chat_sends");
 }
 
+void Stats::handPlayed(const std::string& idHash) {
+    if (!validIdHash(idHash)) return;
+    try {
+        std::lock_guard<std::mutex> lock(mutex_);
+        const std::string date = today();
+        auto found = played_.find(idHash);
+        if (found == played_.end()) {
+            if (played_.size() >= kMaxVisitorIds) return;
+            played_[idHash] = date;
+        } else {
+            const bool counted = !found->second.empty() && found->second.back() == '+';
+            if (found->second.compare(0, date.size(), date) == 0) return;  // 오늘 이미 셌다
+            if (!counted) ++counters_["returning"];  // 처음으로 다른 날에 다시 했다
+            found->second = date + "+";
+        }
+        ++counters_["day." + date + ".active"];
+        changedLocked();
+    } catch (const std::exception& e) {
+        std::fprintf(stderr, "통계 기록 실패: %s\n", e.what());
+    }
+}
+
+long long Stats::onlineLocked(std::time_t now) const {
+    long long count = 0;
+    for (const auto& [id, last] : online_) {
+        if (now - last <= kOnlineSeconds) ++count;
+    }
+    return count;
+}
+
+void Stats::heartbeat(const std::string& idHash) {
+    if (!validIdHash(idHash)) return;
+    try {
+        std::lock_guard<std::mutex> lock(mutex_);
+        const std::time_t now = clock_();
+        for (auto it = online_.begin(); it != online_.end();) {  // 끊긴 접속은 지운다
+            it = now - it->second > kOnlineSeconds ? online_.erase(it) : std::next(it);
+        }
+        if (!online_.count(idHash) && online_.size() >= kMaxVisitorIds) return;
+        online_[idHash] = now;
+        const std::string base = "day." + dateText(now) + ".peak";
+        const long long count = static_cast<long long>(online_.size());
+        if (count > counters_[base]) {
+            counters_[base] = count;
+            counters_[base + "_at"] = (now + kKoreaOffset) % kDaySeconds / 60;
+            changedLocked();
+        }
+    } catch (const std::exception& e) {
+        std::fprintf(stderr, "통계 기록 실패: %s\n", e.what());
+    }
+}
+
+void Stats::botHit() { bump("bot_hits"); }
+
+bool isBotAgent(const std::string& userAgent) {
+    std::string lower;
+    for (const char c : userAgent) lower += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    for (const char* part : {"bot", "crawler", "spider", "preview", "facebookexternalhit", "kakaotalk-scrap", "slurp", "scrapy"}) {
+        if (lower.find(part) != std::string::npos) return true;
+    }
+    return false;
+}
+
 StatsSummary Stats::summary(int days) const {
     const std::time_t now = clock_();
     std::lock_guard<std::mutex> lock(mutex_);
@@ -246,12 +312,19 @@ StatsSummary Stats::summary(int days) const {
     s.publicJoins = get("public_joins");
     s.chatRooms = get("chat_rooms");
     s.chatSends = get("chat_sends");
+    s.online = onlineLocked(now);
+    s.returningPlayers = get("returning");
+    s.botHits = get("bot_hits");
+    s.todayActive = get("day." + dateText(now) + ".active");
     s.totalHands = get("hands");
     for (int i = days - 1; i >= 0; --i) {
         DayStats day;
         day.date = dateText(now - i * kDaySeconds);
         day.hands = get("day." + day.date + ".hands");
         day.visitors = get("day." + day.date + ".visitors");
+        day.active = get("day." + day.date + ".active");
+        day.peak = get("day." + day.date + ".peak");
+        day.peakMinute = get("day." + day.date + ".peak_at");
         s.days.push_back(day);
     }
     s.todayHands = get("day." + dateText(now) + ".hands");
@@ -277,6 +350,10 @@ std::string Stats::serializeLocked() const {
     }
     for (const auto& [id, date] : seen_) {
         out += comma + jsonString("seen." + id) + ":" + jsonString(date);
+        comma = ",\n";
+    }
+    for (const auto& [id, date] : played_) {
+        out += comma + jsonString("play." + id) + ":" + jsonString(date);
         comma = ",\n";
     }
     out += comma + jsonString("ledger.from") + ":" + jsonString(ledgerFrom_);
@@ -403,7 +480,7 @@ void Stats::writerLoop() {
     }
 }
 
-std::string statsPageHtml(const StatsSummary& s) {
+std::string statsPageHtml(const StatsSummary& s, int playingGames, int openRooms) {
     auto card = [](const std::string& title, const std::string& value) {
         return "<div class=\"card\"><b>" + value + "</b><span>" + title + "</span></div>";
     };
@@ -425,7 +502,8 @@ std::string statsPageHtml(const StatsSummary& s) {
     std::string html =
         "<!doctype html><html lang=\"ko\"><head><meta charset=\"utf-8\">"
         "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
-        "<meta name=\"robots\" content=\"noindex, nofollow\"><title>사용 통계</title><style>"
+        "<meta name=\"robots\" content=\"noindex, nofollow\"><meta http-equiv=\"refresh\" content=\"10\">"
+        "<title>사용 통계</title><style>"
         "body{margin:0;padding:14px;background:#0c100e;color:#ece6d6;font-family:system-ui,sans-serif}"
         "main{max-width:720px;margin:0 auto}h1,h2{color:#e8cf85;font-size:18px}h2{font-size:15px;margin-top:22px}"
         ".cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}"
@@ -436,12 +514,23 @@ std::string statsPageHtml(const StatsSummary& s) {
         ".col i{display:block;width:80%;max-height:100px;background:#c9a24b;border-radius:3px 3px 0 0}"
         ".col em{font-style:normal;font-size:10px}.col small{font-size:10px;color:#b9b4a4;padding:2px 0}"
         "p{font-size:12px;color:#b9b4a4}.warn{border:2px solid #e0a33a;border-radius:10px;padding:10px;"
-        "font-size:15px;color:#ffd48a}</style></head><body><main><h1>사용 통계</h1>";
+        "font-size:15px;color:#ffd48a}"
+        ".now{border:2px solid #c9a24b;border-radius:10px;padding:12px;font-size:17px;text-align:center;color:#ece6d6}"
+        ".pair{display:flex;gap:1px;align-items:flex-end;justify-content:center;width:100%;flex:1;min-height:0}"
+        ".pair i{width:42%}.pair i.b,.key.b{background:#8fae9b}.key{display:inline-block;width:10px;height:10px;"
+        "background:#c9a24b;margin:0 4px 0 10px}table{width:100%;border-collapse:collapse;font-size:13px}"
+        "td,th{border-bottom:1px solid #332f22;padding:4px;text-align:right}th:first-child,td:first-child{text-align:left}"
+        "</style></head><body><main><h1>사용 통계</h1>";
+    html += "<p class=\"now\">지금 접속 중 <strong>" + std::to_string(s.online) + "명</strong> / 진행 중인 게임 <strong>" +
+            std::to_string(playingGames) + "개</strong> / 열린 방 <strong>" + std::to_string(openRooms) + "개</strong></p>";
     if (s.ledgerBroken) {
         html += "<p class=\"warn\" role=\"alert\"><strong>ledger 불일치</strong>: data/stats-ledger.jsonl의 내용이 바뀌었거나 "
                 "줄이 사라졌습니다. 공개 저장소의 기록과 비교하세요. 해결될 때까지 새 줄을 덧붙이지 않습니다.</p>";
     }
     html += "<div class=\"cards\">";
+    html += card("오늘 활성 플레이어", std::to_string(s.todayActive));
+    html += card("다시 한 사람", std::to_string(s.returningPlayers));
+    html += card("봇 접속", std::to_string(s.botHits));
     html += card("총 판 수", std::to_string(s.totalHands));
     html += card("오늘 판 수", std::to_string(s.todayHands));
     html += card("고유 방문자 수", std::to_string(s.uniqueVisitors));
@@ -457,7 +546,31 @@ std::string statsPageHtml(const StatsSummary& s) {
     html += card("가장 많은 봇 수", s.topBots < 0 ? "-" : std::to_string(s.topBots));
     html += "</div>";
     html += chart("최근 14일 판 수", &DayStats::hands);
-    html += chart("최근 14일 고유 방문자 수", &DayStats::visitors);
-    html += "<p>숫자만 저장합니다. 닉네임, IP, 카드 내용은 저장하지 않습니다. 날짜는 한국 시간 기준입니다.</p>";
+    // 방문자와 활성 플레이어를 날짜별로 나란히
+    long long top = 1;
+    for (const DayStats& d : s.days) top = std::max({top, d.visitors, d.active});
+    html += "<h2>최근 14일 방문자와 활성 플레이어</h2><p><span class=\"key\"></span>방문자"
+            "<span class=\"key b\"></span>활성 플레이어 (한 판 이상 끝냄)</p><div class=\"chart\">";
+    auto bar = [top](long long value, const char* cls) {
+        return std::string("<i class=\"") + cls + "\" style=\"height:" + std::to_string(value * 100 / top) + "%\"></i>";
+    };
+    for (const DayStats& d : s.days) {
+        html += "<div class=\"col\" title=\"" + d.date + ": 방문자 " + std::to_string(d.visitors) + ", 활성 " +
+                std::to_string(d.active) + "\"><em>" + std::to_string(d.visitors) + "/" + std::to_string(d.active) +
+                "</em><div class=\"pair\">" + bar(d.visitors, "a") + bar(d.active, "b") + "</div><small>" +
+                d.date.substr(8) + "</small></div>";
+    }
+    html += "</div><h2>일별 동시 접속 최고치</h2><table><tr><th>날짜</th><th>최고</th><th>시각(한국)</th></tr>";
+    for (auto d = s.days.rbegin(); d != s.days.rend(); ++d) {
+        char at[16] = "-";
+        if (d->peak > 0) {
+            std::snprintf(at, sizeof(at), "%02d:%02d", static_cast<int>(d->peakMinute / 60),
+                          static_cast<int>(d->peakMinute % 60));
+        }
+        html += "<tr><td>" + d->date + "</td><td>" + std::to_string(d->peak) + "</td><td>" + at + "</td></tr>";
+    }
+    html += "</table>";
+    html += "<p>숫자만 저장합니다. 닉네임, IP, 카드 내용은 저장하지 않습니다. 날짜는 한국 시간 기준입니다.</p>"
+            "<p>사람 수가 아니라 브라우저 수의 추정치입니다. 한 사람이 여러 기기로 들어오면 따로 세어집니다.</p>";
     return html + "</main></body></html>";
 }

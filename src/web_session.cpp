@@ -578,7 +578,21 @@ void Room::addLog(const std::string& line) {
     while (log_.size() > kLogLines) log_.pop_front();
 }
 
-bool Room::join(const std::string& token, std::string name, std::string& error, const std::string& clientId) {
+bool Room::countedLocked() const {
+    return std::any_of(members_.begin(), members_.end(), [](const Member& m) { return !m.left && m.counted; });
+}
+
+bool Room::counted() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return countedLocked();
+}
+
+RoomPhase Room::phase() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return phase_;
+}
+
+bool Room::join(const std::string& token, std::string name, std::string& error, const std::string& clientId, bool counted) {
     if (!cleanNickname(name, error)) return false;
     std::lock_guard<std::mutex> lock(mutex_);
     if (phase_ != RoomPhase::Lobby) {
@@ -602,7 +616,7 @@ bool Room::join(const std::string& token, std::string name, std::string& error, 
             return false;
         }
     }
-    members_.push_back(Member{token, name, -1, false, clientId});
+    members_.push_back(Member{token, name, -1, false, clientId, counted});
     return true;
 }
 
@@ -757,7 +771,7 @@ bool Room::start(const std::string& token, std::string& error) {
     // 끝난 게임의 스레드를 정리하고 새로 시작한다 (mutex_를 풀고 기다려야 한다).
     if (thread_.joinable()) thread_.join();
     thread_ = std::thread([this, names, botCount, seed] { run(names, botCount, seed); });
-    if (options_.stats) options_.stats->gameStarted(solo_, settings_.bots);
+    if (options_.stats && counted()) options_.stats->gameStarted(solo_, settings_.bots);
     return true;
 }
 
@@ -1091,8 +1105,9 @@ void Room::addChatLocked(int seat, const std::string& name, const std::string& k
     while (chat_.size() > static_cast<std::size_t>(CHAT_KEEP)) chat_.pop_front();
 }
 
-void Room::countChatLocked() {
-    if (options_.stats) options_.stats->chatSent(!chatCounted_);
+void Room::countChatLocked(const Member& sender) {
+    if (!sender.counted || !options_.stats) return;
+    options_.stats->chatSent(!chatCounted_);
     chatCounted_ = true;
 }
 
@@ -1117,7 +1132,7 @@ bool Room::react(const std::string& token, std::optional<int> emoji, std::option
         return false;
     }
     addChatLocked(me->seat, me->name, emoji ? "emoji" : "phrase", list[static_cast<std::size_t>(*index)]);
-    countChatLocked();
+    countChatLocked(*me);
     return true;
 }
 
@@ -1148,7 +1163,7 @@ bool Room::say(const std::string& token, std::string text, int& waitMs, std::str
     }
     if (!cleanChatText(text, error)) return false;
     addChatLocked(me->seat, me->name, "text", text);
-    countChatLocked();
+    countChatLocked(*me);
     return true;
 }
 
@@ -1386,7 +1401,23 @@ void Room::run(std::vector<std::string> humanNames, int botCount, unsigned seed)
         std::vector<int> previousRanks;  // 칩 순위 변동(▲▼) 계산용
         while (!game.isOver() && someoneCanPlay()) {
             const HandSummary hand = game.playHand();
-            if (options_.stats) options_.stats->handFinished();
+            if (options_.stats) {
+                bool counted = false;
+                std::vector<std::string> players;  // 이번 판을 함께한 브라우저
+                {
+                    std::lock_guard<std::mutex> lock(mutex_);
+                    counted = countedLocked();
+                    for (const Member& m : members_) {
+                        const std::size_t seat = static_cast<std::size_t>(m.seat);
+                        // 나갔거나 자리를 비운 사람은 "한 판 했다"고 보지 않는다.
+                        if (!m.counted || m.left || m.seat < 0 || seat >= hand.dealtIn.size() || !hand.dealtIn[seat]) continue;
+                        if (seat < away_.size() && away_[seat]) continue;
+                        players.push_back(m.client);
+                    }
+                }
+                if (counted) options_.stats->handFinished();
+                for (const std::string& id : players) options_.stats->handPlayed(id);
+            }
             auto tables = snapshots();
             {
                 std::lock_guard<std::mutex> lock(mutex_);
@@ -1438,7 +1469,7 @@ void RoomManager::leaveLocked(const std::string& token, std::vector<std::shared_
 
 std::string RoomManager::create(const std::string& token, const std::string& name,
                                 const RoomSettings& settings, bool solo, std::string& error,
-                                CreateFail& fail, const std::string& clientId, Clock::time_point now) {
+                                CreateFail& fail, const std::string& clientId, Clock::time_point now, bool counted) {
     fail = CreateFail::Invalid;
     std::string nickname = name;
     // 옛 방을 떠나기 전에 입력부터 검사한다.
@@ -1480,12 +1511,12 @@ std::string RoomManager::create(const std::string& token, const std::string& nam
 
     // 클라이언트가 보낸 모르는 토큰은 쓰지 않고 새로 발급한다.
     const std::string key = tokens_.count(token) ? token : makeToken();
-    if (!room->join(key, nickname, error, clientId)) return "";
+    if (!room->join(key, nickname, error, clientId, counted)) return "";
     if (solo && !room->start(key, error)) return "";
 
     leaveLocked(key, removed);
     ++roomsCreated_;
-    if (settings.isPublic && !solo && options_.stats) options_.stats->publicRoomCreated();
+    if (settings.isPublic && !solo && counted && options_.stats) options_.stats->publicRoomCreated();
     rooms_[code] = Entry{std::move(room), now, clientId, now};
     tokens_[key] = code;
     closed_.erase(token);
@@ -1495,7 +1526,7 @@ std::string RoomManager::create(const std::string& token, const std::string& nam
 
 std::string RoomManager::join(const std::string& token, const std::string& code,
                               const std::string& name, std::string& error, bool& unknownCode,
-                              Clock::time_point now, const std::string& clientId) {
+                              Clock::time_point now, const std::string& clientId, bool counted) {
     unknownCode = false;
     std::vector<std::shared_ptr<Room>> removed;
     std::lock_guard<std::mutex> lock(mutex_);
@@ -1506,11 +1537,11 @@ std::string RoomManager::join(const std::string& token, const std::string& code,
         unknownCode = true;
         return "";
     }
-    return enterLocked(token, it, name, error, clientId, now, removed);
+    return enterLocked(token, it, name, error, clientId, now, removed, counted);
 }
 
 std::string RoomManager::joinPublic(const std::string& token, const std::string& id, const std::string& name,
-                                    std::string& error, const std::string& clientId, Clock::time_point now) {
+                                    std::string& error, const std::string& clientId, Clock::time_point now, bool counted) {
     std::vector<std::shared_ptr<Room>> removed;
     std::lock_guard<std::mutex> lock(mutex_);
     auto it = rooms_.begin();
@@ -1519,12 +1550,12 @@ std::string RoomManager::joinPublic(const std::string& token, const std::string&
         error = "그 방은 지금 들어갈 수 없어요. 목록을 새로 고쳐 주세요.";
         return "";
     }
-    return enterLocked(token, it, name, error, clientId, now, removed);
+    return enterLocked(token, it, name, error, clientId, now, removed, counted);
 }
 
 std::string RoomManager::enterLocked(const std::string& token, std::map<std::string, Entry>::iterator it,
                                      const std::string& name, std::string& error, const std::string& clientId,
-                                     Clock::time_point now, std::vector<std::shared_ptr<Room>>& removed) {
+                                     Clock::time_point now, std::vector<std::shared_ptr<Room>>& removed, bool counted) {
     const std::string code = it->first;
     const std::string key = tokens_.count(token) ? token : makeToken();
     const auto current = tokens_.find(key);
@@ -1534,9 +1565,9 @@ std::string RoomManager::enterLocked(const std::string& token, std::map<std::str
         error = BANNED_MESSAGE;
         return "";
     }
-    if (!it->second.room->join(key, name, error, clientId)) return "";
+    if (!it->second.room->join(key, name, error, clientId, counted)) return "";
     it->second.lastInput = it->second.lastSeen = now;
-    if (it->second.room->isPublic() && options_.stats) options_.stats->publicJoined();
+    if (it->second.room->isPublic() && counted && options_.stats) options_.stats->publicJoined();
     leaveLocked(key, removed);  // 전에 있던 방에서는 나간다
     tokens_[key] = code;
     closed_.erase(token);
@@ -1580,8 +1611,19 @@ bool RoomManager::setPublic(const std::string& token, bool open, std::string& er
         return false;
     }
     if (!room->setPublic(token, open, firstTime, error)) return false;
-    if (firstTime && options_.stats) options_.stats->publicRoomCreated();
+    if (firstTime && options_.stats && room->counted()) options_.stats->publicRoomCreated();
     return true;
+}
+
+std::pair<int, int> RoomManager::activity() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    int playing = 0, open = 0;
+    for (const auto& [code, entry] : rooms_) {
+        if (!entry.room->counted()) continue;
+        ++open;
+        if (entry.room->phase() == RoomPhase::Playing) ++playing;
+    }
+    return {playing, open};
 }
 
 void RoomManager::seen(const std::string& token, Clock::time_point now) {

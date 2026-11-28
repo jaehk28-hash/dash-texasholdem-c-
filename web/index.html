@@ -1294,6 +1294,17 @@ const CLIENT = (() => {
   return { hash: fnv(2166136261) + fnv(3339451297), stored: recall("clientId") === id };
 })();
 const POST_HEADERS = { "Content-Type": "application/json", "X-Client-Id": CLIENT.hash };
+// 운영자 표시: ?owner=1로 한 번 들어오면 이 브라우저는 모든 통계에서 빠진다 (?owner=0으로 해제).
+// 저장이 막혀 있으면 이번에 연 화면에서만 적용된다.
+(() => {
+  const asked = new URLSearchParams(location.search).get("owner");
+  let owner = asked === "1";
+  try {
+    if (asked === "1" || asked === "0") localStorage.setItem("owner", asked);
+    else owner = localStorage.getItem("owner") === "1";
+  } catch (e) {}
+  if (owner) POST_HEADERS["X-No-Stats"] = "1";
+})();
 
 // 화면 글자는 모두 textContent로 넣는다 (HTML 삽입 방지).
 function el(tag, className, text) {
@@ -1753,6 +1764,14 @@ if (location.hash) history.replaceState(null, "", location.pathname + location.s
 render();
 poll();
 // 방문 1회 알림. 저장이 막힌 브라우저는 새로고침마다 새 사람이 되므로 세지 않는다.
+// "지금 접속 중" 신호: 게임 화면이 보이는 동안만 30초마다. 탭을 안 보고 있으면 보내지 않는다.
+let beatAt = 0;
+setInterval(() => {
+  if (document.hidden || $("screen-game").hidden || Date.now() - beatAt < 30000) return;
+  beatAt = Date.now();
+  fetch("/api/beat", { method: "POST", headers: POST_HEADERS, body: "{}" }).catch(() => {});
+}, 1000);
+
 // 링크에 ?src=instagram 같은 유입 경로가 있으면 함께 보낸다 (서버는 정해 둔 이름만 센다).
 if (CLIENT.stored) {
   const src = (new URLSearchParams(location.search).get("src") || "").slice(0, 16);

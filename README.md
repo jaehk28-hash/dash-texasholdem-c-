@@ -211,6 +211,7 @@ PORT=9000 ./build/holdem --web
 | `POST /api/chat/say` | `{"text":"..."}` 비공개 친구 방에서만 |
 | `POST /api/chat/enable`, `/api/chat/mute` | 방장만. `{"on":bool}`, `{"name":"...","on":bool}` |
 | `POST /api/chat/quiet` | 봇 반응 받지 않기 `{"quiet":bool}` |
+| `POST /api/beat` | 접속 중 신호 (통계용) |
 | `POST /api/pace` | 방장만. `pace`: `slow`, `normal`, `fast` (`/api/new`, `/api/room/create`에서도 선택) |
 | `GET /api/state` | 내 시점의 상태. 방이 없으면 `{"hasGame":false, ...}` |
 | `POST /api/action` | `{"action":"fold\|check\|call\|raise\|allin","amount":N,"turnId":T}`. `amount`는 `raise`의 이번 라운드 **총액**, `turnId`는 선택 |
@@ -268,7 +269,18 @@ echo "$STATS_TOKEN"                            # 따로 적어 두세요
 ./build/holdem --web                           # 날짜는 늘 한국 시간으로 센다
 ```
 
-그다음 `http://서버주소:8080/stats?token=위의값` 으로 접속합니다.
+그다음 `http://서버주소:8080/stats?token=위의값` 으로 접속합니다. 10초마다 저절로 새로 고칩니다.
+
+| 항목 | 뜻 |
+|---|---|
+| 지금 접속 중 | 최근 60초 안에 신호를 보낸 브라우저 (게임 화면이 보이는 동안 30초마다). 메모리에서만 셈 |
+| 진행 중인 게임 / 열린 방 | 지금 서버에 있는 방 (혼자 하기 포함) |
+| 동시 접속 최고치 | 하루 중 가장 많았던 때와 그 시각(한국 시간) |
+| 활성 플레이어 | 그날 한 판 이상 끝까지 함께한 브라우저 수 |
+| 다시 한 사람 | 서로 다른 날 이틀 이상 한 판을 끝낸 브라우저 수 |
+| 봇 접속 | 링크 미리보기 봇과 크롤러가 첫 화면을 가져간 횟수. 방문에는 세지 않음 |
+
+**내 접속 빼기**: `주소/?owner=1`로 한 번 들어가면 그 브라우저는 모든 집계에서 빠집니다 (`?owner=0`으로 해제). 브라우저·기기마다 따로 해야 하고, 이미 센 숫자는 줄지 않습니다.
 
 - `STATS_TOKEN`이 없으면 `/stats`는 404입니다. 토큰이 틀려도 404입니다.
 - 토큰을 코드나 git에 적지 마세요. 이 서버는 HTTPS가 없어 주소의 토큰이 암호화되지 않으므로, 다른 곳에서 쓰는 비밀번호를 재사용하지 마세요.

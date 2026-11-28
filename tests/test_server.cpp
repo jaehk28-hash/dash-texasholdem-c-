@@ -600,6 +600,131 @@ void testPublicHttpAndLimits() {
     CHECK(last == 429);
 }
 
+// 지금 접속 중: 60초가 지나면 빠지고, 최고치와 시각만 파일에 남는다
+void testHeartbeatExpiry() {
+    const std::string folder = tempFolder();
+    const std::string path = folder + "/stats.json";
+    std::time_t now = at(10, 14, 5, 0);
+    {
+        Stats stats(path, [&now] { return now; });
+        stats.heartbeat("1111111111111111");
+        stats.heartbeat("2222222222222222");
+        stats.heartbeat("2222222222222222");  // 같은 브라우저는 한 명
+        stats.heartbeat("192.168.0.1");       // 식별값 모양이 아니면 버린다
+        CHECK(stats.summary().online == 2);
+        now += 60;
+        CHECK(stats.summary().online == 2);
+        stats.heartbeat("2222222222222222");
+        now += 1;  // 첫 번째는 61초 동안 조용했다
+        CHECK(stats.summary().online == 1);
+        now += 60;
+        CHECK(stats.summary().online == 0);
+        stats.heartbeat("3333333333333333");
+        const DayStats day = stats.summary().days.back();
+        CHECK(day.peak == 2 && day.peakMinute == 14 * 60 + 5);  // 지나간 최고치는 줄지 않는다
+        CHECK(stats.flush());
+    }
+    const std::string saved = readAll(path);
+    CHECK(has(saved, "\"day.2026-11-10.peak\":2") && !has(saved, "1111111111111111") && !has(saved, "3333333333333333"));
+    Stats again(path, [&now] { return now; });
+    CHECK(again.summary().online == 0 && again.summary().days.back().peak == 2);
+}
+
+// 활성 플레이어와 다시 한 사람. 예전 stats.json의 숫자는 그대로 이어 센다.
+void testDailyActivePlayers() {
+    const std::string folder = tempFolder();
+    const std::string path = folder + "/stats.json";
+    std::ofstream(path) << "{\"hands\":41,\"visits\":7,\"unique\":5,\"day.2026-11-09.visitors\":3,"
+                           "\"seen.aaaaaaaaaaaaaaaa\":\"2026-11-09\"}";
+    std::time_t now = at(10, 12, 0, 0);
+    const auto clock = [&now] { return now; };
+    {
+        Stats stats(path, clock);
+        stats.handPlayed("1111111111111111");
+        stats.handPlayed("1111111111111111");
+        stats.handPlayed("2222222222222222");
+        stats.handPlayed("");
+        CHECK(stats.summary().todayActive == 2 && stats.summary().returningPlayers == 0);
+        now = at(11, 0, 0, 1);  // 한국 시간 자정이 지남
+        stats.handPlayed("1111111111111111");
+        stats.handPlayed("3333333333333333");
+        CHECK(stats.summary().todayActive == 2 && stats.summary().returningPlayers == 1);
+        CHECK(stats.flush());
+    }
+    now = at(12, 9, 0, 0);
+    Stats stats(path, clock);  // 서버를 다시 켜도 이어서
+    stats.handPlayed("1111111111111111");  // 세 번째 날: 다시 한 사람은 늘지 않는다
+    stats.handPlayed("2222222222222222");  // 하루 건너 다시
+    const StatsSummary s = stats.summary();
+    CHECK(s.todayActive == 2 && s.returningPlayers == 2);
+    CHECK(s.totalHands == 41 && s.totalVisits == 7 && s.uniqueVisitors == 5);
+    CHECK(s.days[11].date == "2026-11-10" && s.days[11].active == 2 && s.days[12].active == 2 && s.days[13].active == 2);
+    CHECK(s.days[10].visitors == 3 && s.days[10].active == 0);
+}
+
+void testBotsAndOwnerExcluded() {
+    for (const char* bot : {"Googlebot/2.1", "facebookexternalhit/1.1", "kakaotalk-scrap/1.0", "Slackbot-LinkExpanding",
+                            "SomeCrawler", "Baiduspider", "WhatsApp Preview"}) {
+        CHECK(isBotAgent(bot));
+    }
+    for (const char* person : {"Mozilla/5.0 (iPhone; CPU iPhone OS 17_0) KAKAOTALK 10.4.0", "Mozilla/5.0 Chrome/130", ""}) {
+        CHECK(!isBotAgent(person));
+    }
+
+    const std::string folder = tempFolder();
+    WebOptions options = fastOptions();
+    options.statsToken = "secret-token";
+    options.stats = std::make_shared<Stats>(folder + "/stats.json");
+    TestServer s(options);
+    httplib::Client client("127.0.0.1", s.port);
+    const httplib::Headers person{{"X-Client-Id", "aaaaaaaaaaaaaaaa"}};
+    const httplib::Headers owner{{"X-Client-Id", "bbbbbbbbbbbbbbbb"}, {"X-No-Stats", "1"}};
+    const httplib::Headers bot{{"X-Client-Id", "cccccccccccccccc"}, {"User-Agent", "facebookexternalhit/1.1"}};
+
+    CHECK(client.Get("/", bot)->status == 200 && client.Get("/", person)->status == 200);
+    for (const auto& who : {person, owner, bot}) {
+        CHECK(client.Post("/api/visit", who, "{}", "application/json")->status == 200);
+        CHECK(client.Post("/api/beat", who, "{}", "application/json")->status == 200);
+    }
+    StatsSummary sum = options.stats->summary();
+    CHECK(sum.totalVisits == 1 && sum.online == 1 && sum.botHits == 1);
+
+    // 운영자 혼자 있는 방은 게임 수, 방 수에도 넣지 않는다
+    CHECK(client.Post("/api/new", owner, R"({"bots":2})", "application/json")->status == 200);
+    sum = options.stats->summary();
+    CHECK(sum.soloStarts == 0 && s.rooms.activity() == std::make_pair(0, 0));
+    CHECK(client.Post("/api/new", person, R"({"bots":2})", "application/json")->status == 200);
+    CHECK(options.stats->summary().soloStarts == 1 && s.rooms.activity() == std::make_pair(1, 1));
+
+    const auto page = client.Get("/stats?token=secret-token");
+    CHECK(page && page->status == 200 && has(page->body, "지금 접속 중 <strong>1명</strong>"));
+    CHECK(has(page->body, "진행 중인 게임 <strong>1개</strong> / 열린 방 <strong>1개</strong>"));
+    CHECK(has(page->body, "<b>1</b><span>봇 접속</span>") && has(page->body, "http-equiv=\"refresh\" content=\"10\""));
+    CHECK(has(page->body, "브라우저 수의 추정치") && has(page->body, "noindex") && !has(page->body, "facebookexternalhit"));
+    CHECK(options.stats->flush() && !has(readAll(folder + "/stats.json"), "facebook"));
+}
+
+// 한 판을 끝까지 한 사람만 활성 플레이어가 된다
+void testActivePlayerFromGame() {
+    const std::string folder = tempFolder();
+    WebOptions options = fastOptions();
+    options.nextHandDelay = 60s;
+    options.stats = std::make_shared<Stats>(folder + "/stats.json");
+    for (const bool counted : {true, false}) {
+        Room room(options, RoomSettings{}, "000000", true, 1);
+        std::string error;
+        CHECK(room.join("a", "나", error, "aaaaaaaaaaaaaaaa", counted) && room.start("a", error));
+        CHECK(options.stats->summary().todayActive == (counted ? 0 : 1));
+        CHECK(waitFor([&] {
+            const RoomView v = *room.view("a");
+            if (v.myTurn) room.submit("a", v.table.state.toCall > 0 ? "fold" : "check", {}, v.turnId, error);
+            return v.handOver;
+        }));
+        CHECK(waitFor([&] { return options.stats->summary().todayActive == 1; }));
+    }
+    CHECK(options.stats->summary().totalHands == 1);  // 세지 않는 사람의 판은 빠진다
+}
+
 void testChatHttp() {
     const std::string folder = tempFolder();
     WebOptions options = fastOptions();
@@ -658,6 +783,10 @@ int main() {
     testAbandonedPublicRoomCloses();
     testPublicHttpAndLimits();
     testChatHttp();
+    testHeartbeatExpiry();
+    testDailyActivePlayers();
+    testBotsAndOwnerExcluded();
+    testActivePlayerFromGame();
     std::printf("%d개 검사 중 %d개 실패\n", g_checks, g_failures);
     return g_failures == 0 ? 0 : 1;
 }
