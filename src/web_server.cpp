@@ -236,6 +236,7 @@ void createRoom(const httplib::Request& req, httplib::Response& res, RoomManager
     settings.hint = solo;  // 친구 방에는 승률 힌트가 없다
     std::string name = solo ? "나" : "";
     std::string pace = "slow";
+    std::string difficulty = "normal";
     if (!getString(body, "name", name) || !getInt(body, "chips", settings.config.startingChips) ||
         !getInt(body, "sb", settings.config.smallBlind) ||
         !getInt(body, "bb", settings.config.bigBlind) || !getInt(body, "bots", settings.bots) ||
@@ -245,6 +246,17 @@ void createRoom(const httplib::Request& req, httplib::Response& res, RoomManager
                    !getBool(body, "public", settings.isPublic)))) {
         sendError(res, 400, "설정값의 형식이 잘못되었습니다.");
         return;
+    }
+
+    if (solo) {
+        if (!getString(body, "difficulty", difficulty) ||
+            (difficulty != "easy" && difficulty != "normal" && difficulty != "hard")) {
+            sendError(res, 400, "difficulty는 easy, normal, hard 중 하나여야 합니다.");
+            return;
+        }
+        settings.difficulty = difficulty == "easy"   ? Difficulty::Easy
+                              : difficulty == "hard" ? Difficulty::Hard
+                                                     : Difficulty::Normal;
     }
 
     rooms.cleanupIdle();  // 자리를 만들기 위해 오래된 방을 먼저 정리

@@ -69,7 +69,7 @@ CMake가 없을 때는 컴파일러로 바로 빌드할 수 있습니다 (macOS/
 ```bash
 mkdir -p build
 CORE=(src/card.cpp src/evaluator.cpp src/pot.cpp src/review.cpp src/game.cpp src/equity.cpp src/bots.cpp src/human_player.cpp)
-WEB=(src/web_json.cpp src/web_session.cpp src/web_server.cpp src/stats.cpp src/ledger.cpp src/sha256.cpp src/chat.cpp)
+WEB=(src/web_json.cpp src/web_session.cpp src/web_server.cpp src/stats.cpp src/ledger.cpp src/sha256.cpp src/chat.cpp src/bot_talk.cpp)
 WEBFLAGS=(-isystem third_party -pthread -DHOLDEM_WEB_DIR="\"$PWD/web\"")
 c++ -std=c++17 -O2 -Wall -Wextra -Isrc "${WEBFLAGS[@]}" "${CORE[@]}" "${WEB[@]}" src/main.cpp -o build/holdem
 c++ -std=c++17 -O2 -Wall -Wextra -Isrc "${CORE[@]}" src/bench.cpp -o build/holdem_bench
@@ -140,7 +140,7 @@ PORT=9000 ./build/holdem --web
 | 메뉴 | 내용 |
 |---|---|
 | 혼자 봇과 하기 | 상대 인원(1~5, 기본 3)과 승률 힌트만 고르고 시작. 칩, 블라인드, 속도는 "상세 설정"에 있습니다 |
-| 방 만들기 | 위 설정 + 닉네임, 제한 시간(30초/60초/2분), 봇 수(0~5). **6자리 방 코드**가 나옵니다 |
+| 방 만들기 | 위 설정 + 닉네임, 행동 제한 시간, 연장 횟수, 공개 설정, 봇 수(0~5). **6자리 방 코드**가 나옵니다 |
 | 코드로 들어가기 | 친구에게 받은 코드와 닉네임을 입력 |
 
 ### 친구와 하는 법
@@ -176,7 +176,7 @@ PORT=9000 ./build/holdem --web
 - **자유 입력**은 비공개 친구 방에서만 됩니다. 1~40자, 3초에 한 번이며 10초에 5번 넘게 시도하면 30초 잠깁니다.
 - 링크, 전화번호, 이메일 모양은 거절하고, 작은 내장 목록의 욕설은 `***`로 바꿉니다.
 - 방장은 자유 입력을 켜고 끄거나, 한 사람을 "채팅 금지"할 수 있습니다. 누구든 이름표를 눌러 한 사람을 자기 화면에서 숨길 수 있습니다.
-- 혼자 하기에서는 큰 판이 끝나면 봇이 가끔 반응합니다. "효과 줄이기"를 켜면 보내지 않습니다.
+- 봇이 있는 방에서는 봇이 가끔 반응합니다: 큰 팟을 이기거나 졌을 때, 블러프가 통했을 때, 올인을 마주했을 때, 사람의 이모지·한마디에 답할 때(1~3초 뒤). 봇 한 명은 한 판에 한 번, 봇 전체는 8초에 한 번까지입니다. "효과 줄이기"를 켠 사람에게는 보내지 않습니다.
 - 최근 50개만 서버 메모리에 두고 방과 함께 사라집니다. 파일이나 로그에는 남기지 않고, 통계에는 사용한 방 수와 보낸 횟수만 셉니다.
 
 ### 공통
@@ -207,7 +207,7 @@ PORT=9000 ./build/holdem --web
 | `POST /api/room/leave` | 방 나가기 |
 | `POST /api/continue` | 방장만. 기다리는 단계 넘기기. 선택: `gateId` |
 | `POST /api/skip` | 방장만. 더 행동할 사람이 없을 때 이번 판 빠르게 진행 |
-| `POST /api/chat/react` | `{"emoji":0~5}` 또는 `{"phrase":0~8}` (번호만) |
+| `POST /api/chat/react` | `{"emoji":0~5}` 또는 `{"phrase":0~14}` (번호만) |
 | `POST /api/chat/say` | `{"text":"..."}` 비공개 친구 방에서만 |
 | `POST /api/chat/enable`, `/api/chat/mute` | 방장만. `{"on":bool}`, `{"name":"...","on":bool}` |
 | `POST /api/chat/quiet` | 봇 반응 받지 않기 `{"quiet":bool}` |
@@ -358,6 +358,12 @@ pkill -f "holdem --web"              # 끌 때
 - 칩 총합은 라운드마다/판마다 검사하며, 어긋나면 즉시 프로그램이 멈춥니다 (릴리스 빌드에서도 동작).
 
 ## 봇 5종
+
+- 봇은 **공용 카드, 베팅, 팟, 스택, 포지션, 자기 카드만** 보고 판단합니다. 판단 함수의 입력(`GameState`)에는 남의 홀 카드가 없습니다.
+- 성격은 참여 비율(VPIP), 레이즈 비율(PFR), 공격성, 블러프, 압박에 접는 정도, 슬로우플레이, 생각 속도의 값입니다 (`src/bots.h`).
+- 베팅 크기는 프리플랍 2.2~3.5BB, 이후 팟의 1/3, 1/2, 2/3, 1배, 가끔 오버벳입니다. 큰 팟(20BB 이상)을 잃으면 3판 동안 성격에 따라 더 세지거나 위축됩니다.
+- 생각 시간은 쉬운 폴드 1~2초, 보통 1.5~3.5초, 큰 베팅·올인 3.5~7초에 성격 속도와 ±20%를 곱합니다. 카드 강도는 쓰지 않습니다. 진행 속도에 비례해 줄고 그 속도의 값(5, 3, 1초)을 넘지 않습니다.
+- 혼자 하기의 난이도(쉬움/보통/어려움)는 실수 확률과 블러프 빈도만 바꿉니다.
 
 | 봇 | 성격 |
 |---|---|

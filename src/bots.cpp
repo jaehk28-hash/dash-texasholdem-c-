@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstddef>
 #include <memory>
 #include <vector>
 
@@ -41,6 +42,32 @@ double preflopStrength(const std::array<Card, 2>& hole) {
     }
     // 대략 -1(72o) ~ 20(AA) 범위를 0~1로 바꾼다.
     return std::clamp((points + 1.0) / 21.0, 0.0, 1.0);
+}
+
+double preflopPercentile(const std::array<Card, 2>& hole) {
+    // 1326가지 시작 핸드의 강도를 한 번만 계산해 둔다.
+    static const std::vector<double> all = [] {
+        std::vector<Card> deck;
+        for (int suit = 0; suit < 4; ++suit) {
+            for (int rank = 2; rank <= 14; ++rank) {
+                Card c{};
+                c.rank = rank;
+                c.suit = static_cast<decltype(c.suit)>(suit);
+                deck.push_back(c);
+            }
+        }
+        std::vector<double> values;
+        for (std::size_t i = 0; i < deck.size(); ++i) {
+            for (std::size_t j = i + 1; j < deck.size(); ++j) values.push_back(preflopStrength({deck[i], deck[j]}));
+        }
+        std::sort(values.begin(), values.end());
+        return values;
+    }();
+    const double mine = preflopStrength(hole);
+    const auto range = std::equal_range(all.begin(), all.end(), mine);
+    const double weaker = static_cast<double>(range.first - all.begin());
+    const double same = static_cast<double>(range.second - range.first);
+    return (weaker + same / 2) / static_cast<double>(all.size());
 }
 
 double postflopStrength(const std::array<Card, 2>& hole, const std::vector<Card>& board) {
@@ -91,6 +118,26 @@ double handStrength(const GameState& s) {
 }
 
 // ---------------------------------------------------------------------------
+// 생각하는 시간: 상황만 본다 (카드 강도는 입력이 아니다)
+// ---------------------------------------------------------------------------
+int thinkTimeMs(const GameState& s, const Action& action, double speed, std::mt19937& rng) {
+    std::uniform_real_distribution<double> uniform(0.0, 1.0);
+    const bool someoneAllIn = std::any_of(s.players.begin(), s.players.end(),
+                                          [](const PlayerView& p) { return p.inHand && !p.folded && p.allIn; });
+    const double share = s.pot > 0 ? static_cast<double>(s.toCall) / s.pot : 0.0;
+    const bool big = action.type == ActionType::AllIn || (s.toCall > 0 && (someoneAllIn || s.toCall >= s.bigBlind * 8 ||
+                     share >= 0.45 || (s.myChips > 0 && s.toCall >= s.myChips * 0.35)));
+    double low = 1500, high = 3500;  // 보통의 콜, 체크, 베팅
+    if (big) low = 3500, high = 7000;
+    else if (s.board.empty() && action.type == ActionType::Fold) low = 1000, high = 2000;  // 쉬운 폴드
+    // 범위 안에서는 대부분 무작위이고, 상황의 복잡도에 약하게만 기운다.
+    const double complexity = std::min(1.0, share) * 0.6 + static_cast<double>(s.board.size()) / 5.0 * 0.4;
+    const double at = uniform(rng) * 0.75 + complexity * 0.25;
+    const double jitter = 0.8 + uniform(rng) * 0.4;  // ±20%
+    return static_cast<int>((low + (high - low) * at) * speed * jitter);
+}
+
+// ---------------------------------------------------------------------------
 // 공통 도우미
 // ---------------------------------------------------------------------------
 
@@ -98,125 +145,190 @@ Action Bot::checkOrFold(const GameState& s) const {
     return s.toCall == 0 ? Action::check() : Action::fold();
 }
 
-Action Bot::raiseByPot(const GameState& s, double fraction) const {
-    if (!s.canRaise) return s.toCall == 0 ? Action::check() : Action::call();
-    // "콜한 뒤의 팟"의 fraction 배만큼 더 올린다.
-    const int potAfterCall = s.pot + s.toCall;
-    int target = s.currentBet + static_cast<int>(std::lround(potAfterCall * fraction));
+Action Bot::checkOrCall(const GameState& s) const {
+    return s.toCall == 0 ? Action::check() : Action::call();
+}
+
+Action Bot::raiseTo(const GameState& s, int target) const {
+    if (!s.canRaise) return checkOrCall(s);
     target = std::max(target, s.minRaiseTo);
     if (target >= s.maxRaiseTo) return Action::allIn();
     return Action::raiseTo(target);
 }
 
-// 이미 누가 레이즈해서 "큰 베팅"을 마주한 상황인가? (콜 비용이 빅블라인드의 n배 초과)
-static bool facingRaise(const GameState& s, double bigBlinds = 1.0) {
-    return s.toCall > s.bigBlind * bigBlinds;
+Action Bot::raiseByPot(const GameState& s, double fraction) const {
+    // "콜한 뒤의 팟"의 fraction 배만큼 더 올린다.
+    const int potAfterCall = s.pot + s.toCall;
+    return raiseTo(s, s.currentBet + static_cast<int>(std::lround(potAfterCall * fraction)));
+}
+
+Action Bot::bet(const GameState& s, const BotProfile& p, double strength) {
+    // 크기: 1/3, 1/2, 2/3, 1배, 오버벳. 강할수록, 공격적일수록 큰 쪽이 잦다.
+    const double push = std::clamp(p.aggression * 0.6 + (strength >= 0.75 ? 0.3 : 0.0), 0.0, 1.0);
+    const double weights[5] = {0.35 - 0.25 * push, 0.30, 0.20 + 0.15 * push, 0.10 + 0.20 * push,
+                               strength >= 0.8 || strength < 0.3 ? 0.10 * p.aggression : 0.0};
+    const double sizes[5] = {0.33, 0.5, 0.66, 1.0, 1.25 + 0.35 * rand01()};
+    double total = 0;
+    for (double w : weights) total += w;
+    double pick = rand01() * total;
+    int i = 0;
+    while (i < 4 && pick >= weights[i]) pick -= weights[i++];
+    return raiseByPot(s, sizes[i] * (0.92 + 0.16 * rand01()));
+}
+
+Action Bot::preflopRaise(const GameState& s) {
+    if (s.currentBet <= s.bigBlind) {  // 처음 여는 레이즈
+        return raiseTo(s, static_cast<int>(std::lround((2.2 + 1.3 * rand01()) * s.bigBlind)));
+    }
+    return raiseTo(s, static_cast<int>(std::lround(s.currentBet * (2.5 + rand01()))));
+}
+
+double Bot::mistakeRate() const {
+    return difficulty_ == Difficulty::Easy ? 0.16 : difficulty_ == Difficulty::Hard ? 0.01 : 0.05;
+}
+
+BotProfile Bot::profile() const {
+    BotProfile p = base_;
+    // 틸트: 공격적인 성격은 더 세게, 신중한 성격은 더 위축된다 (설명 문구와 같은 방향).
+    if (tiltHands_ > 0) {
+        if (base_.aggression >= 0.8 || base_.vpip >= 0.5) {
+            if (base_.foldPressure > 0.1) {  // 콜링 스테이션은 변하지 않는다
+                p.aggression = std::min(1.0, p.aggression + 0.12);
+                p.bluff += 0.05;
+            }
+        } else {
+            p.aggression -= 0.12;
+            p.vpip -= 0.04;
+            p.pfr -= 0.03;
+            p.foldPressure += 0.08;
+        }
+    }
+    // 사람의 공개된 행동에 대한 약한 기억 (효과는 0.05로 제한)
+    if (humanActions_ >= 12) {
+        if (humanRaises_ * 5 >= humanActions_ * 2) p.foldPressure = std::max(0.0, p.foldPressure - 0.05);
+        if (humanFolds_ * 5 >= humanActions_ * 3) p.bluff += 0.05;
+    }
+    p.bluff *= difficulty_ == Difficulty::Easy ? 0.6 : difficulty_ == Difficulty::Hard ? 1.15 : 1.0;
+    return p;
+}
+
+void Bot::observe(const PublicAction& a) {
+    if (a.seat >= humanSeats_) return;
+    ++humanActions_;
+    if (a.type == ActionType::Raise) ++humanRaises_;
+    if (a.type == ActionType::Fold) ++humanFolds_;
+}
+
+void Bot::handEnded(int chipDelta, int bigBlind) {
+    if (tiltHands_ > 0) --tiltHands_;
+    if (chipDelta <= -20 * bigBlind) tiltHands_ = 3;  // 큰 팟을 잃으면 몇 판 동안
+}
+
+Action Bot::decide(const GameState& s) {
+    const Action action = choose(s, profile());
+    const bool aggressive = action.type == ActionType::Raise || action.type == ActionType::AllIn;
+    lastBluff_ = aggressive && (s.board.empty() ? preflopPercentile(s.myHole) < 0.5 : postflopStrength(s.myHole, s.board) < 0.3);
+    return action;
 }
 
 // ---------------------------------------------------------------------------
-// 1) 타이트
+// 기본 판단 (타이트, 루즈, 공격형)
 // ---------------------------------------------------------------------------
-Action TightBot::decide(const GameState& s) {
-    const double strength = handStrength(s);
-    const double potOdds = s.toCall > 0 ? static_cast<double>(s.toCall) / (s.pot + s.toCall) : 0.0;
-    const double bbs = static_cast<double>(s.toCall) / s.bigBlind;  // 콜 비용이 빅블라인드 몇 개인가
-
-    if (s.board.empty()) {  // 프리플랍
-        if (strength >= 0.65) return raiseByPot(s, 0.8);  // QQ+, AKs 등: 재레이즈도 한다
-        if (strength >= 0.5) {                            // TT, AKo, AQs 등
-            if (!facingRaise(s)) return raiseByPot(s, 0.7);  // 아무도 안 올렸으면 먼저 레이즈
-            return bbs <= 12 ? Action::call() : Action::fold();
+Action Bot::choose(const GameState& s, const BotProfile& p) {
+    if (s.board.empty()) {  // 프리플랍: 핸드의 순위를 VPIP, PFR과 비교한다
+        const double rank = preflopPercentile(s.myHole);
+        const bool raised = s.currentBet > s.bigBlind;
+        const double bbs = static_cast<double>(s.toCall) / s.bigBlind;
+        if (rank >= 0.965) return preflopRaise(s);  // 최상위 핸드는 접지도 숨기지도 않는다
+        if (rank >= 1.0 - p.pfr) {
+            if (!raised) return preflopRaise(s);
+            if (rank >= 1.0 - p.pfr * 0.35 && chance(p.aggression * 0.6)) return preflopRaise(s);
+            if (bbs <= 6 + (1.0 - p.foldPressure) * 14) return checkOrCall(s);
+            return chance(p.foldPressure) ? checkOrFold(s) : checkOrCall(s);
         }
-        if (strength >= 0.38) {                           // 77~99, AJo, 수티드 커넥터 등
+        if (rank >= 1.0 - p.vpip) {
             if (s.toCall == 0) return Action::check();
-            return bbs <= 4 ? Action::call() : Action::fold();
+            if (bbs <= 1.0 + (1.0 - p.foldPressure) * 6) return Action::call();
+            return chance(mistakeRate()) && bbs <= 8 ? Action::call() : Action::fold();
         }
+        // 범위 밖: 아무도 안 올렸으면 가끔 훔치기
+        if (!raised && s.canRaise && chance(p.bluff * 0.3)) return preflopRaise(s);
+        if (s.toCall > 0 && !raised && rank >= 0.9 - p.vpip && chance(mistakeRate())) return Action::call();
         return checkOrFold(s);
     }
-    // 플랍 이후
-    if (strength >= 0.9) return raiseByPot(s, 0.75);
-    if (strength >= 0.75) return s.toCall == 0 ? raiseByPot(s, 0.65) : Action::call();
+
+    const double strength = postflopStrength(s.myHole, s.board);
+    const double pressure = s.toCall > 0 ? static_cast<double>(s.toCall) / std::max(1, s.pot - s.toCall) : 0.0;
+
+    if (s.toCall == 0) {
+        if (strength >= 0.75) {
+            if (chance(p.slowplay)) {  // 숨기고 기다렸다가 레이즈
+                trapHand_ = s.handNumber;
+                return Action::check();
+            }
+            return bet(s, p, strength);
+        }
+        if (strength >= 0.4) return chance(p.aggression * 0.75) ? bet(s, p, strength) : Action::check();
+        return chance(p.bluff) ? bet(s, p, strength) : Action::check();
+    }
+
+    if (strength >= 0.75) {  // 강한 패는 어떤 경우에도 접지 않는다
+        if (trapHand_ == s.handNumber) return bet(s, p, strength);
+        return strength >= 0.84 && chance(p.aggression * 0.6) ? bet(s, p, strength) : Action::call();
+    }
     if (strength >= 0.55) {
-        if (s.toCall == 0) return raiseByPot(s, 0.5);
-        return potOdds < 0.35 ? Action::call() : Action::fold();
+        if (chance(p.foldPressure * std::max(0.0, pressure - 0.6) * 0.6)) return Action::fold();
+        return chance(p.aggression * 0.15) ? bet(s, p, strength) : Action::call();
     }
-    return checkOrFold(s);
-}
-
-// ---------------------------------------------------------------------------
-// 2) 루즈
-// ---------------------------------------------------------------------------
-Action LooseBot::decide(const GameState& s) {
-    const double strength = handStrength(s);
-    const bool preflop = s.board.empty();
-
-    // 강한 핸드는 가끔 레이즈. 큰 레이즈를 마주했을 때는 아주 강해야만 재레이즈.
-    if (strength >= (preflop ? 0.6 : 0.75) && rand01() < 0.7) {
-        if (!facingRaise(s, 3) || strength >= 0.85) return raiseByPot(s, 0.6);
+    if (strength >= 0.35) {  // 애매한 패
+        double fold = p.foldPressure * std::min(1.5, 0.35 + pressure);
+        if (chance(mistakeRate())) fold = 1.0 - fold;
+        return chance(fold) ? Action::fold() : Action::call();
     }
-    // 가끔 의미 없는 오픈 레이즈
-    if (!facingRaise(s) && rand01() < 0.08) return raiseByPot(s, 0.5);
-
-    // 팟 대비 아주 큰 베팅이 아니면 웬만하면 따라간다.
-    const double minStrength = preflop ? 0.12 : 0.15;
-    const bool tooExpensive = s.toCall > s.pot * 0.9 + s.bigBlind;
-    if (strength >= minStrength && (!tooExpensive || strength >= 0.5)) {
-        return s.toCall == 0 ? Action::check() : Action::call();
-    }
-    if (rand01() < 0.25 && s.toCall <= s.bigBlind * 2) return s.toCall == 0 ? Action::check() : Action::call();
-    return checkOrFold(s);
-}
-
-// ---------------------------------------------------------------------------
-// 3) 공격형
-// ---------------------------------------------------------------------------
-Action AggroBot::decide(const GameState& s) {
-    const double strength = handStrength(s);
-    const bool preflop = s.board.empty();
-
-    // 강한 핸드: 항상 크게 벳/레이즈
-    if (strength >= (preflop ? 0.5 : 0.65)) return raiseByPot(s, 0.9 + 0.6 * rand01());
-    // 블러프: 아직 큰 베팅이 없을 때만 40% 확률로 약한 핸드로 벳/레이즈
-    if (!facingRaise(s) && rand01() < 0.40) return raiseByPot(s, 0.6 + 0.4 * rand01());
-    // 큰 베팅 앞에서는 중간 이상의 핸드로만 콜
-    if (strength >= (preflop ? 0.3 : 0.35) && s.toCall <= s.pot * 0.75) {
-        return s.toCall == 0 ? Action::check() : Action::call();
-    }
-    return checkOrFold(s);
+    if (pressure <= 0.75 && chance(p.bluff * 0.35)) return bet(s, p, strength);
+    if (pressure <= 0.4 && chance((1.0 - p.foldPressure) * 0.35 + mistakeRate())) return Action::call();
+    return Action::fold();
 }
 
 // ---------------------------------------------------------------------------
 // 4) 콜링 스테이션
 // ---------------------------------------------------------------------------
-Action CallingStationBot::decide(const GameState& s) {
+Action CallingStationBot::choose(const GameState& s, const BotProfile& p) {
     const double strength = handStrength(s);
-    // 아주 강할 때만 가끔 레이즈 (큰 베팅을 마주한 상황에서는 그냥 콜)
-    if (strength >= 0.9 && !facingRaise(s, 3) && rand01() < 0.5) return raiseByPot(s, 0.5);
+    const bool bigRaise = s.toCall > s.bigBlind * 3;
+    if (!s.board.empty() && strength >= 0.75 && !bigRaise && chance(1.0 - p.slowplay)) {
+        if (strength >= 0.9 || chance(p.aggression)) return raiseByPot(s, chance(0.5) ? 0.33 : 0.5);
+    }
+    if (s.board.empty() && preflopPercentile(s.myHole) >= 1.0 - p.pfr && !bigRaise && chance(0.5)) return preflopRaise(s);
+    // 아무것도 없는데 가끔 엉뚱하게 건다.
+    if (s.toCall == 0 && !s.board.empty() && chance(p.bluff)) return raiseByPot(s, chance(0.5) ? 0.33 : 1.0);
     // 내 칩의 절반 넘게 내야 하는데 쓰레기 핸드면 그때만 접는다.
     if (s.toCall > 0 && strength < 0.12 && s.toCall > s.myChips * 0.5) return Action::fold();
-    return s.toCall == 0 ? Action::check() : Action::call();
+    return checkOrCall(s);
 }
 
 // ---------------------------------------------------------------------------
 // 5) 확률 계산형
 // ---------------------------------------------------------------------------
-Action OddsBot::decide(const GameState& s) {
-    // 아직 폴드하지 않은 상대 수
+Action OddsBot::choose(const GameState& s, const BotProfile& p) {
+    // 아직 폴드하지 않은 상대 수. 상대 카드는 모르므로 무작위로 뽑아 계산한다.
     const int opponents = std::max(1, s.playersLeft() - 1);
     const double equity = estimateEquity(s.myHole, s.board, opponents, trials_, rng_);
 
     // 팟 오즈: 콜하려고 내는 칩 / (콜 후 팟). 승률이 이보다 높으면 콜이 이득이다.
     const double potOdds = s.toCall > 0 ? static_cast<double>(s.toCall) / (s.pot + s.toCall) : 0.0;
-    // 상대가 많을수록 승률 기준을 높인다 (내 승률이 상대 수에 맞춰 이미 반영돼 있지만,
-    // 레이즈에는 "평균 승률 1/(n+1)"보다 확실히 높아야 한다는 기준을 둔다).
     const double fair = 1.0 / (opponents + 1);
 
-    if (equity > std::max(0.65, fair + 0.3)) return raiseByPot(s, 0.75);   // 밸류 벳
-    if (equity > std::max(0.5, fair + 0.18) && s.toCall == 0) return raiseByPot(s, 0.5);
-    if (s.toCall == 0) return Action::check();
-    // 콜하는 경우: 승률이 팟 오즈를 넘고 약간의 여유(안전 마진)가 있을 때
-    if (equity > potOdds + 0.03) return Action::call();
-    return Action::fold();
+    if (equity > std::max(0.65, fair + 0.3)) {  // 밸류 벳
+        if (!s.board.empty() && chance(p.slowplay)) return checkOrCall(s);
+        return s.board.empty() ? preflopRaise(s) : bet(s, p, equity);
+    }
+    if (equity > std::max(0.5, fair + 0.18) && s.toCall == 0) return s.board.empty() ? preflopRaise(s) : bet(s, p, 0.6);
+    if (s.toCall == 0) return !s.board.empty() && chance(p.bluff) ? bet(s, p, 0.2) : Action::check();
+    // 아슬아슬할 때만 가끔 반대로 고른다.
+    bool call = equity > potOdds + 0.03;
+    if (std::fabs(equity - potOdds) < 0.08 && chance(mistakeRate() * 2)) call = !call;
+    return call ? Action::call() : Action::fold();
 }
 
 // ---------------------------------------------------------------------------

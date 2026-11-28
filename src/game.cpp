@@ -342,7 +342,13 @@ bool Game::bettingRound(int startSeat, Street street) {
         if (actor < 0) break;  // 모두 행동을 마쳤다
 
         Action action = seats_[actor].player->decide(makeState(actor, street));
+        const bool couldCall = currentBet_ > seats_[actor].bet;
+        const int before = currentBet_;
         applyAction(actor, action);
+        // 실제로 적용된 행동을 모두에게 알린다 (올인은 베팅을 올렸는지에 따라 레이즈/콜)
+        PublicAction seen{actor, seats_[actor].folded ? ActionType::Fold : currentBet_ > before ? ActionType::Raise
+                                   : couldCall ? ActionType::Call : ActionType::Check, street};
+        for (Seat& s : seats_) s.player->observe(seen);
         cursor = next(actor);
     }
 
@@ -455,6 +461,9 @@ HandSummary Game::playHand() {
         summary.contributed.push_back(s.contributed);
     }
     history_ = nullptr;
+    for (int i = 0; i < numSeats(); ++i) {
+        if (summary.dealtIn[i]) seats_[i].player->handEnded(summary.endChips[i] - summary.startChips[i], config_.bigBlind);
+    }
     return summary;
 }
 

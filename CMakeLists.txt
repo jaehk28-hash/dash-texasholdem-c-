@@ -33,6 +33,7 @@ add_library(holdem_web
   src/ledger.cpp
   src/sha256.cpp
   src/chat.cpp
+  src/bot_talk.cpp
 )
 # SYSTEM: 외부 헤더에서 나는 경고는 숨긴다
 target_include_directories(holdem_web SYSTEM PUBLIC third_party)

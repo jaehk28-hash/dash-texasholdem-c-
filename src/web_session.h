@@ -27,6 +27,8 @@
 #include <utility>
 #include <vector>
 
+#include "bot_talk.h"
+#include "bots.h"
 #include "chat.h"
 #include "game.h"
 #include "review.h"
@@ -93,7 +95,10 @@ struct WebOptions {
     int joinPerMinute = JOIN_PER_MINUTE;
     int wrongCodeLimit = WRONG_CODE_LIMIT;
     ChatRules chat;                 // 채팅 속도 제한
-    int botReactionPercent = 60;    // 큰 판이 끝났을 때 봇이 반응할 확률
+    bool botsAlwaysTalk = false;    // 테스트용: 성격별 확률 대신 반응할 일이 있으면 항상 말한다
+    std::chrono::milliseconds botGap{8000};       // 봇들의 말 사이의 최소 간격
+    std::chrono::milliseconds replyMin{1000};     // 사람의 이모지에 답하기까지
+    std::chrono::milliseconds replyMax{3000};
     std::shared_ptr<Stats> stats;  // 없으면 통계를 세지 않는다
     std::string statsToken;        // 비어 있으면 /stats는 404
 };
@@ -106,6 +111,7 @@ struct RoomSettings {
     int turnSeconds = 0;  // 결정 한 번에 주어지는 시간. 0이면 제한 없음 (혼자 할 때는 항상 0)
     int extensions = EXTENSIONS_DEFAULT;  // 사람마다 가지는 시간 연장 횟수
     Pace pace = Pace::Slow;  // 처음 진행 속도 (게임 중에도 방장이 바꿀 수 있다)
+    Difficulty difficulty = Difficulty::Normal;  // 봇 난이도 (혼자 하기에서 고른다)
     bool isPublic = false;   // 처음 공개 여부 (대기실에서 방장이 바꿀 수 있다)
 };
 
@@ -139,6 +145,7 @@ struct ChatEntry {
     std::string kind;  // "emoji", "phrase", "text"
     std::string text;
     std::chrono::steady_clock::time_point at;
+    bool bot = false;  // 봇이 보낸 줄 ("효과 줄이기"를 켠 사람에게는 보내지 않는다)
 };
 
 struct ChatView {
@@ -286,7 +293,8 @@ public:
     void setQuiet(const std::string& token, bool quiet);  // 봇 반응 받지 않기 (효과 줄이기)
 
     // token의 시점에서 본 방. 방 사람이 아니면 빈 값.
-    std::optional<RoomView> view(const std::string& token) const;
+    // 예약해 둔 봇의 말 가운데 때가 된 것은 이때 채팅에 올라간다.
+    std::optional<RoomView> view(const std::string& token);
     bool empty() const;  // 남아 있는 사람이 없는가
 
     void stop();  // 게임 스레드에 "그만하라"고 알린다 (기다리지 않는다)
@@ -320,14 +328,24 @@ private:
     void addChatLocked(int seat, const std::string& name, const std::string& kind, const std::string& text);
     void countChatLocked(const Member& sender);
     bool countedLocked() const;
-    // 게임 스레드: 혼자 하기에서 큰 판이 끝나면 봇 하나가 가끔 반응한다
-    void botReaction(const HandReview& review, int humans);
+    // 봇의 반응은 "언제 말할지"를 예약해 두고, 때가 지난 것을 채팅에 올린다 (별도 스레드 없음).
+    // 아래 함수들은 mutex_를 잡은 상태에서
+    bool botsMutedLocked() const;  // 남아 있는 사람 모두가 반응을 껐다
+    bool canTalkLocked(int seat) const;
+    void scheduleLocked(int seat, const BotRemark& remark, std::chrono::milliseconds delay, bool reply);
+    void deliverRemarksLocked();
+    void replyToHumanLocked(const std::string& text);
+    // 게임 스레드: 판이 끝난 뒤, 그리고 봇이 올인을 마주했을 때
+    void reactToHand(const HandReview& review, int humans);
+    void reactToAllIn(int seat);
     void presentLocked(int seat);  // 직접 누른 사람: 자리 비움을 풀고 연속 횟수를 지운다
     bool canSkipLocked(const Member& viewer) const;
     // ---- 아래는 게임 스레드에서만 ----
-    void think(int seat);         // "생각 중" 표시 후 대기
+    // "생각 중" 표시 후 대기. delayMs는 느리게(5초) 기준이며, 진행 속도에 맞춰 줄고 상한을 넘지 않는다.
+    void think(int seat, std::optional<int> delayMs = std::nullopt);
+    std::chrono::milliseconds paceCap();  // 지금 진행 속도의 상한
     void finishAction();          // 공개한 행동을 잠시 보여 주고 표시를 지운다
-    void paceHalf();              // 봇 행동 시간의 절반만큼 대기
+    void paceHold();              // 공개한 행동을 보여 주는 시간
     void waitAt(Waiting point);   // "다음" 입력을 기다린다
     // 끝난 판의 리뷰를 공개하고, 힌트가 켜져 있으면 승률 흐름을 이어서 계산한다.
     void publishReview(const HandSummary& hand, const std::vector<std::string>& names, int humans,
@@ -354,7 +372,20 @@ private:
     std::set<std::string> quiet_;                // 봇 반응을 끈 토큰
     bool chatOn_ = true;
     bool chatCounted_ = false;  // 통계의 "채팅을 쓴 방"에 이미 셌는가
-    std::mt19937 chatRng_{std::random_device{}()};  // 게임 스레드만. 게임의 난수와 섞지 않는다
+    struct Remark {
+        std::chrono::steady_clock::time_point due;
+        int seat;
+        BotRemark remark;
+        bool reply;
+    };
+    std::vector<Remark> remarks_;          // 아직 올리지 않은 봇의 말. 게임이 끝나거나 방이 닫히면 버린다
+    std::map<int, int> spokeHand_;         // 좌석 -> 마지막으로 말한 판
+    std::optional<std::chrono::steady_clock::time_point> lastBotTalk_;
+    int handCount_ = 0;
+    int humans_ = 0;
+    std::set<int> bluffed_;                // 게임 스레드만: 이번 판에 약한 패로 베팅한 봇
+    std::mt19937 talkRng_;                 // mutex_로 보호. 게임의 난수와 섞지 않는다
+    std::mt19937 delayRng_;                // 게임 스레드만
     std::set<std::string> banned_;  // 내보낸 사람의 토큰과 브라우저 식별값
     RoomPhase phase_ = RoomPhase::Lobby;
     unsigned nextSeed_;

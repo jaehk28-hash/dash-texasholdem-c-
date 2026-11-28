@@ -134,7 +134,8 @@ const std::vector<std::string>& chatEmojis() {
 const std::vector<std::string>& chatPhrases() {
     static const std::vector<std::string> list = {"나이스 핸드!", "아깝다...", "이번 판은 내가 접수",
                                                   "블러프 아님. 진짜임", "오 그 베팅 믿어도 돼?", "한 판 더?",
-                                                  "잘 봤어요 ㅎㅎ", "실화냐", "콜?"};
+                                                  "잘 봤어요 ㅎㅎ", "실화냐", "콜?", "그걸 콜해?",
+                                                  "오 이거 위험한데", "어쩔 수 없지", "ㅋㅋㅋ 인정", "과연?", "믿어볼까?"};
     return list;
 }
 

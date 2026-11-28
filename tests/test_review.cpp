@@ -344,7 +344,7 @@ void testSkip() {
     CHECK(room.view("a")->waiting == Waiting::NextHand);
 }
 
-// 진행 속도: 봇 행동은 "생각 중" -> "공개" 순서로 하나씩, 정해진 시간만큼 걸린다.
+// 진행 속도: 봇 행동은 "생각 중" -> "공개" 순서로 하나씩. 걸리는 시간은 상황마다 다르고 설정 값이 상한이다.
 void testPacing() {
     WebOptions options;
     options.seed = 7u;
@@ -368,8 +368,8 @@ void testPacing() {
         std::this_thread::sleep_for(std::chrono::milliseconds(2));
     }
     CHECK(thinking > 0 && revealed.size() == 3);
-    // 연속한 봇 행동 사이에는 최소한 한 사람 몫의 시간이 있다 (조회 간격만큼의 오차 허용)
-    for (std::size_t i = 1; i < revealed.size(); ++i) CHECK(revealed[i] - revealed[i - 1] >= std::chrono::milliseconds(180));
+    // 연속한 봇 행동 사이: 공개를 보여 주는 시간(200/4) + 가장 짧은 생각(약 20ms) 이상 (조회 간격 오차 허용)
+    for (std::size_t i = 1; i < revealed.size(); ++i) CHECK(revealed[i] - revealed[i - 1] >= std::chrono::milliseconds(55));
     Pace pace;
     CHECK(parsePace("fast", pace) && pace == Pace::Fast && !parsePace("turbo", pace));
     CHECK(room.setPace("a", Pace::Fast, error) && room.view("a")->pace == Pace::Fast);

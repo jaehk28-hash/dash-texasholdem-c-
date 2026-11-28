@@ -76,6 +76,13 @@ struct GameState {
     }
 };
 
+// 모두에게 보이는 행동 하나 (누가, 무엇을, 어느 라운드에). 카드 정보는 없다.
+struct PublicAction {
+    int seat = -1;
+    ActionType type = ActionType::Fold;
+    Street street = Street::Preflop;
+};
+
 // 좌석의 포지션 이름 (BTN, SB, BB, UTG, HJ, CO). 이번 판에 참여하지 않는 좌석은 "-".
 // 헤즈업에서는 버튼이 SB를 겸하므로 "BTN/SB"로 표시한다.
 std::string positionName(const GameState& state, int seat);
@@ -92,4 +99,8 @@ public:
     // 내 차례에 호출된다. 현재 상황을 보고 행동을 하나 돌려준다.
     // 규칙에 맞지 않는 행동을 돌려주면 게임이 가장 가까운 합법 행동으로 고친다.
     virtual Action decide(const GameState& state) = 0;
+
+    // 아래 둘은 원하는 플레이어만 쓴다. 모두가 본 일만 알려 준다.
+    virtual void observe(const PublicAction&) {}                    // 누군가 행동했다
+    virtual void handEnded(int /*chipDelta*/, int /*bigBlind*/) {}  // 한 판이 끝나고 내 칩이 변한 양
 };

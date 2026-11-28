@@ -863,7 +863,7 @@
   #advanced > summary::after { content: "▾"; }
   #advanced[open] > summary::after { content: "▴"; }
   #advanced[open] > summary { margin-bottom: 8px; }
-  #screen-setup:not(.solo) #advanced > summary, #screen-setup:not(.solo) .help:not(.keep), #screen-setup:not(.solo) .help-block, #screen-setup.solo #botsRow { display: none; }
+  #screen-setup:not(.solo) #advanced > summary, #screen-setup:not(.solo) .help:not(.keep), #screen-setup:not(.solo) .help-block, #screen-setup.solo #botsRow, #screen-setup:not(.solo) #difficultyRow { display: none; }
   #screen-setup:not(.solo) label.multi { flex-wrap: wrap; row-gap: 0; }
   #screen-setup.solo label { flex-wrap: wrap; row-gap: 0; padding: 4px 0; border-bottom: 1px solid rgba(201, 162, 75, .14); }
   #screen-setup.solo label:last-child { border-bottom: 0; }
@@ -1088,6 +1088,8 @@
         <label>빅 블라인드 <input type="number" id="bb" inputmode="numeric">
           <small class="help">다른 사람이 강제로 내는 큰 판돈이에요. 이 판의 최소 베팅 금액이기도 해요. 보통 스몰 블라인드의 2배예요.</small></label>
         <label id="botsRow">봇 수 <select id="bots"></select></label>
+        <label id="difficultyRow">봇 난이도 <select id="difficulty"><option value="easy">쉬움</option><option value="normal" selected>보통</option><option value="hard">어려움</option></select>
+          <small class="help">쉬움은 봇이 실수를 더 하고 블러프를 덜 해요.</small></label>
         <label class="multi">행동 제한 시간 <select id="turnSeconds">
           <option value="15">15초 (빠름)</option><option value="30">30초</option><option value="45" selected>45초 (기본)</option><option value="60">60초 (여유)</option><option value="0">제한 없음</option>
         </select>
@@ -1624,7 +1626,11 @@ $("startSetup").onclick = () => {
     chips: Number($("chips").value), sb: Number($("sb").value), bb: Number($("bb").value),
     bots: Number($("bots").value), pace: $("pace").value,
   };
-  if (setupSolo) body.hint = $("useHint").checked;
+  if (setupSolo) {
+    body.hint = $("useHint").checked;
+    body.difficulty = $("difficulty").value;
+    remember("difficulty", body.difficulty);
+  }
   if (![body.chips, body.sb, body.bb].every(Number.isInteger)) {
     $("error").textContent = "칩과 블라인드는 정수로 입력하세요.";
     return;
@@ -2508,6 +2514,7 @@ $("bots").addEventListener("change", arrangeRows);
 $("turnSeconds").addEventListener("change", arrangeRows);
 
 // 개인 설정 열고 닫기
+$("difficulty").value = ["easy", "hard"].includes(recall("difficulty")) ? recall("difficulty") : "normal";
 $("showPrefs").onclick = () => {
   $("prefs").hidden = !$("prefs").hidden;
   $("showPrefs").setAttribute("aria-expanded", String(!$("prefs").hidden));
@@ -3503,7 +3510,7 @@ const Talk = (() => {
     if (chat.textWaitMs > 0) textUntil = Math.max(textUntil, Date.now() + chat.textWaitMs);
     enableButtons();
     // "효과 줄이기"를 켠 사람에게는 봇이 반응을 보내지 않게 서버에 알린다
-    if (state.solo && chat.quiet !== still() && Date.now() - quietAsked > 2000) {
+    if (state.settings.bots && chat.quiet !== still() && Date.now() - quietAsked > 2000) {
       quietAsked = Date.now();
       send("/api/chat/quiet", { quiet: still() });
     }

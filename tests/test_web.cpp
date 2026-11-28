@@ -1,4 +1,5 @@
 // test_web.cpp - 웹 모드 테스트 (방 정리, 잘못된 액션 거절, 남의 카드 비노출, 친구 방)
+#include <random>
 #include <algorithm>
 #include <chrono>
 #include <cstddef>
@@ -684,7 +685,9 @@ static void testChatNotInSoloOrPublic() {
 static void testBotReaction() {
     for (const bool quiet : {false, true}) {
         WebOptions options = fastOptions(5);
-        options.botReactionPercent = 100;
+        options.botsAlwaysTalk = true;
+        options.botGap = 0ms;
+        options.replyMin = 0ms;
         RoomSettings settings = soloSettings();
         settings.config.startingChips = 5000;
         settings.bots = 3;
@@ -698,14 +701,106 @@ static void testBotReaction() {
             const RoomView v = *room.view("a");
             if (v.myTurn) room.submit("a", "allin", {}, v.turnId, error);
             most = v.chat.lines.size();
-            // 한 판에 많아야 한 번
-            CHECK(static_cast<int>(most) <= v.table.state.handNumber);
+            // 봇 한 명은 한 판에 많아야 한 번
+            CHECK(static_cast<int>(most) <= v.table.state.handNumber * 3);
             if (v.phase == RoomPhase::Over || (!quiet && most > 0)) break;
             std::this_thread::sleep_for(2ms);
         }
         if (quiet) CHECK(most == 0);
         else CHECK(most >= 1);
     }
+}
+
+// ---------------------------------------------------------------------------
+// 봇의 반응: 매핑 표, 답장, 도배 방지, 효과 줄이기
+// ---------------------------------------------------------------------------
+static void testBotReplyTable() {
+    std::mt19937 rng(1);
+    auto known = [](const BotRemark& r) {
+        const auto& list = r.kind == "emoji" ? chatEmojis() : chatPhrases();
+        return std::find(list.begin(), list.end(), r.text) != list.end();
+    };
+    std::vector<std::string> all = chatEmojis();
+    all.insert(all.end(), chatPhrases().begin(), chatPhrases().end());
+    for (const std::string& said : all) {
+        for (const char* bot : {"타이트", "루즈", "공격형", "콜링스테이션", "확률계산"}) {
+            for (int i = 0; i < 20; ++i) CHECK(known(botReplyRemark(bot, said, rng)));
+        }
+    }
+    for (int i = 0; i < 100; ++i) {  // 요청한 대응
+        const std::string laugh = botReplyRemark("루즈", "😂", rng).text;
+        CHECK(laugh == "😎" || laugh == "ㅋㅋㅋ 인정");
+        CHECK(botReplyRemark("루즈", "나이스 핸드!", rng).text != "실화냐");
+        const std::string bluff = botReplyRemark("확률계산", "블러프 아님. 진짜임", rng).text;
+        CHECK(bluff == "과연?" || bluff == "믿어볼까?");
+    }
+    for (const char* bot : {"타이트", "콜링스테이션"}) CHECK(botTalkRate("공격형") > botTalkRate(bot));
+    for (BotEvent e : {BotEvent::WonBig, BotEvent::LostBig, BotEvent::BluffWorked, BotEvent::FacedAllIn}) {
+        for (int i = 0; i < 50; ++i) CHECK(known(botEventRemark("공격형", e, rng)));
+    }
+}
+
+static int botLines(const RoomView& v) {
+    return static_cast<int>(std::count_if(v.chat.lines.begin(), v.chat.lines.end(),
+                                          [](const ChatView::Line& l) { return l.entry.bot; }));
+}
+
+static void testBotRepliesWithoutSpam() {
+    WebOptions options = fastOptions(4);
+    options.aiAction = 60000ms;  // 첫 봇이 생각하는 동안 채팅만 본다
+    options.chat.cooldown = 0ms;
+    options.replyMin = 30ms;
+    options.replyMax = 40ms;
+    options.botGap = 300ms;
+    RoomSettings settings = soloSettings();
+    settings.bots = 2;
+    Room room(options, settings, "000000", true, 4);
+    std::string error;
+    int wait = 0;
+    CHECK(room.join("a", "나", error) && room.start("a", error));
+    CHECK(waitFor([&] { return room.view("a")->actionPhase == "thinking"; }));
+
+    for (int i = 0; i < 8; ++i) CHECK(room.react("a", 1, {}, wait, error));  // 연타
+    CHECK(botLines(*room.view("a")) == 0);  // 바로 답하지 않는다
+    std::this_thread::sleep_for(80ms);
+    CHECK(botLines(*room.view("a")) == 1);  // 답장은 한 번
+    CHECK(room.react("a", 0, {}, wait, error));  // 간격(300ms) 안
+    std::this_thread::sleep_for(80ms);
+    CHECK(botLines(*room.view("a")) == 1);
+    std::this_thread::sleep_for(300ms);
+    CHECK(room.react("a", {}, 0, wait, error));
+    std::this_thread::sleep_for(80ms);
+    RoomView v = *room.view("a");
+    CHECK(botLines(v) == 2);  // 다른 봇이 답한다
+    std::set<std::string> speakers;
+    for (const auto& line : v.chat.lines) {
+        if (line.entry.bot) speakers.insert(line.entry.name);
+    }
+    CHECK(speakers.size() == 2);
+    std::this_thread::sleep_for(300ms);
+    CHECK(room.react("a", 4, {}, wait, error));  // 두 봇 모두 이번 판에 이미 말했다
+    std::this_thread::sleep_for(80ms);
+    CHECK(botLines(*room.view("a")) == 2);
+
+    // 효과 줄이기: 봇의 말을 보내지 않는다
+    Room quiet(options, settings, "000001", true, 4);
+    CHECK(quiet.join("a", "나", error));
+    quiet.setQuiet("a", true);
+    CHECK(quiet.start("a", error));
+    CHECK(waitFor([&] { return quiet.view("a")->actionPhase == "thinking"; }));
+    CHECK(quiet.react("a", 0, {}, wait, error));
+    std::this_thread::sleep_for(80ms);
+    CHECK(botLines(*quiet.view("a")) == 0);
+
+    // 친구 방: 끈 사람에게만 안 보인다
+    Room friends(options, friendSettings(2), "000002", false, 4);
+    CHECK(friends.join("a", "하나", error) && friends.join("b", "둘", error));
+    friends.setQuiet("b", true);
+    CHECK(friends.start("a", error));
+    CHECK(waitFor([&] { return !friends.view("a")->table.state.players.empty(); }));
+    CHECK(friends.react("a", 0, {}, wait, error));
+    std::this_thread::sleep_for(80ms);
+    CHECK(botLines(*friends.view("a")) == 1 && botLines(*friends.view("b")) == 0);
 }
 
 int main() {
@@ -731,6 +826,8 @@ int main() {
     testChatRoomRules();
     testChatNotInSoloOrPublic();
     testBotReaction();
+    testBotReplyTable();
+    testBotRepliesWithoutSpam();
     std::printf("%d개 검사 중 %d개 실패\n", g_checks, g_failures);
     return g_failures == 0 ? 0 : 1;
 }

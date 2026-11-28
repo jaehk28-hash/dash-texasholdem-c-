@@ -164,9 +164,16 @@ public:
     PacedPlayer(Room& room, std::unique_ptr<Player> bot) : room_(room), bot_(std::move(bot)) {}
     std::string name() const override { return bot_->name(); }
     Action decide(const GameState& state) override {
-        room_.think(state.mySeat);
-        return bot_->decide(state);
+        const Action action = bot_->decide(state);
+        const Bot* bot = dynamic_cast<const Bot*>(bot_.get());
+        if (bot && bot->lastWasBluff()) room_.bluffed_.insert(state.mySeat);
+        room_.reactToAllIn(state.mySeat);
+        const double speed = bot ? bot->profile().thinkSpeed : 1.0;
+        room_.think(state.mySeat, thinkTimeMs(state, action, speed, room_.delayRng_));
+        return action;
     }
+    void observe(const PublicAction& action) override { bot_->observe(action); }
+    void handEnded(int delta, int bigBlind) override { bot_->handEnded(delta, bigBlind); }
 
 private:
     Room& room_;
@@ -546,7 +553,8 @@ Room::Room(const WebOptions& options, const RoomSettings& settings, std::string 
           if (!solo) s.hint = false;
           return s;
       }()),
-      code_(std::move(code)), solo_(solo), id_(makeToken().substr(0, 16)), nextSeed_(seed), hintRng_(seed + 1) {
+      code_(std::move(code)), solo_(solo), id_(makeToken().substr(0, 16)), talkRng_(seed + 2), delayRng_(seed + 3),
+      nextSeed_(seed), hintRng_(seed + 1) {
     pace_ = settings_.pace;
     public_ = everPublic_ = settings_.isPublic && !solo;
 }
@@ -561,6 +569,7 @@ void Room::stop() {
     {
         std::lock_guard<std::mutex> lock(mutex_);
         stopping_ = true;
+        remarks_.clear();
         turnSeat_ = -1;
     }
     cv_.notify_all();
@@ -752,6 +761,8 @@ bool Room::start(const std::string& token, std::string& error) {
         autoStreak_.assign(names.size(), 0);
         away_.assign(names.size(), false);
         gateDeadline_.reset();
+        remarks_.clear();
+        spokeHand_.clear();
         handOver_ = false;
         turnSeat_ = -1;
         pending_.reset();
@@ -798,10 +809,11 @@ bool Room::submit(const std::string& token, const std::string& action, std::opti
     return true;
 }
 
-std::optional<RoomView> Room::view(const std::string& token) const {
+std::optional<RoomView> Room::view(const std::string& token) {
     std::lock_guard<std::mutex> lock(mutex_);
     const Member* me = findMember(token);
     if (!me) return std::nullopt;
+    deliverRemarksLocked();
 
     RoomView v;
     v.phase = phase_;
@@ -819,6 +831,7 @@ std::optional<RoomView> Room::view(const std::string& token) const {
         v.chat.textWaitMs = limit->second.textWait(now, options_.chat);
     }
     for (const ChatEntry& e : chat_) {
+        if (e.bot && v.chat.quiet) continue;  // "효과 줄이기"를 켠 사람에게는 봇의 말을 보내지 않는다
         const auto age = std::chrono::duration_cast<std::chrono::milliseconds>(now - e.at).count();
         v.chat.lines.push_back(ChatView::Line{e, static_cast<int>(std::min<long long>(age, 1000000))});
     }
@@ -997,36 +1010,42 @@ void Room::pause(std::chrono::milliseconds time) {
     if (stopping_) throw StopRequested{};
 }
 
-void Room::paceHalf() {
-    std::chrono::milliseconds time;
-    {
-        std::lock_guard<std::mutex> lock(mutex_);
-        time = options_.aiAction;
-        if (pace_ == Pace::Normal) time = time * 3 / 5;
-        if (pace_ == Pace::Fast) time = time / 5;
-        if (skip_) time = std::min(time, std::chrono::milliseconds(AI_SKIP_MS));
-    }
-    pause(time / 2);
+std::chrono::milliseconds Room::paceCap() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    std::chrono::milliseconds cap = options_.aiAction;
+    if (pace_ == Pace::Normal) cap = cap * 3 / 5;
+    if (pace_ == Pace::Fast) cap = cap / 5;
+    if (skip_) cap = std::min(cap, std::chrono::milliseconds(AI_SKIP_MS));
+    return cap;
 }
+
+void Room::paceHold() { pause(paceCap() / 4); }
 
 void Room::finishAction() {
     if (holdAction_) {
         holdAction_ = false;
-        paceHalf();
+        paceHold();
     }
     std::lock_guard<std::mutex> lock(mutex_);
     actingSeat_ = -1;
     actionPhase_.clear();
 }
 
-void Room::think(int seat) {
+void Room::think(int seat, std::optional<int> delayMs) {
     finishAction();  // 한 번에 한 명씩: 앞사람 행동을 다 보여 준 다음에 시작
     {
         std::lock_guard<std::mutex> lock(mutex_);
         actingSeat_ = seat;
         actionPhase_ = "thinking";
     }
-    paceHalf();
+    const std::chrono::milliseconds cap = paceCap();
+    std::chrono::milliseconds time = cap / 2;
+    if (delayMs) {
+        // 지연은 "느리게(5초)" 기준이라 빠른 속도에서는 비례해서 줄이고, 어느 속도든 상한을 넘지 않는다.
+        const std::chrono::milliseconds scaled(static_cast<long long>(*delayMs) * cap.count() / AI_ACTION_MS);
+        time = std::min(scaled, cap);
+    }
+    pause(time);
     holdAction_ = true;
 }
 
@@ -1131,8 +1150,10 @@ bool Room::react(const std::string& token, std::optional<int> emoji, std::option
         error = "잠깐만요, 조금 뒤에 보낼 수 있어요";
         return false;
     }
+    deliverRemarksLocked();  // 먼저 말한 것이 위에 오게
     addChatLocked(me->seat, me->name, emoji ? "emoji" : "phrase", list[static_cast<std::size_t>(*index)]);
     countChatLocked(*me);
+    replyToHumanLocked(list[static_cast<std::size_t>(*index)]);  // 연출일 뿐, 베팅 판단과는 무관
     return true;
 }
 
@@ -1200,24 +1221,105 @@ void Room::setQuiet(const std::string& token, bool quiet) {
     else quiet_.erase(token);
 }
 
-void Room::botReaction(const HandReview& review, int humans) {
-    if (!solo_) return;
-    // 모두가 본 칩의 오르내림만 보고 정한다. 카드는 보지 않는다.
-    int seat = -1, delta = 0;
-    for (const HandRankRow& row : review.ranking) {
-        if (row.seat >= humans && std::abs(row.delta) > std::abs(delta)) seat = row.seat, delta = row.delta;
+bool Room::botsMutedLocked() const {
+    return std::none_of(members_.begin(), members_.end(),
+                        [this](const Member& m) { return !m.left && !quiet_.count(m.token); });
+}
+
+// 봇 한 명은 한 판에 한 번까지만
+bool Room::canTalkLocked(int seat) const {
+    const auto spoke = spokeHand_.find(seat);
+    if (spoke != spokeHand_.end() && spoke->second == handCount_) return false;
+    return std::none_of(remarks_.begin(), remarks_.end(), [seat](const Remark& r) { return r.seat == seat; });
+}
+
+void Room::scheduleLocked(int seat, const BotRemark& remark, std::chrono::milliseconds delay, bool reply) {
+    if (stopping_ || phase_ != RoomPhase::Playing || botsMutedLocked() || !canTalkLocked(seat)) return;
+    const auto due = std::chrono::steady_clock::now() + delay;
+    // 봇들 전체로도 정해진 간격 안에 두 번 말하지 않는다.
+    if (lastBotTalk_ && due - *lastBotTalk_ < options_.botGap) return;
+    for (const Remark& r : remarks_) {
+        if ((due > r.due ? due - r.due : r.due - due) < options_.botGap) return;
+        if (reply && r.reply) return;  // 사람이 연타해도 답장은 하나
     }
-    if (seat < 0 || std::abs(delta) < settings_.config.bigBlind * 10) return;  // 작은 판에는 조용히
-    std::uniform_int_distribution<int> percent(0, 99), pick(0, 1);
-    if (percent(chatRng_) >= options_.botReactionPercent) return;
-    const bool emoji = pick(chatRng_) == 0;
-    const std::string text = delta > 0 ? (emoji ? chatEmojis()[0] : chatPhrases()[2])   // 😎, 이번 판은 내가 접수
-                                       : (emoji ? chatEmojis()[2] : chatPhrases()[1]);  // 😭, 아깝다...
+    remarks_.push_back(Remark{due, seat, remark, reply});
+    spokeHand_[seat] = handCount_;
+}
+
+void Room::deliverRemarksLocked() {
+    const auto now = std::chrono::steady_clock::now();
+    for (auto it = remarks_.begin(); it != remarks_.end();) {
+        if (it->due > now) {
+            ++it;
+            continue;
+        }
+        if (phase_ == RoomPhase::Playing && !botsMutedLocked() && it->seat < static_cast<int>(seatNames_.size())) {
+            addChatLocked(it->seat, seatNames_[it->seat], it->remark.kind, it->remark.text);
+            chat_.back().bot = true;
+            chat_.back().at = it->due;
+            lastBotTalk_ = it->due;
+        }
+        it = remarks_.erase(it);
+    }
+}
+
+void Room::replyToHumanLocked(const std::string& text) {
+    std::vector<int> seats;
+    std::vector<double> weights;
+    for (int seat = humans_; seat < static_cast<int>(seatNames_.size()); ++seat) {
+        if (!canTalkLocked(seat)) continue;
+        // 칩이 떨어져 탈락한 봇은 말하지 않는다.
+        if (!tables_.empty() && seat < static_cast<int>(tables_[0].state.players.size())) {
+            const PlayerView& p = tables_[0].state.players[seat];
+            if (p.chips == 0 && !p.inHand) continue;
+        }
+        seats.push_back(seat);
+        weights.push_back(botTalkRate(seatNames_[seat]));  // 말이 많은 성격이 먼저 대답한다
+    }
+    if (seats.empty()) return;
+    std::discrete_distribution<std::size_t> who(weights.begin(), weights.end());
+    const int seat = seats[who(talkRng_)];
+    const auto low = options_.replyMin.count(), high = std::max(low, options_.replyMax.count());
+    const std::chrono::milliseconds delay(std::uniform_int_distribution<long long>(low, high)(talkRng_));
+    scheduleLocked(seat, botReplyRemark(seatNames_[seat], text, talkRng_), delay, true);
+}
+
+// 모두가 본 일(칩의 오르내림, 쇼다운 없이 가져간 팟)만으로 정한다.
+void Room::reactToHand(const HandReview& review, int humans) {
     std::lock_guard<std::mutex> lock(mutex_);
-    for (const Member& m : members_) {
-        if (!m.left && quiet_.count(m.token)) return;
+    int seat = -1, delta = 0;
+    BotEvent event = BotEvent::WonBig;
+    for (const HandRankRow& row : review.ranking) {
+        if (row.seat < humans) continue;
+        if (!review.showdown && row.delta > 0 && bluffed_.count(row.seat)) {  // 블러프가 통했다
+            seat = row.seat;
+            event = BotEvent::BluffWorked;
+            break;
+        }
+        if (std::abs(row.delta) >= settings_.config.bigBlind * 10 && std::abs(row.delta) > std::abs(delta)) {
+            seat = row.seat;
+            delta = row.delta;
+            event = delta > 0 ? BotEvent::WonBig : BotEvent::LostBig;
+        }
     }
-    if (seat < static_cast<int>(seatNames_.size())) addChatLocked(seat, seatNames_[seat], emoji ? "emoji" : "phrase", text);
+    if (seat < 0 || seat >= static_cast<int>(seatNames_.size())) return;
+    const std::string& name = seatNames_[seat];
+    if (!options_.botsAlwaysTalk && std::uniform_real_distribution<double>(0, 1)(talkRng_) >= botTalkRate(name)) return;
+    scheduleLocked(seat, botEventRemark(name, event, talkRng_), std::chrono::milliseconds(options_.replyMin), false);
+}
+
+void Room::reactToAllIn(int seat) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (tables_.empty() || seat >= static_cast<int>(seatNames_.size())) return;
+    const auto& players = tables_[0].state.players;  // 공개 정보만 본다
+    bool facing = false;
+    for (int i = 0; i < static_cast<int>(players.size()); ++i) {
+        if (i != seat && players[i].inHand && !players[i].folded && players[i].allIn) facing = true;
+    }
+    if (!facing) return;
+    const std::string& name = seatNames_[seat];
+    if (!options_.botsAlwaysTalk && std::uniform_real_distribution<double>(0, 1)(talkRng_) >= botTalkRate(name) * 0.6) return;
+    scheduleLocked(seat, botEventRemark(name, BotEvent::FacedAllIn, talkRng_), std::chrono::milliseconds(options_.replyMin), false);
 }
 
 bool Room::canSkipLocked(const Member& viewer) const {
@@ -1283,7 +1385,7 @@ void Room::publishReview(const HandSummary& hand, const std::vector<std::string>
     auto review = std::make_shared<const HandReview>(buildHandReview(hand, names, previousRanks));
     previousRanks.assign(names.size(), 0);
     for (const StandingRow& row : review->standings) previousRanks[row.seat] = row.rank;
-    botReaction(*review, humans);
+    reactToHand(*review, humans);
     std::vector<std::optional<ReviewFlow>> flows;
     for (int seat = 0; seat < humans; ++seat) flows.push_back(buildReviewFlow(*review, seat));
     {
@@ -1320,6 +1422,10 @@ void Room::run(std::vector<std::string> humanNames, int botCount, unsigned seed)
         }
         std::vector<std::unique_ptr<Player>> bots = makeAllBots(seed);
         for (int i = 0; i < botCount; ++i) {
+            if (Bot* bot = dynamic_cast<Bot*>(bots[i].get())) {
+                bot->setDifficulty(settings_.difficulty);
+                bot->setHumanSeats(humans);
+            }
             players.push_back(std::make_unique<PacedPlayer>(*this, std::move(bots[i])));
         }
         Game game(settings_.config, std::move(players), seed);
@@ -1341,6 +1447,7 @@ void Room::run(std::vector<std::string> humanNames, int botCount, unsigned seed)
         {
             std::lock_guard<std::mutex> lock(mutex_);
             seatNames_ = seatNames;
+            humans_ = humans;
         }
 
         // 플랍/턴/리버/쇼다운 직전에 멈추고 "다음 단계로"를 기다린다.
@@ -1370,6 +1477,8 @@ void Room::run(std::vector<std::string> humanNames, int botCount, unsigned seed)
             auto tables = snapshots();
             std::lock_guard<std::mutex> lock(mutex_);
             if (line.rfind("=====", 0) == 0) {  // 새 판 시작: 지난 판의 공개 카드를 지운다
+                ++handCount_;
+                bluffed_.clear();
                 revealed_.clear();
                 handOver_ = false;
                 skip_ = false;
@@ -1438,6 +1547,7 @@ void Room::run(std::vector<std::string> humanNames, int botCount, unsigned seed)
 
         std::lock_guard<std::mutex> lock(mutex_);
         phase_ = RoomPhase::Over;
+        remarks_.clear();  // 예약해 둔 말은 버린다
     } catch (const StopRequested&) {
         // 방 정리: 조용히 끝낸다.
     } catch (const std::exception& e) {

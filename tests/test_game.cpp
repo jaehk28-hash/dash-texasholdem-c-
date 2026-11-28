@@ -1,4 +1,5 @@
 // test_game.cpp - 한 판 진행 로직 테스트 (블라인드, 베팅 규칙, 사이드 팟, 봇끼리 대량 시뮬레이션)
+#include <map>
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -596,6 +597,187 @@ static void testBotStatistics() {
     CHECK(aggroRaise > stationRaise + 0.2);
 }
 
+// ---------------------------------------------------------------------------
+// 봇의 공정성: 봇의 입력에는 남의 홀 카드가 없고, 사람의 카드가 달라도 결정이 같다
+// ---------------------------------------------------------------------------
+static std::string describe(const GameState& s) {
+    std::ostringstream out;
+    out << s.handNumber << ' ' << static_cast<int>(s.street) << ' ' << s.mySeat << ' ' << s.button << ' ' << s.pot << ' '
+        << s.currentBet << ' ' << s.toCall << ' ' << s.minRaiseTo << ' ' << s.maxRaiseTo << ' ' << s.canRaise << ' '
+        << s.myChips << ' ' << s.myBet << ' ' << cardToString(s.myHole[0]) << cardToString(s.myHole[1]) << ' ';
+    for (const Card& c : s.board) out << cardToString(c);
+    for (const PlayerView& p : s.players) {
+        out << '|' << p.name << ',' << p.chips << ',' << p.bet << ',' << p.contributed << ',' << p.inHand << p.folded << p.allIn;
+    }
+    return out.str();
+}
+
+// 항상 콜(또는 체크)만 하는 "사람"
+class CallerSpy : public Player {
+public:
+    std::string name() const override { return "사람"; }
+    Action decide(const GameState& s) override { return s.toCall == 0 ? Action::check() : Action::call(); }
+};
+
+// 봇을 감싸서 받은 입력, 고른 행동, 생각 시간을 적어 둔다
+class RecordingBot : public Player {
+public:
+    RecordingBot(std::unique_ptr<Player> bot, std::vector<std::string>& log, std::vector<GameState>& states)
+        : bot_(std::move(bot)), log_(log), states_(states) {}
+    std::string name() const override { return bot_->name(); }
+    Action decide(const GameState& s) override {
+        const Action a = bot_->decide(s);
+        std::mt19937 rng(11);
+        log_.push_back(describe(s) + " => " + std::to_string(static_cast<int>(a.type)) + ":" + std::to_string(a.amount) +
+                       " t" + std::to_string(thinkTimeMs(s, a, 1.0, rng)));
+        states_.push_back(s);
+        return a;
+    }
+    void observe(const PublicAction& a) override { bot_->observe(a); }
+
+private:
+    std::unique_ptr<Player> bot_;
+    std::vector<std::string>& log_;
+    std::vector<GameState>& states_;
+};
+
+static void testBotsIgnoreOthersCards() {
+    int compared = 0;
+    for (unsigned seed = 1; seed <= 30; ++seed) {
+        std::mt19937 shuffle(seed);
+        std::vector<Card> deck;
+        {
+            Deck d;
+            d.shuffle(shuffle);
+            for (int i = 0; i < 52; ++i) deck.push_back(d.draw());
+        }
+        // 6명, 버튼 0 -> 홀 카드는 1번 좌석부터 돌아가므로 0번(사람)은 여섯 번째와 열두 번째 장을 받는다
+        std::vector<Card> other = deck;
+        std::swap(other[5], other[40]);
+        std::swap(other[11], other[41]);
+
+        std::vector<std::string> logs[2];
+        std::vector<GameState> states[2];
+        for (int run = 0; run < 2; ++run) {
+            std::vector<std::unique_ptr<Player>> players;
+            players.push_back(std::make_unique<CallerSpy>());
+            for (auto& bot : makeAllBots(seed)) {
+                dynamic_cast<Bot&>(*bot).setHumanSeats(1);
+                players.push_back(std::make_unique<RecordingBot>(std::move(bot), logs[run], states[run]));
+            }
+            Game game(GameConfig{}, std::move(players), seed);
+            game.setNextButton(0);
+            game.setNextDeck(run == 0 ? deck : other);
+            const HandSummary hand = game.playHand();
+            CHECK(hand.holes[0][0] == (run == 0 ? deck : other)[5] && hand.holes[0][1] == (run == 0 ? deck : other)[11]);
+        }
+        // 사람의 카드만 달라졌는데, 봇이 본 것과 고른 것, 생각 시간이 모두 같다
+        CHECK(!logs[0].empty() && logs[0] == logs[1]);
+        compared += static_cast<int>(logs[0].size());
+
+        // 결정의 확률 분포도 같다 (같은 입력을 여러 시드의 봇에게 물어본다)
+        if (seed <= 3 && !states[0].empty()) {
+            for (std::size_t at = 0; at < states[0].size(); at += 4) {
+                std::map<int, int> a, b;
+                for (unsigned k = 1; k <= 100; ++k) {
+                    AggroBot first(k), second(k);
+                    ++a[static_cast<int>(first.decide(states[0][at]).type)];
+                    ++b[static_cast<int>(second.decide(states[1][at]).type)];
+                }
+                CHECK(a == b);
+            }
+        }
+    }
+    CHECK(compared > 200);
+}
+
+// 성격, 틸트, 난이도, 크기의 다양성, 강한 패는 접지 않기, 생각 시간
+static void testBotHumanLikeness() {
+    TightBot tight(1);
+    AggroBot aggro(1);
+    CallingStationBot station(1);
+    LooseBot loose(1);
+    CHECK(tight.profile().vpip < loose.profile().vpip && loose.profile().vpip < station.profile().vpip);
+    CHECK(aggro.profile().pfr > tight.profile().pfr && aggro.profile().bluff > tight.profile().bluff);
+    CHECK(station.profile().foldPressure < 0.1);
+
+    // 틸트: 큰 팟을 잃으면 3판 동안. 설명 문구("신중함", "세게 베팅", "잘 안 접음")와 같은 방향
+    const BotProfile t0 = tight.profile(), a0 = aggro.profile(), s0 = station.profile();
+    tight.handEnded(-2500, 100);
+    aggro.handEnded(-2500, 100);
+    station.handEnded(-2500, 100);
+    CHECK(tight.tilted() && tight.profile().aggression < t0.aggression && tight.profile().vpip < t0.vpip);
+    CHECK(aggro.profile().aggression > a0.aggression && aggro.profile().bluff > a0.bluff);
+    CHECK(station.profile().aggression == s0.aggression && station.profile().foldPressure == s0.foldPressure);
+    for (int i = 0; i < 3; ++i) tight.handEnded(0, 100);
+    CHECK(!tight.tilted() && tight.profile().vpip == t0.vpip);
+    tight.handEnded(-500, 100);  // 작은 손실에는 변하지 않는다
+    CHECK(!tight.tilted());
+
+    // 난이도는 실수와 블러프만 바꾼다
+    LooseBot easy(1), hard(1);
+    easy.setDifficulty(Difficulty::Easy);
+    hard.setDifficulty(Difficulty::Hard);
+    CHECK(easy.profile().bluff < hard.profile().bluff && easy.profile().vpip == hard.profile().vpip &&
+          easy.profile().aggression == hard.profile().aggression);
+
+    // 사람에 대한 기억은 작게만
+    AggroBot watcher(1);
+    watcher.setHumanSeats(1);
+    for (int i = 0; i < 50; ++i) watcher.observe(PublicAction{0, ActionType::Raise, Street::Preflop});
+    CHECK(a0.foldPressure - watcher.profile().foldPressure <= 0.0501 && watcher.profile().foldPressure < a0.foldPressure);
+
+    // 같은 상황에서도 크기가 여러 가지: 프리플랍 오픈은 2.2~3.5BB
+    std::set<int> opens, bets;
+    GameState pre = makeState("As Ad", "", 150, 100, 100);
+    pre.currentBet = 100;
+    pre.minRaiseTo = 200;
+    GameState flop = makeState("As Ad", "Ac 7d 2h", 600, 0, 0);
+    flop.minRaiseTo = 100;
+    for (unsigned seed = 1; seed <= 300; ++seed) {
+        AggroBot bot(seed);
+        const Action open = bot.decide(pre);
+        if (open.type == ActionType::Raise) opens.insert(open.amount);
+        const Action next = bot.decide(flop);
+        if (next.type == ActionType::Raise) bets.insert(next.amount);
+    }
+    CHECK(opens.size() > 20 && *opens.begin() >= 220 && *opens.rbegin() <= 350);
+    CHECK(bets.size() > 20 && *bets.begin() >= 150 && *bets.rbegin() > 600);  // 팟의 1/3부터 오버벳까지
+
+    // 아주 강한 패는 어떤 난이도에서도 접지 않는다
+    const GameState strong = makeState("As Ad", "Ac 7d 2h", 1200, 800, 800);
+    int folds = 0;
+    for (unsigned seed = 1; seed <= 300; ++seed) {
+        for (auto& bot : makeAllBots(seed)) {
+            dynamic_cast<Bot&>(*bot).setDifficulty(Difficulty::Easy);
+            if (bot->decide(strong).type == ActionType::Fold) ++folds;
+        }
+    }
+    CHECK(folds == 0);
+
+    // 생각 시간: 상황별 범위(±20%)이고, 성격 속도를 곱하며, 카드와는 무관하다
+    std::mt19937 rng(3);
+    GameState call = makeState("7s 2d", "", 300, 100, 100);
+    GameState big = makeState("7s 2d", "Ks Qd Jc", 600, 900, 900);
+    for (int i = 0; i < 500; ++i) {
+        const int fold = thinkTimeMs(call, Action::fold(), 1.0, rng);
+        const int normal = thinkTimeMs(call, Action::call(), 1.0, rng);
+        const int heavy = thinkTimeMs(big, Action::call(), 1.0, rng);
+        CHECK(fold >= 800 && fold <= 2400);
+        CHECK(normal >= 1200 && normal <= 4200);
+        CHECK(heavy >= 2800 && heavy <= 8400);
+    }
+    GameState aces = call;
+    aces.myHole = strong.myHole;
+    for (unsigned seed = 1; seed <= 50; ++seed) {
+        std::mt19937 x(seed), y(seed);
+        CHECK(thinkTimeMs(call, Action::call(), 1.0, x) == thinkTimeMs(aces, Action::call(), 1.0, y));
+    }
+    CHECK(aggro.profile().thinkSpeed < tight.profile().thinkSpeed);
+    OddsBot odds(1);
+    CHECK(odds.profile().thinkSpeed > loose.profile().thinkSpeed);
+}
+
 // 봇 5종 + 타이트 1명이 6인 테이블에서 대량으로 플레이: 칩 보존, 크래시 없음
 static void testBotsPlayManyHands() {
     int hands = 0;
@@ -788,6 +970,8 @@ int main() {
     testEquityKnownValues();
     testBotPersonalities();
     testBotStatistics();
+    testBotsIgnoreOthersCards();
+    testBotHumanLikeness();
     testBotsPlayManyHands();
     testHumanParse();
     testHumanPlayerReprompts();
