@@ -212,6 +212,19 @@ void Stats::handFinished() {
     }
 }
 
+void Stats::bump(const char* key) {
+    try {
+        std::lock_guard<std::mutex> lock(mutex_);
+        ++counters_[key];
+        changedLocked();
+    } catch (const std::exception& e) {
+        std::fprintf(stderr, "통계 기록 실패: %s\n", e.what());
+    }
+}
+
+void Stats::publicRoomCreated() { bump("public_rooms"); }
+void Stats::publicJoined() { bump("public_joins"); }
+
 StatsSummary Stats::summary(int days) const {
     const std::time_t now = clock_();
     std::lock_guard<std::mutex> lock(mutex_);
@@ -225,6 +238,8 @@ StatsSummary Stats::summary(int days) const {
     s.uniqueVisitors = get("unique");
     s.soloStarts = get("solo");
     s.roomStarts = get("room");
+    s.publicRooms = get("public_rooms");
+    s.publicJoins = get("public_joins");
     s.totalHands = get("hands");
     for (int i = days - 1; i >= 0; --i) {
         DayStats day;
@@ -428,6 +443,8 @@ std::string statsPageHtml(const StatsSummary& s) {
     html += card("오늘 방문 수", std::to_string(s.todayVisits));
     html += card("혼자 하기 시작", std::to_string(s.soloStarts));
     html += card("친구 방 시작", std::to_string(s.roomStarts));
+    html += card("공개 방 생성", std::to_string(s.publicRooms));
+    html += card("공개 방 입장", std::to_string(s.publicJoins));
     html += card("게임당 평균 판 수", average);
     html += card("가장 많은 봇 수", s.topBots < 0 ? "-" : std::to_string(s.topBots));
     html += "</div>";

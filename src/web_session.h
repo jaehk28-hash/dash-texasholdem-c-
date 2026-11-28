@@ -21,6 +21,7 @@
 #include <mutex>
 #include <optional>
 #include <random>
+#include <set>
 #include <string>
 #include <thread>
 #include <utility>
@@ -53,6 +54,15 @@ constexpr int ROOM_IDLE_MINUTES = 30;      // 이 시간 동안 입력이 없으
 constexpr int MAX_ROOMS_PER_CLIENT = 2;    // 한 브라우저가 동시에 만들 수 있는 방
 constexpr const char* ROOM_CLOSED_MESSAGE = "오래 쓰지 않아 방이 닫혔어요";
 
+// ===== 공개 방 =====
+constexpr int EMPTY_PUBLIC_MINUTES = 5;  // 아무도 접속해 있지 않은 공개 방은 이 시간 뒤에 닫는다
+constexpr int LIST_PER_MINUTE = 30;      // 브라우저 하나가 1분에 목록을 볼 수 있는 횟수
+constexpr int JOIN_PER_MINUTE = 20;      // 브라우저 하나가 1분에 입장을 시도할 수 있는 횟수
+constexpr int WRONG_CODE_LIMIT = 5;      // 틀린 코드를 연속으로 이만큼 넣으면 1분 동안 막는다
+constexpr const char* KICKED_MESSAGE = "방장이 방에서 내보냈어요";
+constexpr const char* BANNED_MESSAGE = "이 방에는 다시 들어올 수 없어요";
+constexpr const char* BAD_NICKNAME_MESSAGE = "이 닉네임은 쓸 수 없어요";
+
 enum class Pace { Slow, Normal, Fast };
 bool parsePace(const std::string& text, Pace& out);  // "slow", "normal", "fast"
 const char* paceName(Pace pace);
@@ -77,6 +87,10 @@ struct WebOptions {
     int maxPlayers = MAX_PLAYERS_PER_ROOM;
     int idleMinutes = ROOM_IDLE_MINUTES;
     int maxRoomsPerClient = MAX_ROOMS_PER_CLIENT;
+    int emptyPublicMinutes = EMPTY_PUBLIC_MINUTES;
+    int listPerMinute = LIST_PER_MINUTE;
+    int joinPerMinute = JOIN_PER_MINUTE;
+    int wrongCodeLimit = WRONG_CODE_LIMIT;
     std::shared_ptr<Stats> stats;  // 없으면 통계를 세지 않는다
     std::string statsToken;        // 비어 있으면 /stats는 404
 };
@@ -89,7 +103,21 @@ struct RoomSettings {
     int turnSeconds = 0;  // 결정 한 번에 주어지는 시간. 0이면 제한 없음 (혼자 할 때는 항상 0)
     int extensions = EXTENSIONS_DEFAULT;  // 사람마다 가지는 시간 연장 횟수
     Pace pace = Pace::Slow;  // 처음 진행 속도 (게임 중에도 방장이 바꿀 수 있다)
+    bool isPublic = false;   // 처음 공개 여부 (대기실에서 방장이 바꿀 수 있다)
 };
+
+// 공개 방 목록의 한 줄. 방 코드는 담지 않는다.
+struct PublicRoom {
+    std::string id;    // 입장에만 쓰는 임시 식별자
+    std::string name;  // "방장 닉네임의 방" (사용자가 입력하는 글은 없다)
+    int players = 0;
+    int maxPlayers = 0;
+    bool playing = false;  // 게임 중 (중간 입장은 안 된다)
+    int turnSeconds = 0;
+    int chips = 0;
+    int bots = 0;
+};
+std::string publicRoomsJson(const std::vector<PublicRoom>& rooms);
 
 // 설정값이 허용 범위인지 검사한다. solo는 혼자 하기.
 bool validateSettings(const RoomSettings& settings, bool solo, std::string& error);
@@ -127,6 +155,7 @@ struct RoomView {
     std::string code;
     bool solo = false;
     bool isHost = false;
+    bool isPublic = false;
     RoomSettings settings;
     std::vector<MemberInfo> members;  // 방에 있는 사람들 (봇 제외)
 
@@ -186,7 +215,17 @@ public:
     Room& operator=(const Room&) = delete;
 
     // 로비에 있는 방에 들어온다. 첫 번째로 들어온 사람이 방장.
-    bool join(const std::string& token, std::string name, std::string& error);
+    bool join(const std::string& token, std::string name, std::string& error, const std::string& clientId = "");
+    // 방장만, 대기실에서만. 이름의 참가자를 내보내고 그 접속 토큰을 kicked에 담는다.
+    bool kick(const std::string& token, const std::string& name, std::string& kicked, std::string& error);
+    // 내보낸 적이 있는 접속 토큰이나 브라우저인가
+    bool banned(const std::string& token, const std::string& clientId) const;
+    // 방장만, 게임 시작 전에만. 이 방이 처음 공개되면 firstTime이 true.
+    bool setPublic(const std::string& token, bool open, bool& firstTime, std::string& error);
+    bool isPublic() const;
+    // 공개 방 목록에 실을 정보. 비공개, 혼자 하기, 끝난 게임이면 빈 값.
+    std::optional<PublicRoom> publicInfo() const;
+    const std::string& id() const { return id_; }
     // 방을 나간다. 게임 중이면 남은 칩은 자동으로 체크/폴드하며 사라진다.
     void leave(const std::string& token);
     // 방장만. 로비에서 시작하거나, 끝난 게임을 다시 시작한다.
@@ -220,6 +259,7 @@ private:
         std::string name;
         int seat = -1;      // 게임 시작 전에는 -1
         bool left = false;  // 게임 중에 나간 사람
+        std::string client;  // 브라우저 식별값 (내보내기에만 쓰고, 메모리에만 둔다)
     };
 
     // 아래 두 함수는 mutex_를 잡은 상태에서 부른다.
@@ -247,12 +287,16 @@ private:
     const RoomSettings settings_;
     const std::string code_;
     const bool solo_;
+    const std::string id_;  // 공개 목록에 쓰는 식별자. 방 코드와 상관없는 난수
 
     std::mutex startMutex_;  // start()가 동시에 두 번 실행되지 않게 한다
 
     mutable std::mutex mutex_;  // 아래 변수들을 보호한다
     std::condition_variable cv_;
     std::vector<Member> members_;  // 첫 번째 사람(나가지 않은)이 방장
+    bool public_ = false;
+    bool everPublic_ = false;
+    std::set<std::string> banned_;  // 내보낸 사람의 토큰과 브라우저 식별값
     RoomPhase phase_ = RoomPhase::Lobby;
     unsigned nextSeed_;
     bool stopping_ = false;
@@ -311,7 +355,21 @@ public:
 
     // 코드로 방에 들어간다. 성공하면 접속 토큰. unknownCode는 "그런 방이 없어서" 실패했는지.
     std::string join(const std::string& token, const std::string& code, const std::string& name,
-                     std::string& error, bool& unknownCode, Clock::time_point now = Clock::now());
+                     std::string& error, bool& unknownCode, Clock::time_point now = Clock::now(),
+                     const std::string& clientId = "");
+    // 공개 방 목록의 식별자로 들어간다. 비공개가 된 방은 없는 방으로 대한다.
+    std::string joinPublic(const std::string& token, const std::string& id, const std::string& name,
+                           std::string& error, const std::string& clientId = "",
+                           Clock::time_point now = Clock::now());
+    // 공개 방만. 들어갈 수 있는 방이 앞에 온다.
+    std::vector<PublicRoom> publicRooms() const;
+    bool kick(const std::string& token, const std::string& name, std::string& error,
+              Clock::time_point now = Clock::now());
+    bool setPublic(const std::string& token, bool open, std::string& error);
+    // 그 방의 누군가가 화면을 보고 있다 (빈 공개 방을 가리는 데만 쓴다)
+    void seen(const std::string& token, Clock::time_point now = Clock::now());
+    // 방이 없어진 사람에게 보여 줄 안내. 없으면 빈 문자열.
+    std::string closedMessage(const std::string& token) const;
 
     void leave(const std::string& token);
 
@@ -335,7 +393,13 @@ private:
         std::shared_ptr<Room> room;
         Clock::time_point lastInput;
         std::string creator;  // 만든 브라우저의 식별값 (메모리에만 둔다)
+        Clock::time_point lastSeen;
     };
+
+    // mutex_를 잡은 상태에서: 이미 찾은 방에 들어간다. 성공하면 접속 토큰.
+    std::string enterLocked(const std::string& token, std::map<std::string, Entry>::iterator it,
+                            const std::string& name, std::string& error, const std::string& clientId,
+                            Clock::time_point now, std::vector<std::shared_ptr<Room>>& removed);
 
     // mutex_를 잡은 상태에서 부른다. 방이 비면 removed로 옮긴다
     // (방은 mutex를 푼 뒤에 없어져야 한다. 소멸자가 게임 스레드를 기다리기 때문).
@@ -345,6 +409,6 @@ private:
     mutable std::mutex mutex_;  // 아래 변수들을 보호한다
     std::map<std::string, Entry> rooms_;         // 방 코드 -> 방
     std::map<std::string, std::string> tokens_;  // 접속 토큰 -> 방 코드
-    std::map<std::string, Clock::time_point> closed_;  // 방이 닫혔다고 알려 줄 토큰
+    std::map<std::string, std::pair<Clock::time_point, std::string>> closed_;  // 안내를 보여 줄 토큰
     unsigned roomsCreated_ = 0;
 };

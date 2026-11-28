@@ -29,6 +29,8 @@ struct StatsSummary {
     long long uniqueVisitors = 0;
     long long soloStarts = 0;
     long long roomStarts = 0;
+    long long publicRooms = 0;  // 공개 방 생성 수
+    long long publicJoins = 0;  // 공개 방 입장 수
     long long totalHands = 0;
     long long todayHands = 0;
     double handsPerGame = 0;
@@ -53,6 +55,8 @@ public:
     void visit(const std::string& idHash, const std::string& src = "");
     void gameStarted(bool solo, int bots);
     void handFinished();
+    void publicRoomCreated();
+    void publicJoined();
     StatsSummary summary(int days = 14) const;
 
     bool flush();  // 지금 바로 파일에 쓴다. 실패하면 false
@@ -70,6 +74,7 @@ private:
     std::string today() const;
     std::string serializeLocked() const;
     void changedLocked();
+    void bump(const char* key);  // 숫자 하나를 늘린다
     void writerLoop();
 
     const std::string path_;

@@ -124,6 +124,60 @@ private:
     std::map<std::string, Failures> failures_;
 };
 
+// 1분 동안 key마다 limit번까지만 허용한다.
+class RateLimiter {
+public:
+    bool allow(const std::string& key, int limit) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        const auto now = std::chrono::steady_clock::now();
+        if (now - since_ >= std::chrono::minutes(1) || counts_.size() > kMaxKeys) {
+            counts_.clear();
+            since_ = now;
+        }
+        return ++counts_[key] <= limit;
+    }
+
+private:
+    static constexpr std::size_t kMaxKeys = 10000;  // 식별값을 마구 바꿔 보내도 메모리가 늘지 않게
+    std::mutex mutex_;
+    std::map<std::string, int> counts_;
+    std::chrono::steady_clock::time_point since_ = std::chrono::steady_clock::now();
+};
+
+// 브라우저별로, 틀린 코드를 연속으로 limit번 넣으면 1분 동안 막는다. 맞히면 처음부터 다시 센다.
+class WrongCodeGuard {
+public:
+    bool blocked(const std::string& key, int limit) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        const auto it = fails_.find(key);
+        if (it == fails_.end()) return false;
+        if (std::chrono::steady_clock::now() - it->second.last >= std::chrono::minutes(1)) {
+            fails_.erase(it);
+            return false;
+        }
+        return it->second.count >= limit;
+    }
+    void fail(const std::string& key) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (fails_.size() > 10000) fails_.clear();
+        Fails& f = fails_[key];
+        ++f.count;
+        f.last = std::chrono::steady_clock::now();
+    }
+    void success(const std::string& key) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        fails_.erase(key);
+    }
+
+private:
+    struct Fails {
+        int count = 0;
+        std::chrono::steady_clock::time_point last;
+    };
+    std::mutex mutex_;
+    std::map<std::string, Fails> fails_;
+};
+
 using Body = std::map<std::string, JsonValue>;
 
 // 요청 본문을 JSON으로 읽는다. 본문이 비어 있으면 빈 객체로 본다.
@@ -182,7 +236,8 @@ void createRoom(const httplib::Request& req, httplib::Response& res, RoomManager
         !getInt(body, "bb", settings.config.bigBlind) || !getInt(body, "bots", settings.bots) ||
         (solo && !getBool(body, "hint", settings.hint)) || !getString(body, "pace", pace) ||
         !parsePace(pace, settings.pace) ||
-        (!solo && (!getInt(body, "turnSeconds", settings.turnSeconds) || !getInt(body, "extensions", settings.extensions)))) {
+        (!solo && (!getInt(body, "turnSeconds", settings.turnSeconds) || !getInt(body, "extensions", settings.extensions) ||
+                   !getBool(body, "public", settings.isPublic)))) {
         sendError(res, 400, "설정값의 형식이 잘못되었습니다.");
         return;
     }
@@ -242,27 +297,93 @@ void setupRoutes(httplib::Server& server, RoomManager& rooms, const std::string&
     });
 
     auto limiter = std::make_shared<JoinLimiter>();
-    server.Post("/api/room/join", [&rooms, limiter](const httplib::Request& req, httplib::Response& res) {
-        if (limiter->blocked(req.remote_addr)) {
-            sendError(res, 429, "코드를 너무 많이 틀렸습니다. 1분 뒤에 다시 시도해 주세요.");
+    auto guard = std::make_shared<WrongCodeGuard>();
+    auto joins = std::make_shared<RateLimiter>();
+    server.Post("/api/room/join", [&rooms, limiter, guard, joins](const httplib::Request& req, httplib::Response& res) {
+        const WebOptions& options = rooms.options();
+        const std::string client = clientId(req);
+        const std::string who = client.empty() ? req.remote_addr : client;
+        if (!joins->allow(who, options.joinPerMinute)) {
+            sendLimit(res, "RATE_LIMIT", "입장을 너무 자주 시도했어요. 1분 뒤에 다시 해 주세요.");
             return;
         }
         Body body;
         if (!readBody(req, res, body)) return;
-        std::string code, name;
-        if (!getString(body, "code", code) || !getString(body, "name", name)) {
-            sendError(res, 400, "code와 name은 문자열이어야 합니다.");
+        std::string code, id, name;
+        if (!getString(body, "code", code) || !getString(body, "id", id) || !getString(body, "name", name)) {
+            sendError(res, 400, "code, id, name은 문자열이어야 합니다.");
             return;
         }
         std::string error;
-        bool unknownCode = false;
-        const std::string token = rooms.join(sessionToken(req), code, name, error, unknownCode);
+        std::string token;
+        if (!id.empty()) {  // 공개 방 목록에서 고른 방
+            token = rooms.joinPublic(sessionToken(req), id, name, error, client);
+        } else {
+            // 코드를 마구 대입하지 못하게: IP별 합계와 브라우저별 연속 실패를 함께 본다.
+            if (limiter->blocked(req.remote_addr) || (!client.empty() && guard->blocked(client, options.wrongCodeLimit))) {
+                sendError(res, 429, "코드를 너무 많이 틀렸습니다. 1분 뒤에 다시 시도해 주세요.");
+                return;
+            }
+            bool unknownCode = false;
+            token = rooms.join(sessionToken(req), code, name, error, unknownCode, RoomManager::Clock::now(), client);
+            if (unknownCode) {
+                limiter->fail(req.remote_addr);
+                if (!client.empty()) guard->fail(client);
+            } else if (!token.empty() && !client.empty()) {
+                guard->success(client);
+            }
+        }
         if (token.empty()) {
-            if (unknownCode) limiter->fail(req.remote_addr);
             sendError(res, 400, error);
             return;
         }
         setSessionCookie(res, token);
+        res.set_content("{\"ok\":true}", kJson);
+    });
+
+    // 공개 방 목록. 비공개 방과 방 코드는 응답에 들어가지 않는다.
+    auto lists = std::make_shared<RateLimiter>();
+    server.Get("/api/rooms/public", [&rooms, lists](const httplib::Request& req, httplib::Response& res) {
+        res.set_header("Cache-Control", "no-store");
+        const std::string client = clientId(req);
+        if (!lists->allow(client.empty() ? req.remote_addr : client, rooms.options().listPerMinute)) {
+            sendLimit(res, "RATE_LIMIT", "목록을 너무 자주 불러왔어요. 잠시 뒤에 다시 해 주세요.");
+            return;
+        }
+        rooms.cleanupIdle();
+        res.set_content(publicRoomsJson(rooms.publicRooms()), kJson);
+    });
+
+    // 방장만, 대기실에서: 참가자 내보내기
+    server.Post("/api/room/kick", [&rooms](const httplib::Request& req, httplib::Response& res) {
+        const std::string token = sessionToken(req);
+        Body body;
+        if (!readBody(req, res, body)) return;
+        std::string name, error;
+        if (!getString(body, "name", name) || !rooms.kick(token, name, error)) {
+            sendError(res, 400, error.empty() ? "name은 문자열이어야 합니다." : error);
+            return;
+        }
+        rooms.touch(token);
+        res.set_content("{\"ok\":true}", kJson);
+    });
+
+    // 방장만, 게임 시작 전: 공개/비공개 바꾸기
+    server.Post("/api/room/visibility", [&rooms](const httplib::Request& req, httplib::Response& res) {
+        const std::string token = sessionToken(req);
+        Body body;
+        if (!readBody(req, res, body)) return;
+        bool open = false;
+        std::string error;
+        if (!body.count("public") || !getBool(body, "public", open)) {
+            sendError(res, 400, "public은 true 또는 false여야 합니다.");
+            return;
+        }
+        if (!rooms.setPublic(token, open, error)) {
+            sendError(res, 400, error);
+            return;
+        }
+        rooms.touch(token);
         res.set_content("{\"ok\":true}", kJson);
     });
 
@@ -385,10 +506,10 @@ void setupRoutes(httplib::Server& server, RoomManager& rooms, const std::string&
         auto room = rooms.find(token);
         std::optional<RoomView> view;
         if (room) view = room->view(token);
+        if (view) rooms.seen(token);
         if (!view) {  // 방이 없으면 설정 화면에 쓸 기본값을 알려 준다
-            const std::string closed = rooms.closedByIdle(token)
-                                           ? ",\"closed\":" + jsonString(ROOM_CLOSED_MESSAGE)
-                                           : "";
+            const std::string message = rooms.closedMessage(token);
+            const std::string closed = message.empty() ? "" : ",\"closed\":" + jsonString(message);
             const GameConfig& c = rooms.options().config;
             res.set_content("{\"hasGame\":false,\"defaults\":{\"chips\":" +
                                 std::to_string(c.startingChips) + ",\"sb\":" +

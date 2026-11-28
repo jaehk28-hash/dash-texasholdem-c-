@@ -703,6 +703,27 @@
   /* 패널 밖의 안내 글도 어두운 바탕 위에 */
   #lobbyWait, #setupWarn:not(:empty), .wrap:has(.indoor:not([hidden])) #error:not(:empty) {
     background: rgba(20, 11, 6, .94); border-radius: 8px; padding: 6px 10px; text-align: center; }
+  /* 공개 방 목록, 대기실 참가자 */
+  .public-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  #publicNote { font-size: 14px; line-height: 1.5; color: #d6c6a8; word-break: keep-all; }
+  #publicNote:empty { display: none; }
+  #publicList { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+  #publicList button { width: 100%; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 2px 10px; text-align: left; }
+  #publicList button b { font-size: 16px; overflow-wrap: anywhere; }
+  #publicList button span { font-size: 13px; }
+  #publicList button small { flex-basis: 100%; font-size: 12px; font-weight: 500; color: #d6c6a8; }
+  #publicList button:disabled { opacity: .6; }
+  #publicCreate { width: 100%; margin-top: 8px; }
+  #screen-lobby #memberList li { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 44px; }
+  #visibilityText { font-size: 14px; color: #d6c6a8; }
+  #joinDialog { width: min(360px, calc(100vw - 16px)); margin: auto; padding: 16px; border: 1px solid #b8933f; border-radius: 12px;
+    background: #1c100a; color: var(--ink); }
+  #joinDialog::backdrop { background: rgba(0, 0, 0, .65); }
+  #joinForm { display: flex; flex-direction: column; gap: 10px; }
+  #joinForm p { font-size: 13px; line-height: 1.5; color: #d6c6a8; word-break: keep-all; }
+  #joinDialogError:empty { display: none; }
+  #joinForm #joinDialogError { color: #ffd48a; }
+
   /* 휴대폰에서 입력 중에는 키보드 위로 올릴 수 있게 아래에 여유를 둔다 */
   html.typing .indoor { padding-bottom: 60vh; }
 
@@ -832,6 +853,16 @@
 <body>
 <!-- 시작 화면의 밤하늘 (장식). 별은 아래 스크립트가 채운다 -->
 <div id="sky" aria-hidden="true"><div class="stars" id="stars"></div><svg class="moon" viewBox="0 0 40 40"><defs><radialGradient id="moon-glow"><stop offset=".35" stop-color="#fff1c8" stop-opacity=".35"/><stop offset="1" stop-color="#fff1c8" stop-opacity="0"/></radialGradient></defs><circle cx="20" cy="20" r="20" fill="url(#moon-glow)"/><path d="M23 9a11 11 0 1 0 8 17a9 9 0 0 1-8-17z" fill="#fbf0cd"/></svg><i class="cloud one"></i><i class="cloud two"></i><i class="shoot"></i></div>
+<dialog id="joinDialog" aria-labelledby="joinDialogTitle">
+  <form method="dialog" id="joinForm">
+    <h3 id="joinDialogTitle"></h3>
+    <label>내 닉네임 <input id="publicName" maxlength="10" placeholder="한글/영문 1~10자" autocomplete="off"></label>
+    <p>공개 방에서는 모르는 사람과 함께해요. 실제 이름이나 개인정보를 쓰지 마세요.</p>
+    <p id="joinDialogError" role="alert"></p>
+    <button type="submit" class="primary" value="join">입장</button>
+    <button type="button" id="joinCancel">취소</button>
+  </form>
+</dialog>
 <div class="wrap">
   <header>
     <svg id="headLogo" class="coupe-icon" role="img" aria-label="Coupe Holdem 로고" viewBox="108 116 224 278"><use href="/logo.svg?v=2#coupe"/></svg>
@@ -929,6 +960,7 @@
 
     <button type="button" class="link" id="rulesToHands">족보는 상단의 족보 버튼에서 볼 수 있어요</button>
     <p class="rules-note">칩이 0이 되면 탈락해요.<br>친구와 할 때는 시간이 다 되면 연장이 먼저 쓰이고, 연장이 없으면 자동으로 체크하거나 폴드해요.</p>
+    <p class="rules-note">공개 방에서는 모르는 사람과 함께해요. 실제 이름이나 개인정보를 닉네임에 쓰지 마세요. 이 게임에는 실제 돈이 없고, 칩은 연습용이에요.</p>
 
     <div class="rules-end">
       <p class="rules-slogan">일단 해보면서 배우는 홀덤!</p>
@@ -979,9 +1011,9 @@
             <svg viewBox="0 0 48 48" aria-hidden="true"><rect x="9" y="7" width="30" height="34" rx="4"/><path d="M24 15v18M15 24h18"/></svg>
             <span class="neon-text"><span class="neon-title">CREATE ROOM</span><span class="neon-sub">방 만들기</span></span>
           </button>
-          <button class="big neon pink" id="goJoin" aria-label="JOIN ROOM, 코드로 방 들어가기">
+          <button class="big neon pink" id="goJoin" aria-label="JOIN ROOM, 코드 입력과 공개 방 목록">
             <svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="15" cy="24" r="9"/><path d="M24 24h19M36 24v8M43 24v6"/></svg>
-            <span class="neon-text"><span class="neon-title">JOIN ROOM</span><span class="neon-sub">코드로 방 들어가기</span></span>
+            <span class="neon-text"><span class="neon-title">JOIN ROOM</span><span class="neon-sub">코드 입력 · 공개 방 목록</span></span>
           </button>
       </div>
     </div>
@@ -1024,6 +1056,10 @@
           <option value="15">15초 (빠름)</option><option value="30">30초</option><option value="45" selected>45초 (기본)</option><option value="60">60초 (여유)</option><option value="0">제한 없음</option>
         </select>
           <small class="help keep">내 차례에 결정할 수 있는 시간이에요.</small></label>
+        <label class="multi">공개 설정 <select id="visibility">
+          <option value="private" selected>비공개 (기본)</option><option value="public">공개</option>
+        </select>
+          <small class="help keep">공개 방은 방 목록에 보이고 누구나 들어올 수 있어요. 비공개 방은 코드를 아는 사람만 들어올 수 있어요.</small></label>
         <label class="multi" id="extensionsRow">연장 횟수 <select id="extensions">
           <option value="0">0회</option><option value="1">1회</option><option value="2" selected>2회 (기본)</option><option value="3">3회</option>
         </select>
@@ -1039,12 +1075,18 @@
 
   <!-- 4) 코드 입력 -->
   <section class="screen indoor" id="screen-join" hidden>
-    <h2>코드로 방 들어가기</h2>
+    <h2>방 들어가기</h2>
     <div class="panel">
       <label>방 코드 <input id="joinCode" inputmode="numeric" maxlength="6" placeholder="숫자 6자리"></label>
       <label>내 닉네임 <input id="joinName" maxlength="10" placeholder="한글/영문 1~10자"></label>
     </div>
     <button class="primary big" id="joinRoom">들어가기</button>
+    <div class="panel" id="publicPanel">
+      <div class="public-head"><h3>공개 방 목록</h3><button type="button" id="publicRefresh">새로고침</button></div>
+      <p id="publicNote" role="status"></p>
+      <ul id="publicList"></ul>
+      <button type="button" class="primary" id="publicCreate" hidden>방 만들기</button>
+    </div>
     <button class="back">뒤로</button>
   </section>
 
@@ -1057,6 +1099,8 @@
     </div>
     <div class="panel">
       <div id="roomSettings"></div>
+      <label id="visibilityRow">공개 설정 <select id="lobbyVisibility"><option value="private">비공개</option><option value="public">공개</option></select></label>
+      <div id="visibilityText"></div>
       <ul id="memberList"></ul>
     </div>
     <div id="lobbyWait"></div>
@@ -1323,8 +1367,27 @@ function renderLobby() {
   $("roomSettings").textContent = "시작 칩 " + st.chips.toLocaleString() + " · 블라인드 " + st.sb + "/" + st.bb
     + " · 봇 " + st.bots + " · "
     + (st.turnSeconds ? "행동 제한 " + st.turnSeconds + "초 · 연장 " + st.extensions + "회" : "행동 제한 없음");
-  $("memberList").replaceChildren(...state.members.map((m) =>
-    el("li", "", m.name + (m.isHost ? " (방장)" : "") + (m.isMe ? " ← 나" : ""))));
+  const key = JSON.stringify([state.code, state.isHost, state.members]);
+  if ($("memberList").dataset.key !== key) {
+    $("memberList").dataset.key = key;
+    $("memberList").replaceChildren(...state.members.map((m) => {
+      const row = el("li", "", "");
+      row.append(el("span", "", m.name + (m.isHost ? " (방장)" : "") + (m.isMe ? " ← 나" : "")));
+      if (state.isHost && !m.isMe) {
+        const out = el("button", "", "내보내기");
+        out.type = "button";
+        out.onclick = () => {
+          if (confirm(m.name + " 님을 내보낼까요? 이 방에는 다시 들어올 수 없어요.")) post("/api/room/kick", { name: m.name });
+        };
+        row.append(out);
+      }
+      return row;
+    }));
+  }
+  $("visibilityRow").hidden = !state.isHost;
+  $("visibilityText").hidden = state.isHost;
+  $("visibilityText").textContent = state.public ? "공개 방 (목록에 보여요)" : "비공개 방 (코드로만 들어와요)";
+  if (document.activeElement !== $("lobbyVisibility")) $("lobbyVisibility").value = state.public ? "public" : "private";
   const bots = Math.min(st.bots, 6 - state.members.length);
   const total = state.members.length + bots;
   $("lobbyWait").textContent = "지금 시작하면 사람 " + state.members.length + "명 + 봇 " + bots + "명"
@@ -1504,10 +1567,81 @@ $("startSetup").onclick = () => {
     body.name = $("hostName").value;
     body.turnSeconds = Number($("turnSeconds").value);
     body.extensions = Number($("extensions").value);
+    body.public = $("visibility").value === "public";
     remember("nickname", body.name);
   }
   lastTurnId = -1;
   post(setupSolo ? "/api/new" : "/api/room/create", body);
+};
+
+$("lobbyVisibility").onchange = () => {
+  const open = $("lobbyVisibility").value === "public";
+  $("lobbyVisibility").blur();
+  post("/api/room/visibility", { public: open });
+};
+
+// ---- 공개 방 목록: 입장 화면이 보이고 탭이 켜져 있을 때만 5초마다 새로 가져온다 ----
+let publicAt = 0, publicBusy = false, publicShown = "", publicPick = "";
+async function loadPublic() {
+  if (publicBusy) return;
+  publicBusy = true;
+  publicAt = Date.now();
+  try {
+    const res = await fetch("/api/rooms/public", { cache: "no-store", headers: { "X-Client-Id": CLIENT.hash } });
+    const data = await res.json();
+    if (!res.ok) $("publicNote").textContent = data.message || data.error;
+    else renderPublic(data.rooms);
+  } catch (e) {
+    $("publicNote").textContent = "목록을 불러오지 못했어요.";
+  }
+  publicBusy = false;
+}
+function renderPublic(rooms) {
+  $("publicNote").textContent = rooms.length ? "" : "지금 열려 있는 공개 방이 없어요. 직접 방을 만들어 보세요!";
+  $("publicCreate").hidden = rooms.length > 0;
+  const key = JSON.stringify(rooms);
+  if (key === publicShown) return;  // 바뀌지 않았으면 그대로 둔다
+  publicShown = key;
+  $("publicList").replaceChildren(...rooms.map((room) => {
+    const full = room.players >= room.max;
+    const button = el("button", "", "");
+    button.type = "button";
+    button.disabled = full || room.playing;  // 게임 중에는 중간 입장이 없다
+    const status = room.playing ? "게임 중 (입장 불가)" : full ? "가득 참" : "대기 중";
+    button.append(el("b", "", room.name), el("span", "", room.players + "/" + room.max + "명 · " + status),
+      el("small", "", (room.turnSeconds ? "행동 제한 " + room.turnSeconds + "초" : "행동 제한 없음")
+        + " · 시작 칩 " + room.chips.toLocaleString() + " · 봇 " + room.bots));
+    button.onclick = () => {
+      publicPick = room.id;
+      $("joinDialogTitle").textContent = room.name + "에 들어가기";
+      $("publicName").value = $("joinName").value || recall("nickname") || "";
+      $("joinDialogError").textContent = "";
+      $("joinDialog").showModal();
+    };
+    const row = el("li", "", "");
+    row.append(button);
+    return row;
+  }));
+}
+setInterval(() => {
+  if ($("screen-join").hidden) { publicAt = 0; return; }
+  if (!document.hidden && Date.now() - publicAt >= 5000) loadPublic();
+}, 500);
+$("publicRefresh").onclick = loadPublic;
+$("publicCreate").onclick = () => { openSetup(false); arrangeSetup(); };
+$("joinCancel").onclick = () => $("joinDialog").close();
+$("joinForm").onsubmit = async (e) => {
+  e.preventDefault();
+  const name = $("publicName").value;
+  lastTurnId = -1;
+  if (await post("/api/room/join", { id: publicPick, name })) {
+    remember("nickname", name);
+    $("joinName").value = name;
+    $("joinDialog").close();
+  } else {
+    $("joinDialogError").textContent = $("error").textContent || "잠시 뒤에 다시 눌러 주세요.";
+    loadPublic();
+  }
 };
 
 $("joinRoom").onclick = () => {
@@ -2332,6 +2466,7 @@ function arrangeSetup() {
     $("useHint").checked = recall("hint") !== "0";
   } else {
     fillMoney(serverDefaults());
+    $("visibility").value = "private";  // 공개는 매번 직접 고른다
   }
   arrangeRows();
   checkSetup();

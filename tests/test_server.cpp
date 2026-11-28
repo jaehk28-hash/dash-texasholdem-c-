@@ -428,6 +428,177 @@ void testAssets() {
     thread.join();
 }
 
+// ---------------------------------------------------------------------------
+// 공개 방
+// ---------------------------------------------------------------------------
+RoomSettings roomSettings(bool open, int bots = 0) {
+    RoomSettings s;
+    s.bots = bots;
+    s.turnSeconds = 45;
+    s.isPublic = open;
+    return s;
+}
+
+std::string makeFor(RoomManager& rooms, const std::string& name, const RoomSettings& settings) {
+    std::string error;
+    CreateFail fail = CreateFail::None;
+    return rooms.create("", name, settings, false, error, fail);
+}
+
+bool has(const std::string& text, const std::string& part) { return text.find(part) != std::string::npos; }
+
+void testNicknameFilter() {
+    std::string error;
+    for (const char* bad : {"a@b.com", "x.kr", "http", "www abc", "0101234567", "010-123-45", "씨발", "시 1 발", "FuCk", "병_신"}) {
+        std::string name = bad;
+        CHECK(!cleanNickname(name, error) && error == BAD_NICKNAME_MESSAGE);
+    }
+    for (const char* good : {"철수", "Kim_1", "player 07", "나"}) {
+        std::string name = good;
+        CHECK(cleanNickname(name, error));
+    }
+}
+
+void testPublicListHidesPrivateRooms() {
+    WebOptions options = fastOptions();
+    options.maxRooms = 10;
+    options.maxPlayers = 2;
+    RoomManager rooms(options);
+    const std::string secret = makeFor(rooms, "비밀방장", roomSettings(false));
+    const std::string open = makeFor(rooms, "열린방장", roomSettings(true, 3));
+    const std::string secretCode = rooms.find(secret)->code(), openCode = rooms.find(open)->code();
+    const std::string secretId = rooms.find(secret)->id();
+
+    std::vector<PublicRoom> list = rooms.publicRooms();
+    CHECK(list.size() == 1 && list[0].name == "열린방장의 방" && list[0].players == 1 && list[0].maxPlayers == 2);
+    CHECK(!list[0].playing && list[0].turnSeconds == 45 && list[0].chips == 10000 && list[0].bots == 3);
+    std::string json = publicRoomsJson(list);
+    CHECK(!has(json, "비밀") && !has(json, secretCode) && !has(json, openCode) && !has(json, secretId) && !has(json, "code"));
+    CHECK(list[0].id != openCode && list[0].id.size() == 16);
+
+    // 비공개 방은 식별자를 알아도 들어갈 수 없다
+    std::string error;
+    CHECK(rooms.joinPublic("", secretId, "손님", error).empty());
+    // 가득 찬 방은 못 들어간다
+    CHECK(!rooms.joinPublic("", list[0].id, "손님", error).empty());
+    CHECK(rooms.publicRooms()[0].players == 2);
+    CHECK(rooms.joinPublic("", list[0].id, "또손님", error).empty() && error == "이 방은 인원이 가득 찼어요.");
+
+    // 대기실에서 방장만 바꿀 수 있고, 목록에 바로 반영된다
+    CHECK(rooms.setPublic(secret, true, error) && rooms.publicRooms().size() == 2);
+    CHECK(rooms.setPublic(secret, false, error) && rooms.publicRooms().size() == 1);
+    CHECK(!rooms.setPublic("모르는토큰", true, error));
+
+    // 게임이 시작되면 "게임 중"으로 남고 입장은 안 되며, 설정도 바꿀 수 없다
+    CHECK(rooms.find(open)->start(open, error));
+    list = rooms.publicRooms();
+    CHECK(list.size() == 1 && list[0].playing);
+    CHECK(!rooms.setPublic(open, false, error));
+    rooms.leave(open);
+}
+
+void testKickAndHostHandover() {
+    RoomManager rooms(fastOptions());
+    const std::string host = makeFor(rooms, "방장", roomSettings(true));
+    const std::string code = rooms.find(host)->code();
+    const std::string id = rooms.find(host)->id();
+    std::string error;
+    bool unknown = false;
+    const auto now = RoomManager::Clock::now();
+    const std::string guest = rooms.join("", code, "손님", error, unknown, now, "bbbbbbbbbbbbbbbb");
+    const std::string third = rooms.join("", code, "셋째", error, unknown, now, "cccccccccccccccc");
+    CHECK(!guest.empty() && !third.empty());
+    CHECK(!rooms.kick(guest, "셋째", error));  // 방장이 아니면 안 된다
+    CHECK(!rooms.kick(host, "방장", error));   // 자기 자신은 안 된다
+    CHECK(rooms.kick(host, "손님", error));
+    CHECK(!rooms.find(guest) && rooms.closedMessage(guest) == KICKED_MESSAGE);
+    // 같은 브라우저는 이름을 바꿔도, 코드로도 목록으로도 못 들어온다
+    CHECK(rooms.join(guest, code, "새이름", error, unknown, now, "bbbbbbbbbbbbbbbb").empty() && error == BANNED_MESSAGE);
+    CHECK(rooms.joinPublic("", id, "새이름", error, "bbbbbbbbbbbbbbbb").empty() && error == BANNED_MESSAGE);
+    CHECK(rooms.join("", code, "새이름", error, unknown, now, "").empty());  // 식별값을 빼도 안 된다
+    CHECK(!rooms.join("", code, "넷째", error, unknown, now, "dddddddddddddddd").empty());
+
+    // 방장이 나가면 다음 사람에게 넘어간다
+    rooms.leave(host);
+    CHECK(rooms.find(third)->view(third)->isHost);
+    CHECK(rooms.publicRooms()[0].name == "셋째의 방");
+}
+
+void testAbandonedPublicRoomCloses() {
+    RoomManager rooms(fastOptions());
+    const auto start = RoomManager::Clock::now();
+    const std::string open = makeFor(rooms, "공개", roomSettings(true));
+    const std::string secret = makeFor(rooms, "비공개", roomSettings(false));
+    const std::string watched = makeFor(rooms, "지켜봄", roomSettings(true));
+    rooms.seen(watched, start + 4min);
+    CHECK(rooms.cleanupIdle(start + 4min) == 0);
+    CHECK(rooms.cleanupIdle(start + 6min) == 1);  // 접속이 없는 공개 방만
+    CHECK(!rooms.find(open) && rooms.find(secret) && rooms.find(watched));
+    CHECK(rooms.closedMessage(open) == ROOM_CLOSED_MESSAGE);
+}
+
+void testPublicHttpAndLimits() {
+    const std::string folder = tempFolder();
+    WebOptions options = fastOptions();
+    options.maxRooms = 2;
+    options.listPerMinute = 4;
+    options.joinPerMinute = 12;
+    options.wrongCodeLimit = 3;
+    options.stats = std::make_shared<Stats>(folder + "/stats.json");
+    TestServer s(options);
+    httplib::Client client("127.0.0.1", s.port);
+    const httplib::Headers a{{"X-Client-Id", "aaaaaaaaaaaaaaaa"}}, b{{"X-Client-Id", "bbbbbbbbbbbbbbbb"}},
+        c{{"X-Client-Id", "cccccccccccccccc"}};
+    auto cookie = [](const httplib::Result& r) {
+        const std::string v = r->get_header_value("Set-Cookie");
+        return v.substr(0, v.find(';'));
+    };
+    auto hidden = client.Post("/api/room/create", a, R"({"name":"숨은방장"})", "application/json");
+    auto shown = client.Post("/api/room/create", b, R"({"name":"열린방장","public":true})", "application/json");
+    CHECK(hidden && hidden->status == 200 && shown && shown->status == 200);
+    const std::string hiddenCode = s.rooms.find(cookie(hidden).substr(4))->code();
+    const std::string shownCode = s.rooms.find(cookie(shown).substr(4))->code();
+
+    // 방 제한은 공개 방에도 그대로
+    const auto full = client.Post("/api/room/create", c, R"({"name":"셋째","public":true})", "application/json");
+    CHECK(full && full->status == 429 && has(full->body, "ROOMS_FULL") && has(full->body, "방이 가득 찼어요"));
+
+    const auto list = client.Get("/api/rooms/public", c);
+    CHECK(list && list->status == 200 && has(list->body, "열린방장의 방"));
+    CHECK(!has(list->body, "숨은") && !has(list->body, hiddenCode) && !has(list->body, shownCode));
+    // 다른 API로도 비공개 방의 코드는 새지 않는다
+    CHECK(!has(client.Get("/api/state", c)->body, hiddenCode));
+    CHECK(!has(client.Get("/api/state", httplib::Headers{{"Cookie", cookie(shown)}})->body, hiddenCode));
+
+    for (int i = 0; i < 3; ++i) CHECK(client.Get("/api/rooms/public", c)->status == 200);
+    CHECK(client.Get("/api/rooms/public", c)->status == 429);
+    CHECK(client.Get("/api/rooms/public", a)->status == 200);  // 다른 브라우저는 영향 없음
+
+    // 목록의 식별자로 입장
+    const std::size_t at = list->body.find("\"id\":\"") + 6;
+    const std::string id = list->body.substr(at, 16);
+    const auto joined = client.Post("/api/room/join", c, "{\"id\":\"" + id + "\",\"name\":\"손님\"}", "application/json");
+    CHECK(joined && joined->status == 200);
+    CHECK(options.stats->summary().publicRooms == 1 && options.stats->summary().publicJoins == 1);
+    CHECK(has(statsPageHtml(options.stats->summary()), "<b>1</b><span>공개 방 입장</span>"));
+
+    // 틀린 코드를 연속 3번 넣으면, 맞는 코드도 잠시 못 넣는다
+    const httplib::Headers d{{"X-Client-Id", "dddddddddddddddd"}};
+    for (int i = 0; i < 3; ++i) {
+        CHECK(client.Post("/api/room/join", d, R"({"code":"x","name":"추측"})", "application/json")->status == 400);
+    }
+    const std::string right = "{\"code\":\"" + shownCode + "\",\"name\":\"추측\"}";
+    CHECK(client.Post("/api/room/join", d, right, "application/json")->status == 429);
+
+    // 입장 시도 횟수 제한
+    const httplib::Headers e{{"X-Client-Id", "eeeeeeeeeeeeeeee"}};
+    int last = 0;
+    for (int i = 0; i < 13; ++i) {
+        last = client.Post("/api/room/join", e, R"({"id":"0000000000000000","name":"반복"})", "application/json")->status;
+    }
+    CHECK(last == 429);
+}
+
 }  // namespace
 
 int main() {
@@ -445,6 +616,11 @@ int main() {
     testWriteFailureDoesNotStopGame();
     testStatsPage();
     testAssets();
+    testNicknameFilter();
+    testPublicListHidesPrivateRooms();
+    testKickAndHostHandover();
+    testAbandonedPublicRoomCloses();
+    testPublicHttpAndLimits();
     std::printf("%d개 검사 중 %d개 실패\n", g_checks, g_failures);
     return g_failures == 0 ? 0 : 1;
 }
