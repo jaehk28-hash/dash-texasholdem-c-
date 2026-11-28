@@ -230,7 +230,7 @@
   .seat.me .dealer { top: auto; bottom: 60px; left: 6px; right: auto; }
   .seat.me > .status { position: absolute; bottom: 44px; right: 4px; left: auto; width: max-content; max-width: calc(50% - 92px); overflow: hidden; text-overflow: ellipsis; text-shadow: 0 1px 3px #000; }
   .seat.me > .cards { position: absolute; bottom: 0; left: 50%; width: 164px; height: 112px; margin-left: -82px; align-items: flex-start; gap: 0;
-            cursor: pointer; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+            user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
   .seat.me .card { flex: 0 0 76px; height: 108px; border-radius: 8px; padding: 6px 7px; justify-content: flex-start; transform-origin: 50% 100%;
             transform: translateY(24px) rotate(-6deg); }
   .seat.me .card + .card { margin-left: -2px; transform: translateY(24px) rotate(6deg); }
@@ -238,12 +238,8 @@
   .seat.me .card span:last-child { align-self: center; font-size: 36px; }
   .hands, .thumbs { position: absolute; bottom: 0; left: 50%; width: 230px; height: 102px; margin-left: -115px; pointer-events: none; transform-origin: 50% 100%; }
   .hands { z-index: 2; } .thumbs { z-index: 4; }
-  .table:not(:has(.seat.me .card)) :is(.hands, .thumbs, .peek-tip) { display: none; }
+  .table:not(:has(.seat.me .card)) :is(.hands, .thumbs) { display: none; }
   .seat.me > .cards, .hands, .thumbs { transition: transform .18s ease-out; }
-  /* 누르고 있으면 들어 올려 크게 본다 */
-  .table.peek .seat.me > .cards, .table.peek .hands, .table.peek .thumbs { transform: translateY(-44px) scale(1.22); }
-  .table.peek .seat.me { z-index: 5; }
-  .peek-tip { position: absolute; z-index: 5; right: 4px; bottom: 66px; padding: 1px 6px; border-radius: 6px; background: rgba(5, 8, 7, .88); color: var(--muted); font-size: 11px; pointer-events: none; }
 
   /* ---- 가운데: 팟과 공용 카드 ---- */
   .mid { position: absolute; z-index: 1; left: 0; right: 0; top: 266px; display: flex; flex-direction: column; align-items: center; text-align: center; }
@@ -382,7 +378,6 @@
     .seat.me > .status { right: calc(50% - 250px); bottom: 56px; max-width: 150px; text-align: right; }
     .table .seat.me .bubble { left: 90px; top: 30px; }
     .hands, .thumbs { width: 300px; height: 133px; margin-left: -150px; }
-    .peek-tip { right: 60px; bottom: 90px; }
   }
 
   .panel { background: linear-gradient(rgba(22, 29, 26, .85), rgba(12, 17, 15, .9)); border: 1px solid var(--line); border-radius: 10px; padding: 10px;
@@ -2858,7 +2853,7 @@ const FX = (() => {
     return box;
   }
 
-  table.append(layer("hands", arm + palm), layer("thumbs", '<g transform="translate(0 48) scale(.74)">' + thumb + "</g>"), el("div", "peek-tip", "꾹 눌러 보기"));
+  table.append(layer("hands", arm + palm), layer("thumbs", '<g transform="translate(0 48) scale(.74)">' + thumb + "</g>"));
 
   function animate(node, className, delay) {
     node.classList.add(className);
@@ -2968,15 +2963,6 @@ const FX = (() => {
   // 좌석, 공용 카드, 팟이 다시 그려질 때 실행 (우리가 좌석 안에 붙이는 것은 감시하지 않는다)
   const observer = new MutationObserver(decorate);
   for (const node of [table, $("board"), $("pot")]) observer.observe(node, { childList: true });
-
-  // 내 카드를 누르고 있는 동안 들어 올리기. 상태는 다시 만들어지지 않는 #table에 둔다.
-  table.addEventListener("pointerdown", (e) => {
-    if (e.target.closest(".seat.me > .cards")) table.classList.add("peek");
-  });
-  for (const type of ["pointerup", "pointercancel", "blur"]) {
-    window.addEventListener(type, () => table.classList.remove("peek"));
-  }
-  table.addEventListener("contextmenu", (e) => { if (e.target.closest(".seat.me > .cards")) e.preventDefault(); });
 })();
 
 // ---- 밤하늘의 별 80개 (매번 같은 자리). 다섯 개 중 하나만 4~6초 주기로 천천히 밝기가 변한다 ----
