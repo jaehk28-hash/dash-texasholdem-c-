@@ -38,6 +38,14 @@ constexpr int kSeats = 6;  // 한 테이블의 최대 인원 (사람 + 봇)
 constexpr int AI_ACTION_MS = 5000;
 constexpr int AI_SKIP_MS = 200;  // "남은 진행 빠르게 보기"를 눌렀을 때 봇 한 명의 시간
 
+// ===== 친구 방의 행동 제한 시간 =====
+constexpr int TURN_SECONDS_DEFAULT = 45;  // 고를 수 있는 값: 15, 30, 45, 60, 0(제한 없음)
+constexpr int EXTENSIONS_DEFAULT = 2;     // 사람마다 가지는 연장 횟수 (0~3). 게임을 새로 시작할 때만 채운다
+constexpr int EXTENSION_SECONDS = 30;     // 연장 1회에 늘어나는 시간
+constexpr int TURN_GRACE_MS = 1000;       // 네트워크 지연을 감안한 여유
+constexpr int AWAY_AFTER = 3;             // 연속으로 이만큼 자동 처리되면 "자리 비움"
+constexpr int AWAY_GATE_MS = 3000;        // 방장이 자리 비움일 때 "다음 단계"를 넘기는 시간
+
 // ===== 방 제한: 기본값. 서버를 켤 때 같은 이름의 환경변수로 바꿀 수 있다 =====
 constexpr int MAX_ROOMS = 20;              // 동시에 열려 있는 방 (혼자 하기 포함)
 constexpr int MAX_PLAYERS_PER_ROOM = 6;    // 방 하나의 최대 인원 (봇 포함, 2~6)
@@ -62,6 +70,9 @@ struct WebOptions {
     // 테스트용: true면 "다음" 입력을 기다리지 않는다. 다음 판은 nextHandDelay 뒤에 시작한다.
     bool autoContinue = false;
     std::chrono::milliseconds nextHandDelay{0};
+    std::chrono::milliseconds turnGrace{TURN_GRACE_MS};
+    std::chrono::milliseconds extensionTime{EXTENSION_SECONDS * 1000};
+    std::chrono::milliseconds awayGate{AWAY_GATE_MS};
     int maxRooms = MAX_ROOMS;
     int maxPlayers = MAX_PLAYERS_PER_ROOM;
     int idleMinutes = ROOM_IDLE_MINUTES;
@@ -74,8 +85,9 @@ struct WebOptions {
 struct RoomSettings {
     GameConfig config;
     int bots = 5;         // 원하는 봇 수. 사람이 많으면 남는 자리만큼만 앉는다.
-    bool hint = true;     // 승률 힌트
-    int turnSeconds = 0;  // 한 차례의 제한 시간. 0이면 무제한 (혼자 할 때)
+    bool hint = true;     // 승률 힌트. 혼자 하기에만 있다 (친구 방은 Room이 항상 끈다)
+    int turnSeconds = 0;  // 결정 한 번에 주어지는 시간. 0이면 제한 없음 (혼자 할 때는 항상 0)
+    int extensions = EXTENSIONS_DEFAULT;  // 사람마다 가지는 시간 연장 횟수
     Pace pace = Pace::Slow;  // 처음 진행 속도 (게임 중에도 방장이 바꿀 수 있다)
 };
 
@@ -126,6 +138,13 @@ struct RoomView {
     int turnSeat = -1;  // 지금 결정 중인 사람의 좌석 (봇 차례면 -1)
     int turnId = 0;     // 사람 차례가 올 때마다 1씩 증가
     int secondsLeft = 0;  // 제한 시간이 있을 때 남은 초
+    int timeLeftMs = 0;   // 지금 차례의 남은 시간. 시간은 서버만 잰다
+    int timeTotalMs = 0;  // 지금 구간의 전체 시간 (0이면 제한 시간이 없거나 사람 차례가 아님)
+    bool timeExtended = false;      // 지금 연장 시간을 쓰는 중인가
+    std::vector<int> extensionsLeft;  // 사람 좌석별 남은 연장 횟수
+    std::vector<bool> away;           // 사람 좌석별 "자리 비움"
+    bool meAway = false;
+    int gateSeconds = 0;  // "다음"을 안 눌러도 넘어가기까지 남은 초 (0이면 계속 기다림)
     std::optional<double> equity;
     int opponents = 0;
     bool handOver = false;
@@ -181,6 +200,8 @@ public:
     // 방장만. 더 행동할 사람이 없을 때, 이번 판의 남은 진행을 빠르게 넘긴다.
     bool skipHand(const std::string& token, std::string& error);
     bool setPace(const std::string& token, Pace pace, std::string& error);
+    // "자리 비움"에서 돌아온다.
+    bool comeBack(const std::string& token, std::string& error);
 
     // token의 시점에서 본 방. 방 사람이 아니면 빈 값.
     std::optional<RoomView> view(const std::string& token) const;
@@ -209,6 +230,8 @@ private:
     Action waitForAction(int seat, const GameState& state);
     void pause(std::chrono::milliseconds time);  // stop()이 오면 즉시 깨어나는 잠
     bool isHostLocked(const std::string& token) const;
+    bool hostAwayLocked() const;
+    void presentLocked(int seat);  // 직접 누른 사람: 자리 비움을 풀고 연속 횟수를 지운다
     bool canSkipLocked(const Member& viewer) const;
     // ---- 아래는 게임 스레드에서만 ----
     void think(int seat);         // "생각 중" 표시 후 대기
@@ -258,6 +281,12 @@ private:
     std::optional<Action> pending_;
     std::optional<double> equity_;
     std::chrono::steady_clock::time_point deadline_;
+    std::chrono::milliseconds turnTotal_{0};
+    bool turnExtended_ = false;
+    std::vector<int> extensions_;  // 좌석별 남은 연장 (사람 좌석만)
+    std::vector<int> autoStreak_;  // 좌석별 연속 자동 처리 횟수
+    std::vector<bool> away_;       // 좌석별 자리 비움
+    std::optional<std::chrono::steady_clock::time_point> gateDeadline_;
 
     std::mt19937 hintRng_;  // 게임 스레드만 사용
     std::thread thread_;    // startMutex_로 보호

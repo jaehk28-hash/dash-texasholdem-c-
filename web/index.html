@@ -331,8 +331,9 @@
   .table.myturn .seat.me > .cards, .table.myturn .hands, .table.myturn .thumbs { transform: translateY(-9px); }
   .potpile.bump { animation: bump .3s ease-out .35s; }
   @keyframes bump { 40% { transform: scale(1.35); } }
-  #reduceRow { justify-content: center; min-height: 44px; font-size: 14px; color: var(--muted); cursor: pointer; }
-  #screen-game #reduceRow { flex-wrap: nowrap; border: 0; }
+  #prefs { align-self: flex-end; width: min(100%, 320px); font-size: 14px; }
+  #prefs label { justify-content: flex-start; cursor: pointer; }
+  #prefs small { display: block; color: #d6c6a8; font-size: 12px; line-height: 1.5; word-break: keep-all; }
   @media (prefers-reduced-motion: reduce) { .potpile.bump { animation: none; } }
 
   @media (min-width: 600px) {
@@ -384,6 +385,9 @@
   input:not([type=range]):not([type=checkbox]), select { border-radius: 8px; border: 1px solid #55503d; background: #070a09; color: var(--ivory); padding: 4px 8px; }
   input:disabled { opacity: .45; }
   #notice { color: var(--gold-light); font-size: 14px; min-height: 20px; text-align: center; }
+  .tbar { height: 8px; border-radius: 4px; background: rgba(255, 255, 255, .12); overflow: hidden; }
+  .tbar i { display: block; height: 100%; background: #8fae9b; transform-origin: 0 50%; transition: transform .4s linear; }
+  .ttext { margin-top: 4px; min-height: 18px; text-align: center; font-size: 13px; color: var(--ink); }
   #log { height: 180px; overflow-y: auto; font-size: 12px; line-height: 1.6; color: var(--muted); overflow-wrap: anywhere; }
 
   /* 진행 버튼, 행동 기록, 족보 한 줄, 말풍선 */
@@ -803,7 +807,8 @@
   #advanced > summary::after { content: "▾"; }
   #advanced[open] > summary::after { content: "▴"; }
   #advanced[open] > summary { margin-bottom: 8px; }
-  #screen-setup:not(.solo) #advanced > summary, #screen-setup:not(.solo) .help, #screen-setup:not(.solo) .help-block, #screen-setup.solo #botsRow { display: none; }
+  #screen-setup:not(.solo) #advanced > summary, #screen-setup:not(.solo) .help:not(.keep), #screen-setup:not(.solo) .help-block, #screen-setup.solo #botsRow { display: none; }
+  #screen-setup:not(.solo) label.multi { flex-wrap: wrap; row-gap: 0; }
   #screen-setup.solo label { flex-wrap: wrap; row-gap: 0; padding: 4px 0; border-bottom: 1px solid rgba(201, 162, 75, .14); }
   #screen-setup.solo label:last-child { border-bottom: 0; }
   #screen-setup.solo #hintRow { border-bottom: 0; }
@@ -837,8 +842,14 @@
       <button type="button" id="showStory" aria-haspopup="dialog">이야기</button>
       <button type="button" id="showHands" aria-haspopup="dialog">족보</button>
       <button id="showRules">규칙</button>
+      <button type="button" id="showPrefs" aria-expanded="false" aria-controls="prefs">설정</button>
     </div>
   </header>
+  <!-- 개인 설정: 이 브라우저에만 저장한다 -->
+  <div class="panel" id="prefs" hidden>
+    <label><input type="checkbox" id="reduceFx"> 효과 줄이기</label>
+    <small>움직임과 빛나는 효과를 끄고 가만히 보여 줘요. 이 브라우저에만 저장돼요.</small>
+  </div>
 
   <div id="error" role="alert"></div>
   <div id="closedNotice" role="alert" hidden>
@@ -917,7 +928,7 @@
     </details>
 
     <button type="button" class="link" id="rulesToHands">족보는 상단의 족보 버튼에서 볼 수 있어요</button>
-    <p class="rules-note">칩이 0이 되면 탈락해요.<br>친구와 할 때는 시간이 지나면 자동으로 체크하거나 폴드해요.</p>
+    <p class="rules-note">칩이 0이 되면 탈락해요.<br>친구와 할 때는 시간이 다 되면 연장이 먼저 쓰이고, 연장이 없으면 자동으로 체크하거나 폴드해요.</p>
 
     <div class="rules-end">
       <p class="rules-slogan">일단 해보면서 배우는 홀덤!</p>
@@ -992,7 +1003,10 @@
           <button type="button" data-bots="5" aria-pressed="false">5</button>
         </div>
       </div>
-      <div class="panel" id="hintSlot"></div>
+      <div class="panel" id="hintSlot">
+        <label id="hintRow"><span class="switch-title">승률 힌트</span><input type="checkbox" id="useHint" role="switch" checked>
+          <small class="help">내 카드가 이길 확률을 알려줘요. 연습할 땐 켜두는 걸 추천해요.</small></label>
+      </div>
     </div>
     <details id="advanced">
       <summary>상세 설정</summary>
@@ -1006,15 +1020,16 @@
         <label>빅 블라인드 <input type="number" id="bb" inputmode="numeric">
           <small class="help">다른 사람이 강제로 내는 큰 판돈이에요. 이 판의 최소 베팅 금액이기도 해요. 보통 스몰 블라인드의 2배예요.</small></label>
         <label id="botsRow">봇 수 <select id="bots"></select></label>
-        <label class="multi">제한 시간 <select id="turnSeconds">
-          <option value="30">30초</option><option value="60" selected>60초</option><option value="120">2분</option>
-        </select></label>
-        <label id="hintRow"><span class="switch-title">승률 힌트</span><input type="checkbox" id="useHint" role="switch" checked>
-          <small class="help">내 카드가 이길 확률을 알려줘요. 연습할 땐 켜두는 걸 추천해요.</small></label>
-        <label>진행 속도 <select id="pace"><option value="slow">느리게(5초)</option><option value="normal">보통(3초)</option><option value="fast">빠르게(1초)</option></select>
+        <label class="multi">행동 제한 시간 <select id="turnSeconds">
+          <option value="15">15초 (빠름)</option><option value="30">30초</option><option value="45" selected>45초 (기본)</option><option value="60">60초 (여유)</option><option value="0">제한 없음</option>
+        </select>
+          <small class="help keep">내 차례에 결정할 수 있는 시간이에요.</small></label>
+        <label class="multi" id="extensionsRow">연장 횟수 <select id="extensions">
+          <option value="0">0회</option><option value="1">1회</option><option value="2" selected>2회 (기본)</option><option value="3">3회</option>
+        </select>
+          <small class="help keep">연장 1회는 +30초예요. 시간이 다 되면 저절로 쓰여요. 게임 전체에서 사람마다 이만큼 가져요.</small></label>
+        <label id="paceRow">봇 행동 속도 <select id="pace"><option value="slow">느리게(5초)</option><option value="normal">보통(3초)</option><option value="fast">빠르게(1초)</option></select>
           <small class="help">봇 한 명이 행동하는 데 걸리는 시간이에요. 게임 중에도 바꿀 수 있어요.</small></label>
-        <label>효과 줄이기 <input type="checkbox" id="reduceFxSetup">
-          <small class="help">움직임과 빛나는 효과를 끄고 가만히 보여 줘요.</small></label>
       </div>
     </details>
     <button class="primary big" id="startSetup"></button>
@@ -1080,6 +1095,10 @@
     </div>
     <div id="myHandLine" role="status" hidden></div>
     <div id="notice"></div>
+    <div id="turnTimer" hidden>
+      <div class="tbar" aria-hidden="true"><i></i></div>
+      <div class="ttext" role="status"></div>
+    </div>
 
     <div class="panel">
       <div class="buttons">
@@ -1101,8 +1120,7 @@
     <div class="panel hint" id="hint"></div>
     <div class="panel"><div id="log"></div></div>
     <div class="settings-row">
-      <label>진행 속도 <select id="paceLive"><option value="slow">느리게(5초)</option><option value="normal">보통(3초)</option><option value="fast">빠르게(1초)</option></select></label>
-      <label id="reduceRow"><input type="checkbox" id="reduceFx"> 효과 줄이기</label>
+      <label id="paceLiveRow">봇 행동 속도 <select id="paceLive"><option value="slow">느리게(5초)</option><option value="normal">보통(3초)</option><option value="fast">빠르게(1초)</option></select></label>
     </div>
     <div class="row">
       <button class="primary" id="restart" hidden>다시 하기</button>
@@ -1110,6 +1128,7 @@
     </div>
     <!-- 화면 아래에 고정되는 진행 버튼 -->
     <div id="gatebar" hidden>
+      <button type="button" class="primary" id="backSeat" hidden>자리 비움 중 · 자리로 돌아오기</button>
       <button type="button" class="primary" id="nextStep" hidden><b></b><small></small></button>
       <button type="button" id="skipHand" hidden>남은 진행 빠르게 보기(건너뛰기)</button>
     </div>
@@ -1231,6 +1250,8 @@ function renderSeats(players) {
     else if (p.folded) status = "폴드";
     else if (p.allIn) status = "올인";
     if (p.bet > 0) status += (status ? " · " : "") + "베팅 " + p.bet.toLocaleString();
+    // 자리 높이가 늘지 않게 상태 줄에 적는다 (폴드는 카드를 치우고 흐리게 보여서 알 수 있다)
+    if (p.away) status = "자리 비움" + (p.bet > 0 ? " · " + p.bet.toLocaleString() : "");
     seat.append(el("div", "status", status));
     $("table").append(seat);
   }
@@ -1259,6 +1280,9 @@ function renderControls() {
 
 function renderHint() {
   const box = $("hint");
+  box.hidden = !state.solo;  // 친구 방에는 승률 힌트가 없다
+  // 다른 화면 갱신이 이 칸의 변화를 보고 따라오므로, 감출 때도 내용을 새로 그린다.
+  if (!state.solo) { box.replaceChildren(el("span")); return; }
   box.replaceChildren();
   const h = state.hint;
   if (!h) {
@@ -1297,7 +1321,8 @@ function renderLobby() {
   const st = state.settings;
   $("roomCode").textContent = state.code;
   $("roomSettings").textContent = "시작 칩 " + st.chips.toLocaleString() + " · 블라인드 " + st.sb + "/" + st.bb
-    + " · 봇 " + st.bots + " · 제한 " + st.turnSeconds + "초 · 힌트 " + (st.hint ? "켬" : "끔");
+    + " · 봇 " + st.bots + " · "
+    + (st.turnSeconds ? "행동 제한 " + st.turnSeconds + "초 · 연장 " + st.extensions + "회" : "행동 제한 없음");
   $("memberList").replaceChildren(...state.members.map((m) =>
     el("li", "", m.name + (m.isHost ? " (방장)" : "") + (m.isMe ? " ← 나" : ""))));
   const bots = Math.min(st.bots, 6 - state.members.length);
@@ -1324,15 +1349,31 @@ function renderGame() {
   } else if (state.handOver) notice = "판 종료!";
   else if (state.myTurn) notice = "내 차례입니다.";
   else if (actor && !actor.isMe) notice = actor.name + " 님 차례";
-  if (state.phase === "playing" && state.turnSeat >= 0 && state.settings.turnSeconds) {
-    notice += " (" + state.secondsLeft + "초)";
-  }
   $("notice").textContent = notice;
+  renderTimer();
 
   $("restart").hidden = !(state.phase === "over" && state.isHost);
   renderControls();
   renderHint();
   renderLog(state.log);
+}
+
+// 남은 시간: 서버가 알려 준 값을 그대로 그린다 (브라우저 시계는 쓰지 않는다). 마지막 5초부터 숫자도 보여 준다.
+function renderTimer() {
+  const timer = state.phase === "playing" ? state.turnTimer : null;
+  const actor = timer && state.players[state.turnSeat];
+  $("turnTimer").hidden = !actor;
+  $("backSeat").hidden = !(state.phase === "playing" && state.meAway);
+  if (!actor) return;
+  document.querySelector("#turnTimer .tbar i").style.transform = "scaleX(" + Math.min(1, timer.leftMs / timer.totalMs) + ")";
+  const who = actor.isMe ? "내" : actor.name + " 님의";
+  const seconds = Math.ceil(timer.leftMs / 1000);
+  const parts = [];
+  if (timer.extended) parts.push(who + " 시간 연장 사용 (+30초, 남은 연장 " + actor.extensions + "회)");
+  else if (actor.isMe) parts.push("남은 연장 " + actor.extensions + "회");
+  if (seconds <= 5) parts.push(who + " 남은 시간 " + seconds + "초");
+  const text = parts.join(" · "), box = document.querySelector("#turnTimer .ttext");
+  if (box.textContent !== text) box.textContent = text;
 }
 
 function render() {
@@ -1452,8 +1493,9 @@ document.querySelectorAll(".back").forEach((b) => { b.onclick = () => goMenu("ho
 $("startSetup").onclick = () => {
   const body = {
     chips: Number($("chips").value), sb: Number($("sb").value), bb: Number($("bb").value),
-    bots: Number($("bots").value), hint: $("useHint").checked, pace: $("pace").value,
+    bots: Number($("bots").value), pace: $("pace").value,
   };
+  if (setupSolo) body.hint = $("useHint").checked;
   if (![body.chips, body.sb, body.bb].every(Number.isInteger)) {
     $("error").textContent = "칩과 블라인드는 정수로 입력하세요.";
     return;
@@ -1461,6 +1503,7 @@ $("startSetup").onclick = () => {
   if (!setupSolo) {
     body.name = $("hostName").value;
     body.turnSeconds = Number($("turnSeconds").value);
+    body.extensions = Number($("extensions").value);
     remember("nickname", body.name);
   }
   lastTurnId = -1;
@@ -1930,10 +1973,11 @@ function fill(template, values) {
       const last = wait.next === "nextHand";
       next.disabled = !wait.canContinue || sending;
       next.querySelector("b").textContent = last ? TEXTS.gate.nextHand : TEXTS.gate.next;
-      next.querySelector("small").textContent = !wait.canContinue ? TEXTS.gate.host : last ? "" : TEXTS.gate[wait.next];
+      next.querySelector("small").textContent = (!wait.canContinue ? TEXTS.gate.host : last ? "" : TEXTS.gate[wait.next])
+        + (wait.autoSeconds > 0 && wait.autoSeconds <= 5 ? " · " + wait.autoSeconds + "초 뒤 자동으로 넘어가요" : "");
     }
     skip.hidden = !state.canSkip;
-    $("gatebar").hidden = next.hidden && skip.hidden;
+    $("gatebar").hidden = next.hidden && skip.hidden && $("backSeat").hidden;
 
     const me = state.players.find((p) => p.isMe), hand = state.myHand;
     $("myHandLine").hidden = !(hand && me && !me.folded && !state.handOver);
@@ -1946,7 +1990,7 @@ function fill(template, values) {
     for (const text of state.log) {
       if (text.startsWith("=====") || text.startsWith("[")) rows.push([text.replace(/=/g, "").trim(), "sep"]);
       else {
-        const m = text.match(/^(.+?): ((?:폴드|체크|시간 초과|콜 \d|벳 \d|레이즈 \d|스몰 블라인드|빅 블라인드).*)$/);
+        const m = text.match(/^(.+?): ((?:폴드|체크|시간 초과|시간 연장|자리 비움|자리로|콜 \d|벳 \d|레이즈 \d|스몰 블라인드|빅 블라인드).*)$/);
         if (m) rows.push([m[1] + " " + m[2], ""]);
       }
     }
@@ -1957,6 +2001,7 @@ function fill(template, values) {
       box.scrollTop = box.scrollHeight;
     }
 
+    $("paceLiveRow").hidden = !state.settings.bots;  // 봇이 없으면 봇 속도도 없다
     const live = $("paceLive");
     if (document.activeElement !== live) live.value = state.pace;
     live.disabled = !state.isHost;
@@ -2258,6 +2303,21 @@ function checkSetup() {
   $("startSetup").disabled = !!problem;
 }
 
+// 상황에 맞지 않는 칸은 감춘다: 봇이 없으면 봇 속도, 제한 시간이 없으면 연장 횟수.
+function arrangeRows() {
+  $("paceRow").hidden = !setupSolo && Number($("bots").value) < 1;
+  $("extensionsRow").hidden = setupSolo || $("turnSeconds").value === "0";
+}
+$("bots").addEventListener("change", arrangeRows);
+$("turnSeconds").addEventListener("change", arrangeRows);
+
+// 개인 설정 열고 닫기
+$("showPrefs").onclick = () => {
+  $("prefs").hidden = !$("prefs").hidden;
+  $("showPrefs").setAttribute("aria-expanded", String(!$("prefs").hidden));
+};
+$("backSeat").onclick = () => post("/api/back");
+
 // 설정 화면이 열릴 때 (openSetup이 먼저 실행된 다음에 호출된다)
 function arrangeSetup() {
   const screen = $("screen-setup");
@@ -2266,18 +2326,14 @@ function arrangeSetup() {
   // 혼자 하기: 상세 설정은 시작 버튼 아래에 접어 둔다. 방 만들기: 예전처럼 위에 펼쳐 둔다.
   screen.insertBefore($("advanced"), setupSolo ? screen.querySelector(".back") : $("startSetup"));
   $("advanced").open = !setupSolo;
-  // 승률 힌트 스위치는 하나뿐이라, 화면 종류에 따라 자리를 옮긴다.
-  if (setupSolo) $("hintSlot").append($("hintRow"));
-  else $("pace").closest("label").before($("hintRow"));
-
   if (setupSolo) {  // 마지막으로 고른 값 (처음이면 3명, 켜짐)
     const saved = recall("bots");
     chooseBots(/^[1-5]$/.test(saved) ? saved : 3);
     $("useHint").checked = recall("hint") !== "0";
   } else {
     fillMoney(serverDefaults());
-    $("useHint").checked = true;
   }
+  arrangeRows();
   checkSetup();
 }
 $("goSolo").addEventListener("click", arrangeSetup);
@@ -2512,7 +2568,7 @@ const FX = (() => {
     });
   }
 
-  const boxes = [$("reduceFx"), $("reduceFxSetup")];
+  const boxes = [$("reduceFx")];
   function applyReduce() {
     document.documentElement.classList.toggle("reduce-fx", reduced());
     for (const box of boxes) {

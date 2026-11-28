@@ -173,14 +173,16 @@ void createRoom(const httplib::Request& req, httplib::Response& res, RoomManager
     const WebOptions& options = rooms.options();
     RoomSettings settings;
     settings.config = options.config;
-    settings.turnSeconds = solo ? 0 : 60;
+    settings.turnSeconds = solo ? 0 : TURN_SECONDS_DEFAULT;
+    settings.hint = solo;  // 친구 방에는 승률 힌트가 없다
     std::string name = solo ? "나" : "";
     std::string pace = "slow";
     if (!getString(body, "name", name) || !getInt(body, "chips", settings.config.startingChips) ||
         !getInt(body, "sb", settings.config.smallBlind) ||
         !getInt(body, "bb", settings.config.bigBlind) || !getInt(body, "bots", settings.bots) ||
-        !getBool(body, "hint", settings.hint) || !getString(body, "pace", pace) || !parsePace(pace, settings.pace) ||
-        (!solo && !getInt(body, "turnSeconds", settings.turnSeconds))) {
+        (solo && !getBool(body, "hint", settings.hint)) || !getString(body, "pace", pace) ||
+        !parsePace(pace, settings.pace) ||
+        (!solo && (!getInt(body, "turnSeconds", settings.turnSeconds) || !getInt(body, "extensions", settings.extensions)))) {
         sendError(res, 400, "설정값의 형식이 잘못되었습니다.");
         return;
     }
@@ -305,6 +307,19 @@ void setupRoutes(httplib::Server& server, RoomManager& rooms, const std::string&
         auto room = rooms.find(token);
         std::string error = "들어가 있는 방이 없습니다.";
         if (!room || !room->skipHand(token, error)) {
+            sendError(res, 400, error);
+            return;
+        }
+        rooms.touch(token);
+        res.set_content("{\"ok\":true}", kJson);
+    });
+
+    // "자리 비움"에서 돌아오기
+    server.Post("/api/back", [&rooms](const httplib::Request& req, httplib::Response& res) {
+        const std::string token = sessionToken(req);
+        auto room = rooms.find(token);
+        std::string error = "들어가 있는 방이 없습니다.";
+        if (!room || !room->comeBack(token, error)) {
             sendError(res, 400, error);
             return;
         }

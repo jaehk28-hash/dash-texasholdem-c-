@@ -1,4 +1,5 @@
 // test_web.cpp - 웹 모드 테스트 (방 정리, 잘못된 액션 거절, 남의 카드 비노출, 친구 방)
+#include <algorithm>
 #include <chrono>
 #include <cstddef>
 #include <cstdio>
@@ -152,8 +153,18 @@ static void testSettingsAndNickname() {
     s = soloSettings();
     s.config.startingChips = 2000000;
     CHECK(!validateSettings(s, true, error));
+    for (int seconds : {0, 15, 30, 45, 60}) {  // 친구 방에서 고를 수 있는 값
+        s = friendSettings();
+        s.turnSeconds = seconds;
+        CHECK(validateSettings(s, false, error));
+    }
     s = friendSettings();
-    s.turnSeconds = 0;  // 친구 방은 제한 시간이 있어야 한다
+    s.turnSeconds = 20;
+    CHECK(!validateSettings(s, false, error));
+    s = friendSettings();
+    s.extensions = 4;
+    CHECK(!validateSettings(s, false, error));
+    s.extensions = -1;
     CHECK(!validateSettings(s, false, error));
 
     for (const char* good : {"철수", "Kim_1", "  영희  ", "ㅋㅋ"}) {
@@ -266,6 +277,7 @@ static void testNoOtherCardsBeforeShowdown() {
 static void testTurnTimeoutAndStaleTurn() {
     RoomSettings settings = friendSettings(1);
     settings.turnSeconds = 1;  // 검사 함수를 거치지 않으므로 짧게 줄 수 있다
+    settings.extensions = 0;
     Room room(fastOptions(), settings, "000000", false, 2);
     std::string error;
     CHECK(room.join("a", "철수", error) && room.start("a", error));
@@ -282,6 +294,159 @@ static void testTurnTimeoutAndStaleTurn() {
         if (line.find("시간 초과") != std::string::npos) logged = true;
     }
     CHECK(logged);
+}
+
+// 시간 제한 시험용: 1초 제한, 연장은 300ms, 여유 50ms
+static WebOptions timerOptions(unsigned seed) {
+    WebOptions o = fastOptions(seed);
+    o.turnGrace = 50ms;
+    o.extensionTime = 300ms;
+    return o;
+}
+
+static int countLines(const RoomView& v, const std::string& part) {
+    int n = 0;
+    for (const std::string& line : v.log) {
+        if (line.find(part) != std::string::npos) ++n;
+    }
+    return n;
+}
+
+// 사람 수 2, 4명: 시간이 다 되면 연장이 먼저 쓰이고, 그 뒤에 낼 칩이 있으면 폴드, 없으면 체크.
+// 연속 3번 자동 처리되면 자리 비움이 되고, 그 뒤로는 기다리지 않는다.
+static void testExtensionsAutoActionAndAway(int humans) {
+    RoomSettings settings = friendSettings(0);
+    settings.turnSeconds = 1;
+    settings.extensions = 1;
+    Room room(timerOptions(3), settings, "000000", false, 3);
+    const std::vector<std::string> tokens = {"a", "b", "c", "d"};
+    const std::vector<std::string> names = {"하나", "둘", "셋", "넷"};
+    std::string error;
+    for (int i = 0; i < humans; ++i) CHECK(room.join(tokens[i], names[i], error));
+    CHECK(room.start("a", error));
+
+    // 첫 차례: 낼 칩이 있다 (빅 블라인드 뒤)
+    CHECK(waitFor([&] { return room.view("a")->turnSeat >= 0; }));
+    const RoomView before = *room.view("a");
+    const int seat = before.turnSeat;
+    const std::string who = names[seat];
+    CHECK(before.extensionsLeft.size() == static_cast<std::size_t>(humans) && before.extensionsLeft[seat] == 1);
+    CHECK(before.timeTotalMs == 1000 && before.timeLeftMs > 0 && !before.timeExtended);
+    CHECK(waitFor([&] { return room.view("a")->timeExtended; }));
+    const RoomView extended = *room.view("a");
+    CHECK(extended.turnSeat == seat && extended.extensionsLeft[seat] == 0 && extended.timeTotalMs == 300);
+    CHECK(countLines(extended, who + ": 시간 연장") == 1);
+    CHECK(waitFor([&] { return countLines(*room.view("a"), who + ": 폴드") == 1; }));
+    CHECK(countLines(*room.view("a"), who + ": 시간 초과") == 1);
+
+    // 아무도 누르지 않으면 모두 자리 비움이 되고 게임은 계속 간다
+    bool everyoneAway = false;
+    for (int i = 0; i < 6000 && !everyoneAway; ++i) {
+        const RoomView v = *room.view("a");
+        everyoneAway = std::all_of(v.away.begin(), v.away.end(), [](bool b) { return b; }) || v.phase == RoomPhase::Over;
+        std::this_thread::sleep_for(5ms);
+    }
+    CHECK(everyoneAway);
+    const RoomView idle = *room.view("a");
+    for (int i = 0; i < humans; ++i) CHECK(idle.extensionsLeft[i] == 0);  // 판이 바뀌어도 다시 차지 않는다
+    // 자리 비움이면 1초를 기다리지 않고 판이 빠르게 넘어간다
+    const int hand = idle.table.state.handNumber;
+    CHECK(waitFor([&] { return room.view("a")->table.state.handNumber >= hand + 3 || room.view("a")->phase == RoomPhase::Over; }));
+}
+
+// 베팅이 없으면 폴드가 아니라 체크
+static void testTimeoutChecksWhenNothingToCall() {
+    RoomSettings settings = friendSettings(0);
+    settings.turnSeconds = 1;
+    settings.extensions = 0;
+    Room room(timerOptions(5), settings, "000000", false, 5);
+    std::string error;
+    CHECK(room.join("a", "하나", error) && room.join("b", "둘", error) && room.start("a", error));
+    CHECK(waitFor([&] { return room.view("a")->turnSeat >= 0; }));
+    const int seat = room.view("a")->turnSeat;
+    const std::string first = seat == 0 ? "a" : "b", second = seat == 0 ? "b" : "a";
+    CHECK(room.submit(first, "call", {}, room.view(first)->turnId, error));
+    // 빅 블라인드는 낼 칩이 없다: 시간이 지나면 체크
+    CHECK(waitFor([&] { return countLines(*room.view("a"), std::string(seat == 0 ? "둘" : "하나") + ": 체크") >= 1; }));
+    CHECK(countLines(*room.view(second), std::string(seat == 0 ? "둘" : "하나") + ": 폴드") == 0);
+}
+
+// 자리 비움은 직접 돌아오면 풀리고, 직접 행동하면 연속 횟수가 지워진다
+static void testComeBack() {
+    RoomSettings settings = friendSettings(0);
+    settings.turnSeconds = 1;
+    settings.extensions = 0;
+    WebOptions options = timerOptions(3);
+    options.nextHandDelay = 100ms;
+    Room room(options, settings, "000000", false, 3);
+    std::string error;
+    CHECK(room.join("a", "하나", error) && room.join("b", "둘", error) && room.start("a", error));
+    // b는 바로 행동하고, a는 아무것도 하지 않는다
+    bool away = false;
+    for (int i = 0; i < 3000 && !away; ++i) {
+        const RoomView b = *room.view("b");
+        if (b.myTurn) room.submit("b", b.table.state.toCall > 0 ? "call" : "check", {}, b.turnId, error);
+        away = room.view("a")->meAway;
+        std::this_thread::sleep_for(5ms);
+    }
+    CHECK(away && !room.view("b")->meAway);
+    CHECK(countLines(*room.view("a"), "하나: 시간 초과") == AWAY_AFTER);
+    CHECK(viewToJson(*room.view("b")).find("\"away\":true") != std::string::npos);  // 다른 사람에게도 보인다
+    CHECK(room.comeBack("a", error));
+    CHECK(!room.view("a")->meAway && countLines(*room.view("a"), "하나: 자리로 돌아왔습니다") == 1);
+    CHECK(waitFor([&] {
+        const RoomView b = *room.view("b");
+        if (b.myTurn) room.submit("b", b.table.state.toCall > 0 ? "call" : "check", {}, b.turnId, error);
+        return room.view("a")->myTurn;  // 돌아온 뒤에는 다시 기다려 준다
+    }));
+}
+
+// 시간 제한이 있는 친구 방은 방장이 누르지 않아도 다음 단계로 간다
+static void testGateAutoAdvance() {
+    RoomSettings settings = friendSettings(0);
+    settings.turnSeconds = 1;
+    WebOptions options = timerOptions(5);
+    options.autoContinue = false;
+    Room room(options, settings, "000000", false, 5);
+    std::string error;
+    CHECK(room.join("a", "하나", error) && room.join("b", "둘", error) && room.start("a", error));
+    CHECK(waitFor([&] {
+        for (const char* who : {"a", "b"}) {
+            const RoomView v = *room.view(who);
+            if (v.myTurn) room.submit(who, v.table.state.toCall > 0 ? "call" : "check", {}, v.turnId, error);
+        }
+        return room.view("a")->waiting == Waiting::Flop;
+    }));
+    CHECK(room.view("b")->gateSeconds >= 1);
+    CHECK(waitFor([&] { return room.view("a")->table.state.board.size() == 3; }));
+
+    settings.turnSeconds = 0;  // 제한 없음: 계속 기다린다
+    Room open(options, settings, "000001", false, 5);
+    CHECK(open.join("a", "하나", error) && open.join("b", "둘", error) && open.start("a", error));
+    CHECK(waitFor([&] {
+        for (const char* who : {"a", "b"}) {
+            const RoomView v = *open.view(who);
+            if (v.myTurn) open.submit(who, v.table.state.toCall > 0 ? "call" : "check", {}, v.turnId, error);
+        }
+        return open.view("a")->waiting == Waiting::Flop;
+    }));
+    std::this_thread::sleep_for(1300ms);
+    CHECK(open.view("a")->waiting == Waiting::Flop && open.view("a")->gateSeconds == 0 && open.view("a")->timeTotalMs == 0);
+}
+
+// 친구 방은 힌트를 요청해도 승률을 계산하지도 보내지도 않는다
+static void testNoHintInFriendRoom() {
+    RoomSettings settings = friendSettings(1);
+    settings.hint = true;
+    Room room(fastOptions(2), settings, "000000", false, 2);
+    std::string error;
+    CHECK(room.join("a", "철수", error) && room.start("a", error));
+    CHECK(waitFor([&] { return room.view("a")->myTurn; }));
+    const RoomView v = *room.view("a");
+    CHECK(!v.settings.hint && !v.equity);
+    const std::string json = viewToJson(v);
+    CHECK(json.find("\"hint\":null") != std::string::npos);
+    CHECK(json.find("\"hint\":true") == std::string::npos && json.find("equity") == std::string::npos);
 }
 
 // 게임 중에 나가면 그 사람의 차례를 기다리지 않는다
@@ -410,6 +575,12 @@ int main() {
     testJoinAndLeave();
     testNoOtherCardsBeforeShowdown();
     testTurnTimeoutAndStaleTurn();
+    testExtensionsAutoActionAndAway(2);
+    testExtensionsAutoActionAndAway(4);
+    testTimeoutChecksWhenNothingToCall();
+    testComeBack();
+    testGateAutoAdvance();
+    testNoHintInFriendRoom();
     testMyCardsVisibleRightAfterDeal();
     testLeaveDuringGame();
     testHttpApi();

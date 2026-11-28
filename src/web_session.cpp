@@ -73,8 +73,12 @@ bool validateSettings(const RoomSettings& s, bool solo, std::string& error) {
         error = "스몰 블라인드는 1 이상, 빅 블라인드 이하여야 합니다.";
     } else if (s.bots < (solo ? 1 : 0) || s.bots > kSeats - 1) {
         error = solo ? "봇은 1 ~ 5명이어야 합니다." : "봇은 0 ~ 5명이어야 합니다.";
-    } else if (solo ? s.turnSeconds != 0 : (s.turnSeconds < 10 || s.turnSeconds > 300)) {
-        error = "제한 시간은 10 ~ 300초여야 합니다.";
+    } else if (solo ? s.turnSeconds != 0
+                    : (s.turnSeconds != 0 && s.turnSeconds != 15 && s.turnSeconds != 30 && s.turnSeconds != 45 &&
+                       s.turnSeconds != 60)) {
+        error = "행동 제한 시간은 15, 30, 45, 60초 또는 제한 없음(0)이어야 합니다.";
+    } else if (!solo && (s.extensions < 0 || s.extensions > 3)) {
+        error = "연장 횟수는 0 ~ 3회여야 합니다.";
     } else {
         return true;
     }
@@ -331,8 +335,9 @@ std::string viewToJson(const RoomView& v) {
          ",\"sb\":" + std::to_string(v.settings.config.smallBlind) +
          ",\"bb\":" + std::to_string(v.settings.config.bigBlind) +
          ",\"bots\":" + std::to_string(v.settings.bots) +
-         ",\"hint\":" + boolJson(v.settings.hint) +
-         ",\"turnSeconds\":" + std::to_string(v.settings.turnSeconds) + "}";
+         (v.solo ? std::string(",\"hint\":") + boolJson(v.settings.hint) : std::string()) +  // 친구 방에는 힌트가 없다
+         ",\"turnSeconds\":" + std::to_string(v.settings.turnSeconds) +
+         ",\"extensions\":" + std::to_string(v.settings.extensions) + "}";
 
     j += ",\"members\":[";
     for (std::size_t i = 0; i < v.members.size(); ++i) {
@@ -372,13 +377,22 @@ std::string viewToJson(const RoomView& v) {
                            : v.waiting == Waiting::Showdown ? "showdown"
                                                             : "nextHand";
         j += std::string("{\"next\":\"") + next + "\",\"gateId\":" + std::to_string(v.gateId) +
-             ",\"canContinue\":" + boolJson(v.canContinue) + "}";
+             ",\"canContinue\":" + boolJson(v.canContinue) +
+             ",\"autoSeconds\":" + std::to_string(v.gateSeconds) + "}";
     } else {
         j += "null";
     }
     j += std::string(",\"canSkip\":") + boolJson(v.canSkip) + ",\"skipping\":" + boolJson(v.skipping);
     j += ",\"turnId\":" + std::to_string(v.turnId);
     j += ",\"secondsLeft\":" + std::to_string(v.secondsLeft);
+    j += ",\"turnTimer\":";
+    if (v.timeTotalMs > 0) {
+        j += "{\"leftMs\":" + std::to_string(v.timeLeftMs) + ",\"totalMs\":" + std::to_string(v.timeTotalMs) +
+             ",\"extended\":" + boolJson(v.timeExtended) + "}";
+    } else {
+        j += "null";
+    }
+    j += std::string(",\"meAway\":") + boolJson(v.meAway);
     j += std::string(",\"handOver\":") + boolJson(v.handOver);
     j += ",\"message\":" + jsonString(v.message);
 
@@ -412,6 +426,9 @@ std::string viewToJson(const RoomView& v) {
         j += std::string(",\"allIn\":") + boolJson(p.allIn);
         j += std::string(",\"isMe\":") + boolJson(me);
         j += ",\"position\":" + jsonString(position);
+        const bool human = i < static_cast<int>(v.away.size());
+        j += std::string(",\"away\":") + boolJson(human && v.away[i]);
+        j += ",\"extensions\":" + std::to_string(i < static_cast<int>(v.extensionsLeft.size()) ? v.extensionsLeft[i] : 0);
         j += ",\"cards\":" + cards + "}";
     }
     j += "]";
@@ -464,9 +481,16 @@ std::string viewToJson(const RoomView& v) {
 // ---------------------------------------------------------------------------
 Room::Room(const WebOptions& options, const RoomSettings& settings, std::string code, bool solo,
            unsigned seed)
-    : options_(options), settings_(settings), code_(std::move(code)), solo_(solo), nextSeed_(seed),
-      hintRng_(seed + 1) {
-    pace_ = settings_.pace;}
+    : options_(options),
+      // 사람끼리 하는 방에서 힌트는 공정하지 않으므로 어떤 경로로 만들어도 끈다.
+      settings_([&] {
+          RoomSettings s = settings;
+          if (!solo) s.hint = false;
+          return s;
+      }()),
+      code_(std::move(code)), solo_(solo), nextSeed_(seed), hintRng_(seed + 1) {
+    pace_ = settings_.pace;
+}
 
 Room::~Room() {
     stop();
@@ -581,6 +605,11 @@ bool Room::start(const std::string& token, std::string& error) {
             names.push_back(members_[i].name);
         }
         phase_ = RoomPhase::Playing;
+        // 연장 횟수와 자리 비움은 판마다가 아니라 게임을 새로 시작할 때만 처음 값이 된다.
+        extensions_.assign(names.size(), settings_.extensions);
+        autoStreak_.assign(names.size(), 0);
+        away_.assign(names.size(), false);
+        gateDeadline_.reset();
         handOver_ = false;
         turnSeat_ = -1;
         pending_.reset();
@@ -621,6 +650,7 @@ bool Room::submit(const std::string& token, const std::string& action, std::opti
         Action chosen;
         if (!buildWebAction(action, amount, turnState_, chosen, error)) return false;
         pending_ = chosen;
+        presentLocked(me->seat);
     }
     cv_.notify_all();  // 기다리던 게임 스레드를 깨운다
     return true;
@@ -680,8 +710,21 @@ std::optional<RoomView> Room::view(const std::string& token) const {
     v.myTurn = turnSeat_ >= 0 && turnSeat_ == me->seat && !pending_;
     if (turnSeat_ >= 0 && settings_.turnSeconds > 0) {
         const auto left = deadline_ - std::chrono::steady_clock::now();
-        v.secondsLeft = std::max(
-            0, static_cast<int>(std::chrono::duration_cast<std::chrono::seconds>(left).count()));
+        v.timeLeftMs = std::max(
+            0, static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(left).count()));
+        v.secondsLeft = (v.timeLeftMs + 999) / 1000;
+        v.timeTotalMs = static_cast<int>(turnTotal_.count());
+        v.timeExtended = turnExtended_;
+    }
+    if (!solo_) {
+        v.extensionsLeft = extensions_;
+        v.away = away_;
+        v.meAway = me->seat >= 0 && me->seat < static_cast<int>(away_.size()) && away_[me->seat];
+        if (v.waiting != Waiting::None && gateDeadline_) {
+            const auto left = std::chrono::duration_cast<std::chrono::milliseconds>(
+                *gateDeadline_ - std::chrono::steady_clock::now()).count();
+            v.gateSeconds = std::max(0, static_cast<int>((left + 999) / 1000));
+        }
     }
     if (v.myTurn) {
         v.equity = equity_;
@@ -726,6 +769,15 @@ Action Room::waitForAction(int seat, const GameState& state) {
     }
     finishAction();  // 앞사람의 행동을 다 보여 준 뒤에 내 차례를 연다
 
+    {  // 자리 비움: 기다리지 않고 바로 처리한다
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (away_[seat]) {
+            tables_[seat] = TableSnapshot{state, true};
+            actingSeat_ = seat;  // 이어지는 행동 기록을 이 자리의 말풍선으로 보여 준다
+            return automatic;
+        }
+    }
+
     // 승률 계산은 시간이 걸리므로 mutex를 잡기 전에 한다.
     std::optional<double> equity;
     if (options_.showHint && settings_.hint) {
@@ -742,17 +794,40 @@ Action Room::waitForAction(int seat, const GameState& state) {
     actingSeat_ = seat;
     actionPhase_.clear();
     ++turnId_;
-    deadline_ = std::chrono::steady_clock::now() + std::chrono::seconds(settings_.turnSeconds);
+    turnTotal_ = std::chrono::seconds(settings_.turnSeconds);
+    turnExtended_ = false;
+    deadline_ = std::chrono::steady_clock::now() + turnTotal_;
 
     // 행동이 들어오거나, 나가거나, stop()이 불릴 때까지 잠든다 (CPU를 쓰지 않는다).
     auto ready = [this, seat] { return stopping_ || pending_.has_value() || seatLeft(seat); };
     bool timedOut = false;
-    if (settings_.turnSeconds > 0) timedOut = !cv_.wait_until(lock, deadline_, ready);
-    else cv_.wait(lock, ready);
+    if (settings_.turnSeconds > 0) {
+        // 시간은 서버만 잰다. 여유 시간(turnGrace) 안에 도착한 행동은 받는다.
+        while (!cv_.wait_until(lock, deadline_ + options_.turnGrace, ready)) {
+            if (extensions_[seat] <= 0) {
+                timedOut = true;
+                break;
+            }
+            --extensions_[seat];  // 연장 1회가 자동으로 쓰인다
+            turnTotal_ = options_.extensionTime;
+            turnExtended_ = true;
+            deadline_ += turnTotal_;
+            addLog(state.players[seat].name + ": 시간 연장 (+" + std::to_string(EXTENSION_SECONDS) +
+                   "초, 남은 " + std::to_string(extensions_[seat]) + "회)");
+        }
+    } else {
+        cv_.wait(lock, ready);
+    }
 
     turnSeat_ = -1;
     if (stopping_) throw StopRequested{};
-    if (timedOut) addLog(state.players[seat].name + ": 시간 초과");
+    if (timedOut) {
+        addLog(state.players[seat].name + ": 시간 초과");
+        if (++autoStreak_[seat] >= AWAY_AFTER) {
+            away_[seat] = true;
+            addLog(state.players[seat].name + ": 자리 비움");
+        }
+    }
     const Action action = pending_ ? *pending_ : automatic;
     pending_.reset();
     return action;
@@ -811,7 +886,20 @@ void Room::waitAt(Waiting point) {
     waiting_ = point;
     ++gateId_;
     continue_ = false;
-    cv_.wait(lock, [this, skippable] { return stopping_ || continue_ || (skippable && skip_); });
+    auto done = [this, skippable] { return stopping_ || continue_ || (skippable && skip_); };
+    if (!solo_ && settings_.turnSeconds > 0) {
+        // 방장이 자리를 비워도 게임이 멈추지 않게, 시간이 지나면 저절로 넘어간다.
+        const auto began = std::chrono::steady_clock::now();
+        const std::chrono::milliseconds limit = std::chrono::seconds(settings_.turnSeconds);
+        while (!done()) {
+            const bool away = hostAwayLocked();
+            gateDeadline_ = began + (away ? options_.awayGate : limit + options_.turnGrace);
+            if (!cv_.wait_until(lock, *gateDeadline_, [&] { return done() || hostAwayLocked() != away; })) break;
+        }
+        gateDeadline_.reset();
+    } else {
+        cv_.wait(lock, done);
+    }
     waiting_ = Waiting::None;
     continue_ = false;
     if (stopping_) throw StopRequested{};
@@ -821,6 +909,36 @@ bool Room::isHostLocked(const std::string& token) const {
     // 방장 = 남아 있는 사람 중 가장 먼저 들어온 사람
     const auto host = std::find_if(members_.begin(), members_.end(), [](const Member& m) { return !m.left; });
     return host != members_.end() && host->token == token;
+}
+
+bool Room::hostAwayLocked() const {
+    const auto host = std::find_if(members_.begin(), members_.end(), [](const Member& m) { return !m.left; });
+    return host != members_.end() && host->seat >= 0 && host->seat < static_cast<int>(away_.size()) &&
+           away_[host->seat];
+}
+
+void Room::presentLocked(int seat) {
+    if (seat < 0 || seat >= static_cast<int>(away_.size())) return;
+    autoStreak_[seat] = 0;
+    if (!away_[seat]) return;
+    away_[seat] = false;
+    for (const Member& m : members_) {
+        if (m.seat == seat) addLog(m.name + ": 자리로 돌아왔습니다");
+    }
+}
+
+bool Room::comeBack(const std::string& token, std::string& error) {
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        const Member* me = findMember(token);
+        if (stopping_ || !me || phase_ != RoomPhase::Playing) {
+            error = "지금은 할 수 없습니다.";
+            return false;
+        }
+        presentLocked(me->seat);
+    }
+    cv_.notify_all();
+    return true;
 }
 
 bool Room::canSkipLocked(const Member& viewer) const {
@@ -850,6 +968,8 @@ bool Room::proceed(const std::string& token, std::optional<long long> gateId, st
             return false;
         }
         continue_ = true;
+        const Member* me = findMember(token);
+        if (me->seat >= 0 && me->seat < static_cast<int>(away_.size()) && away_[me->seat]) presentLocked(me->seat);
     }
     cv_.notify_all();
     return true;
