@@ -274,7 +274,7 @@
   .chips-art i.grow { animation: grow .5s ease-out var(--d) backwards; }
   @keyframes grow { from { transform: scaleY(var(--from)); } }
   @media (prefers-reduced-motion: reduce) { .chips-art i.grow { animation: none; } }
-  .glass { flex: none; width: 23px; height: 29px; overflow: visible; --coupe-w: 14px; --coupe-bubbles: none; }
+  .glass { flex: none; width: 23px; height: 29px; overflow: visible; --coupe-w: 14px; --coupe-bubbles: none; --coupe-spade: none; }  /* 평소에는 빈 잔 */
   .seat.folded .glass { opacity: .5; }
   .seat.out .glass { opacity: .12; }
 
@@ -319,6 +319,15 @@
   }
   /* ---- 연출 층: 전부 터치를 통과시키고 transform, opacity만 움직인다 ---- */
   .fx { position: absolute; inset: 0; z-index: 6; overflow: hidden; pointer-events: none; }
+
+  /* 최종 우승: 우승자 잔에 스페이드가 담긴다. 누르기를 가로막지 않는다 (번쩍임 없음) */
+  .ceremony { position: absolute; inset: 0; z-index: 7; pointer-events: none; }
+  .win-glass { position: absolute; }
+  .win-spade { display: block; width: 100%; height: 100%; overflow: visible; transform-origin: 49% 32%; }
+  .ripple { position: absolute; left: 15%; width: 70%; top: 28%; height: 5px; border: 1px solid #ffb3cd; border-radius: 50%; opacity: 0; }
+  .win-label { position: absolute; padding: 3px 10px; border-radius: 8px; background: rgba(8, 6, 4, .82); color: #e8c56b;
+    font-family: var(--font-brand); font-weight: 700; font-size: 20px; line-height: 1.3; white-space: nowrap; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .fx > * { position: absolute; left: 0; top: 0; pointer-events: none; }
   .fx-chip { --chip: #b02a3b; --edge: #f3ecd9; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%; background: var(--chip);
              border: 3px dashed var(--edge); box-shadow: 0 0 0 1px var(--chip), 0 3px 5px rgba(0, 0, 0, .7); }
@@ -865,8 +874,8 @@
 </dialog>
 <div class="wrap">
   <header>
-    <svg id="headLogo" class="coupe-icon" role="img" aria-label="Coupe Holdem 로고" viewBox="108 116 224 278"><use href="/logo.svg?v=2#coupe"/></svg>
-    <h1 class="brand"><svg class="coupe-icon" aria-hidden="true" viewBox="108 116 224 278"><use href="/logo.svg?v=2#coupe"/></svg><span><span>Coupe</span> <span>Holdem</span></span></h1>
+    <svg id="headLogo" class="coupe-icon" role="img" aria-label="Coupe Holdem 로고" viewBox="108 116 224 278"><use href="/logo.svg?v=3#coupe"/></svg>
+    <h1 class="brand"><svg class="coupe-icon" aria-hidden="true" viewBox="108 116 224 278"><use href="/logo.svg?v=3#coupe"/></svg><span><span>Coupe</span> <span>Holdem</span></span></h1>
     <button type="button" id="homeBack">← 처음으로</button>
     <span id="info"></span>
     <div class="head-buttons">
@@ -890,7 +899,7 @@
 
   <!-- 술집 내부 배경: indoor 화면들이 함께 쓴다 (장식이라 화면 읽기에서는 뺀다) -->
   <div id="tavern" aria-hidden="true">
-    <svg class="bar-art" viewBox="0 0 360 92" preserveAspectRatio="xMidYMid meet" aria-hidden="true"><defs><radialGradient id="bar-amber" cx=".5" cy=".6" r=".6"><stop offset="0" stop-color="#ffb24a" stop-opacity=".75"/><stop offset=".55" stop-color="#c46a1c" stop-opacity=".32"/><stop offset="1" stop-color="#c46a1c" stop-opacity="0"/></radialGradient><radialGradient id="bar-lamp"><stop offset="0" stop-color="#ffc66a" stop-opacity=".8"/><stop offset="1" stop-color="#ff9a2e" stop-opacity="0"/></radialGradient><pattern id="bar-wood" width="36" height="64" patternUnits="userSpaceOnUse"><rect width="36" height="64" fill="#3b2214"/><path d="M0 0V64M12 0V64M24 0V64" stroke="#170c05" stroke-width="1.4"/><path d="M4 3q1 9.0 0 18" stroke="#2a170c" fill="none" stroke-width=".7"/><path d="M9 30q1 11.0 0 22" stroke="#2a170c" fill="none" stroke-width=".7"/><path d="M17 12q1 13.0 0 26" stroke="#2a170c" fill="none" stroke-width=".7"/><path d="M22 44q1 8.0 0 16" stroke="#2a170c" fill="none" stroke-width=".7"/><path d="M29 6q1 7.0 0 14" stroke="#2a170c" fill="none" stroke-width=".7"/><path d="M31 36q1 10.0 0 20" stroke="#2a170c" fill="none" stroke-width=".7"/><path d="M6 52q1 5.0 0 10" stroke="#2a170c" fill="none" stroke-width=".7"/><ellipse cx="18" cy="50" rx="1.8" ry="3" fill="#170c05" opacity=".7"/></pattern></defs><rect x="22" y="24" width="316" height="62" fill="url(#bar-wood)"/><rect x="22" y="24" width="316" height="62" fill="url(#bar-amber)"/><path d="M36 77v-26h3v-10h4v10h3v26z" fill="#6b2a1c"/><path d="M39 73v-14" stroke="#ffe3ac" stroke-width="1" opacity=".45"/><rect x="37.5" y="63" width="8" height="6" fill="#d9c39a" opacity=".55"/><path d="M53 77q-3-14 3-19v-9h5v9q6 5 3 19z" fill="#3f5a2c"/><path d="M56 73v-14" stroke="#ffe3ac" stroke-width="1" opacity=".45"/><rect x="54.5" y="63" width="8" height="6" fill="#d9c39a" opacity=".55"/><path d="M68 77q-3-14 3-19v-9h5v9q6 5 3 19z" fill="#3f5a2c"/><path d="M71 73v-14" stroke="#ffe3ac" stroke-width="1" opacity=".45"/><rect x="69.5" y="63" width="8" height="6" fill="#d9c39a" opacity=".55"/><svg x="85" y="53" width="19" height="24" viewBox="108 116 224 278" style="--coupe-w:16px;--coupe-bubbles:none"><use href="/logo.svg?v=2#coupe"/></svg><path d="M109 77q-3-14 3-19v-9h5v9q6 5 3 19z" fill="#3f5a2c"/><path d="M112 73v-14" stroke="#ffe3ac" stroke-width="1" opacity=".45"/><rect x="110.5" y="63" width="8" height="6" fill="#d9c39a" opacity=".55"/><path d="M129 77v-22q0-4 4-6v-8h5v8q4 2 4 6v22z" fill="#3f5a2c"/><path d="M132 73v-14" stroke="#ffe3ac" stroke-width="1" opacity=".45"/><rect x="130.5" y="63" width="8" height="6" fill="#d9c39a" opacity=".55"/><path d="M144 77v-26h3v-10h4v10h3v26z" fill="#2d3f52"/><path d="M147 73v-14" stroke="#ffe3ac" stroke-width="1" opacity=".45"/><rect x="145.5" y="63" width="8" height="6" fill="#d9c39a" opacity=".55"/><path d="M159 77v-22q0-4 4-6v-8h5v8q4 2 4 6v22z" fill="#3f5a2c"/><path d="M162 73v-14" stroke="#ffe3ac" stroke-width="1" opacity=".45"/><rect x="160.5" y="63" width="8" height="6" fill="#d9c39a" opacity=".55"/><svg x="179" y="53" width="19" height="24" viewBox="108 116 224 278" style="--coupe-w:16px;--coupe-bubbles:none"><use href="/logo.svg?v=2#coupe"/></svg><path d="M203 77v-26h3v-10h4v10h3v26z" fill="#3f5a2c"/><path d="M206 73v-14" stroke="#ffe3ac" stroke-width="1" opacity=".45"/><rect x="204.5" y="63" width="8" height="6" fill="#d9c39a" opacity=".55"/><path d="M223 77v-22q0-4 4-6v-8h5v8q4 2 4 6v22z" fill="#6b2a1c"/><path d="M226 73v-14" stroke="#ffe3ac" stroke-width="1" opacity=".45"/><rect x="224.5" y="63" width="8" height="6" fill="#d9c39a" opacity=".55"/><path d="M243 77q-3-14 3-19v-9h5v9q6 5 3 19z" fill="#7a4a1a"/><path d="M246 73v-14" stroke="#ffe3ac" stroke-width="1" opacity=".45"/><rect x="244.5" y="63" width="8" height="6" fill="#d9c39a" opacity=".55"/><path d="M258 77q-3-14 3-19v-9h5v9q6 5 3 19z" fill="#7a4a1a"/><path d="M261 73v-14" stroke="#ffe3ac" stroke-width="1" opacity=".45"/><rect x="259.5" y="63" width="8" height="6" fill="#d9c39a" opacity=".55"/><svg x="275" y="53" width="19" height="24" viewBox="108 116 224 278" style="--coupe-w:16px;--coupe-bubbles:none"><use href="/logo.svg?v=2#coupe"/></svg><path d="M299 77v-22q0-4 4-6v-8h5v8q4 2 4 6v22z" fill="#6b2a1c"/><path d="M302 73v-14" stroke="#ffe3ac" stroke-width="1" opacity=".45"/><rect x="300.5" y="63" width="8" height="6" fill="#d9c39a" opacity=".55"/><path d="M314 77q-3-14 3-19v-9h5v9q6 5 3 19z" fill="#6b2a1c"/><path d="M317 73v-14" stroke="#ffe3ac" stroke-width="1" opacity=".45"/><rect x="315.5" y="63" width="8" height="6" fill="#d9c39a" opacity=".55"/><rect x="24" y="77" width="312" height="6" fill="#8a5a30"/><rect x="24" y="83" width="312" height="3" fill="#1b0f08"/><rect x="16" y="20" width="328" height="6" fill="#6b4426"/><rect x="16" y="20" width="8" height="70" fill="#5c381e"/><rect x="336" y="20" width="8" height="70" fill="#5c381e"/><path d="M40 0V22" stroke="#0e0804" stroke-width="2"/><circle class="lamp-glow" cx="40" cy="36" r="30" fill="url(#bar-lamp)"/><path d="M30 29Q40 17 50 29Z" fill="#1a0f08"/><path d="M33 29h14l-2 15h-10z" fill="#ffd98a"/><path d="M40 29v15M33 29l2 15M47 29l-2 15" stroke="#2a1a0c" stroke-width="1.2"/><rect x="34" y="44" width="12" height="4" fill="#1a0f08"/><path d="M180 0V6" stroke="#0e0804" stroke-width="2"/><circle class="lamp-glow" cx="180" cy="20" r="30" fill="url(#bar-lamp)"/><path d="M170 13Q180 1 190 13Z" fill="#1a0f08"/><path d="M173 13h14l-2 15h-10z" fill="#ffd98a"/><path d="M180 13v15M173 13l2 15M187 13l-2 15" stroke="#2a1a0c" stroke-width="1.2"/><rect x="174" y="28" width="12" height="4" fill="#1a0f08"/><path d="M320 0V22" stroke="#0e0804" stroke-width="2"/><circle class="lamp-glow" cx="320" cy="36" r="30" fill="url(#bar-lamp)"/><path d="M310 29Q320 17 330 29Z" fill="#1a0f08"/><path d="M313 29h14l-2 15h-10z" fill="#ffd98a"/><path d="M320 29v15M313 29l2 15M327 29l-2 15" stroke="#2a1a0c" stroke-width="1.2"/><rect x="314" y="44" width="12" height="4" fill="#1a0f08"/></svg>
+    <svg class="bar-art" viewBox="0 0 360 92" preserveAspectRatio="xMidYMid meet" aria-hidden="true"><defs><radialGradient id="bar-amber" cx=".5" cy=".6" r=".6"><stop offset="0" stop-color="#ffb24a" stop-opacity=".75"/><stop offset=".55" stop-color="#c46a1c" stop-opacity=".32"/><stop offset="1" stop-color="#c46a1c" stop-opacity="0"/></radialGradient><radialGradient id="bar-lamp"><stop offset="0" stop-color="#ffc66a" stop-opacity=".8"/><stop offset="1" stop-color="#ff9a2e" stop-opacity="0"/></radialGradient><pattern id="bar-wood" width="36" height="64" patternUnits="userSpaceOnUse"><rect width="36" height="64" fill="#3b2214"/><path d="M0 0V64M12 0V64M24 0V64" stroke="#170c05" stroke-width="1.4"/><path d="M4 3q1 9.0 0 18" stroke="#2a170c" fill="none" stroke-width=".7"/><path d="M9 30q1 11.0 0 22" stroke="#2a170c" fill="none" stroke-width=".7"/><path d="M17 12q1 13.0 0 26" stroke="#2a170c" fill="none" stroke-width=".7"/><path d="M22 44q1 8.0 0 16" stroke="#2a170c" fill="none" stroke-width=".7"/><path d="M29 6q1 7.0 0 14" stroke="#2a170c" fill="none" stroke-width=".7"/><path d="M31 36q1 10.0 0 20" stroke="#2a170c" fill="none" stroke-width=".7"/><path d="M6 52q1 5.0 0 10" stroke="#2a170c" fill="none" stroke-width=".7"/><ellipse cx="18" cy="50" rx="1.8" ry="3" fill="#170c05" opacity=".7"/></pattern></defs><rect x="22" y="24" width="316" height="62" fill="url(#bar-wood)"/><rect x="22" y="24" width="316" height="62" fill="url(#bar-amber)"/><path d="M36 77v-26h3v-10h4v10h3v26z" fill="#6b2a1c"/><path d="M39 73v-14" stroke="#ffe3ac" stroke-width="1" opacity=".45"/><rect x="37.5" y="63" width="8" height="6" fill="#d9c39a" opacity=".55"/><path d="M53 77q-3-14 3-19v-9h5v9q6 5 3 19z" fill="#3f5a2c"/><path d="M56 73v-14" stroke="#ffe3ac" stroke-width="1" opacity=".45"/><rect x="54.5" y="63" width="8" height="6" fill="#d9c39a" opacity=".55"/><path d="M68 77q-3-14 3-19v-9h5v9q6 5 3 19z" fill="#3f5a2c"/><path d="M71 73v-14" stroke="#ffe3ac" stroke-width="1" opacity=".45"/><rect x="69.5" y="63" width="8" height="6" fill="#d9c39a" opacity=".55"/><svg x="85" y="53" width="19" height="24" viewBox="108 116 224 278" style="--coupe-w:16px;--coupe-bubbles:none"><use href="/logo.svg?v=3#coupe"/></svg><path d="M109 77q-3-14 3-19v-9h5v9q6 5 3 19z" fill="#3f5a2c"/><path d="M112 73v-14" stroke="#ffe3ac" stroke-width="1" opacity=".45"/><rect x="110.5" y="63" width="8" height="6" fill="#d9c39a" opacity=".55"/><path d="M129 77v-22q0-4 4-6v-8h5v8q4 2 4 6v22z" fill="#3f5a2c"/><path d="M132 73v-14" stroke="#ffe3ac" stroke-width="1" opacity=".45"/><rect x="130.5" y="63" width="8" height="6" fill="#d9c39a" opacity=".55"/><path d="M144 77v-26h3v-10h4v10h3v26z" fill="#2d3f52"/><path d="M147 73v-14" stroke="#ffe3ac" stroke-width="1" opacity=".45"/><rect x="145.5" y="63" width="8" height="6" fill="#d9c39a" opacity=".55"/><path d="M159 77v-22q0-4 4-6v-8h5v8q4 2 4 6v22z" fill="#3f5a2c"/><path d="M162 73v-14" stroke="#ffe3ac" stroke-width="1" opacity=".45"/><rect x="160.5" y="63" width="8" height="6" fill="#d9c39a" opacity=".55"/><svg x="179" y="53" width="19" height="24" viewBox="108 116 224 278" style="--coupe-w:16px;--coupe-bubbles:none"><use href="/logo.svg?v=3#coupe"/></svg><path d="M203 77v-26h3v-10h4v10h3v26z" fill="#3f5a2c"/><path d="M206 73v-14" stroke="#ffe3ac" stroke-width="1" opacity=".45"/><rect x="204.5" y="63" width="8" height="6" fill="#d9c39a" opacity=".55"/><path d="M223 77v-22q0-4 4-6v-8h5v8q4 2 4 6v22z" fill="#6b2a1c"/><path d="M226 73v-14" stroke="#ffe3ac" stroke-width="1" opacity=".45"/><rect x="224.5" y="63" width="8" height="6" fill="#d9c39a" opacity=".55"/><path d="M243 77q-3-14 3-19v-9h5v9q6 5 3 19z" fill="#7a4a1a"/><path d="M246 73v-14" stroke="#ffe3ac" stroke-width="1" opacity=".45"/><rect x="244.5" y="63" width="8" height="6" fill="#d9c39a" opacity=".55"/><path d="M258 77q-3-14 3-19v-9h5v9q6 5 3 19z" fill="#7a4a1a"/><path d="M261 73v-14" stroke="#ffe3ac" stroke-width="1" opacity=".45"/><rect x="259.5" y="63" width="8" height="6" fill="#d9c39a" opacity=".55"/><svg x="275" y="53" width="19" height="24" viewBox="108 116 224 278" style="--coupe-w:16px;--coupe-bubbles:none"><use href="/logo.svg?v=3#coupe"/></svg><path d="M299 77v-22q0-4 4-6v-8h5v8q4 2 4 6v22z" fill="#6b2a1c"/><path d="M302 73v-14" stroke="#ffe3ac" stroke-width="1" opacity=".45"/><rect x="300.5" y="63" width="8" height="6" fill="#d9c39a" opacity=".55"/><path d="M314 77q-3-14 3-19v-9h5v9q6 5 3 19z" fill="#6b2a1c"/><path d="M317 73v-14" stroke="#ffe3ac" stroke-width="1" opacity=".45"/><rect x="315.5" y="63" width="8" height="6" fill="#d9c39a" opacity=".55"/><rect x="24" y="77" width="312" height="6" fill="#8a5a30"/><rect x="24" y="83" width="312" height="3" fill="#1b0f08"/><rect x="16" y="20" width="328" height="6" fill="#6b4426"/><rect x="16" y="20" width="8" height="70" fill="#5c381e"/><rect x="336" y="20" width="8" height="70" fill="#5c381e"/><path d="M40 0V22" stroke="#0e0804" stroke-width="2"/><circle class="lamp-glow" cx="40" cy="36" r="30" fill="url(#bar-lamp)"/><path d="M30 29Q40 17 50 29Z" fill="#1a0f08"/><path d="M33 29h14l-2 15h-10z" fill="#ffd98a"/><path d="M40 29v15M33 29l2 15M47 29l-2 15" stroke="#2a1a0c" stroke-width="1.2"/><rect x="34" y="44" width="12" height="4" fill="#1a0f08"/><path d="M180 0V6" stroke="#0e0804" stroke-width="2"/><circle class="lamp-glow" cx="180" cy="20" r="30" fill="url(#bar-lamp)"/><path d="M170 13Q180 1 190 13Z" fill="#1a0f08"/><path d="M173 13h14l-2 15h-10z" fill="#ffd98a"/><path d="M180 13v15M173 13l2 15M187 13l-2 15" stroke="#2a1a0c" stroke-width="1.2"/><rect x="174" y="28" width="12" height="4" fill="#1a0f08"/><path d="M320 0V22" stroke="#0e0804" stroke-width="2"/><circle class="lamp-glow" cx="320" cy="36" r="30" fill="url(#bar-lamp)"/><path d="M310 29Q320 17 330 29Z" fill="#1a0f08"/><path d="M313 29h14l-2 15h-10z" fill="#ffd98a"/><path d="M320 29v15M313 29l2 15M327 29l-2 15" stroke="#2a1a0c" stroke-width="1.2"/><rect x="314" y="44" width="12" height="4" fill="#1a0f08"/></svg>
   </div>
 
   <!-- 1) 규칙 설명 (처음 들어오면 보임) -->
@@ -1129,6 +1138,7 @@
       </div>
     </div>
 
+    <div class="sr-only" id="winLive" aria-live="polite"></div>
     <div class="panel" id="result" hidden>
       <h3 id="resultTitle"></h3>
       <div id="resultBody"></div>
@@ -1195,7 +1205,7 @@
 <dialog class="modal" id="story" aria-labelledby="storyTitle">
   <div class="modal-box">
     <div class="modal-head">
-      <h2 id="storyTitle"><svg class="coupe-icon" aria-hidden="true" viewBox="108 116 224 278"><use href="/logo.svg?v=2#coupe"/></svg>만든 이야기</h2>
+      <h2 id="storyTitle"><svg class="coupe-icon" aria-hidden="true" viewBox="108 116 224 278"><use href="/logo.svg?v=3#coupe"/></svg>만든 이야기</h2>
       <button type="button" class="modal-close" aria-label="닫기">✕</button>
     </div>
     <div class="modal-body">
@@ -1750,7 +1760,7 @@ const TEXTS = {
   levels: ["약해요", "보통 이하예요", "괜찮아요", "강해요", "아주 강해요", "최강급이에요"],
   boardOnly: " (공통 카드만으로 된 패라 모두가 같이 써요)",
   result: {
-    title: "이번 판 결과 (제 {hand} 판)", ranking: "이번 판 순위", standings: "현재 칩 순위", place: "{place}위",
+    title: "이번 판 결과 (제 {hand} 판)", ranking: "이번 판 순위", standings: "현재 칩 순위", finalStandings: "최종 순위", place: "{place}위",
     tie: "무승부", same: "공동", folded: "폴드", out: "탈락", hidden: "카드 비공개 (모두 폴드해서 보여 주지 않아요)",
     win: "승리", kicker: "키커", mine: "점이 있는 카드 = 그 사람이 손에 쥔 카드 (나머지는 공용 카드)",
     potsLine: "팟이 여러 개예요: {pots}",
@@ -2069,7 +2079,7 @@ function fill(template, values) {
       out.push(line(fill(T.potsLine, { pots: review.pots.map((pot, i) => TEXTS.potName(i) + " " + num(pot.amount) + " → "
         + pot.winners.map((w) => name(w.seat)).join(", ")).join(" / ") })));
     }
-    out.push(el("h4", "", T.standings));
+    out.push(el("h4", "", state.phase === "over" ? T.finalStandings : T.standings));
     for (const s of review.standings) {
       const row = el("div", "rk" + (s.out ? " out" : ""));
       const place = s.out ? T.out : (s.tie ? T.same + " " : "") + fill(T.place, { place: s.rank });
@@ -2084,12 +2094,13 @@ function fill(template, values) {
   let shownResult = "", shownHand = "";
   function renderResult() {
     const review = state.review;
-    const show = !!review && review.handNumber === state.handNumber && (state.handOver || state.phase === "over");
+    const show = !!review && review.handNumber === state.handNumber && (state.handOver || state.phase === "over")
+      && !Ceremony.busy();
     $("result").hidden = !show;
     if (!show) { shownResult = ""; return; }
     const hand = state.code + ":" + review.handNumber;
     if (hand !== shownHand) { shownHand = hand; $("review").open = false; }  // 새 결과는 접힌 상태로
-    const key = hand + JSON.stringify(review);
+    const key = hand + state.phase + JSON.stringify(review);
     if (key === shownResult) return;
     shownResult = key;
     $("resultTitle").textContent = fill(TEXTS.result.title, { hand: review.handNumber });
@@ -2386,6 +2397,7 @@ function fill(template, values) {
     if (!state || !state.players) return;
     renderGuide();
     renderNow();
+    Ceremony.update();  // 결과 패널보다 먼저: 연출 중에는 패널을 잠깐 미룬다
     renderResult();
     renderFlow();
     markMyHand();  // 열어 둔 동안 카드가 더 깔리면 표시도 따라간다
@@ -2764,7 +2776,7 @@ const FX = (() => {
     svg.setAttribute("viewBox", "108 116 224 278");
     svg.setAttribute("aria-hidden", "true");
     const use = document.createElementNS(NS, "use");
-    use.setAttribute("href", "/logo.svg?v=2#coupe");
+    use.setAttribute("href", "/logo.svg?v=3#coupe");
     svg.append(use);
     return svg;
   }
@@ -2950,6 +2962,7 @@ const FX = (() => {
       }
     });
     FX.update(reveal);
+    if (typeof Ceremony !== "undefined") Ceremony.place();  // 좌석이 새로 그려질 때마다 잔을 따라간다
   }
 
   // 좌석, 공용 카드, 팟이 다시 그려질 때 실행 (우리가 좌석 안에 붙이는 것은 감시하지 않는다)
@@ -3010,6 +3023,141 @@ const FX = (() => {
     if (typed(e.target)) timer = setTimeout(() => document.documentElement.classList.remove("typing"), 400);
   });
   if (window.visualViewport) window.visualViewport.addEventListener("resize", lift);
+})();
+
+// ---- 최종 우승 연출 (겉모습만) ----
+// 게임이 끝났을 때(phase "over") 서버가 이미 보내 준 최종 순위(review.standings)의 1위만 쓴다.
+// 좌석은 계속 새로 만들어지므로, 연출은 테이블 위의 별도 층에 한 번만 만들고 위치만 따라간다.
+const Ceremony = (() => {
+  const FALL = 1350;  // 스페이드가 떨어지는 시간(ms)
+  const table = $("table");
+  const layer = el("div", "ceremony");
+  layer.setAttribute("aria-hidden", "true");
+  table.append(layer);
+  let key = "", winners = [], animations = [], busyUntil = 0;
+
+  const reduced = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    || document.documentElement.classList.contains("reduce-fx");
+
+  function clear() {
+    key = "";
+    winners = [];
+    animations = [];
+    busyUntil = 0;
+    layer.replaceChildren();
+    $("winLive").textContent = "";
+  }
+
+  function play(node, frames, options) {
+    animations.push(node.animate(frames, Object.assign({ fill: "both" }, options)));
+  }
+
+  function spade() {
+    const NS = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(NS, "svg"), use = document.createElementNS(NS, "use");
+    svg.setAttribute("class", "win-spade");
+    svg.setAttribute("viewBox", "108 116 224 278");  // 잔과 같은 좌표라 로고처럼 잔 안에 꼭 들어간다
+    use.setAttribute("href", "/logo.svg?v=3#coupe-spade");
+    svg.append(use);
+    return svg;
+  }
+
+  function start(rows) {
+    const still = reduced();
+    // 마지막 판의 카드 공개와 칩 이동을 보여 준 뒤에 시작한다
+    const wait = still ? 0 : state.review.showdown ? 1800 : 900;
+    const names = [];
+    for (const row of rows) {
+      const player = state.players[row.seat];
+      if (!player) continue;
+      names.push(player.name);
+      const box = el("div", "win-glass");
+      const drop = spade();
+      box.append(drop);
+      const short = player.name.length > 10 ? player.name.slice(0, 9) + "…" : player.name;
+      const label = el("div", "win-label", player.isMe ? "YOU WIN!" : short + " WIN");
+      layer.append(box, label);
+      winners.push({ seat: row.seat, box, label });
+      if (still) {  // 낙하와 파문 없이 스페이드만 스르르
+        play(drop, [{ opacity: 0 }, { opacity: 1 }], { duration: 300 });
+        continue;
+      }
+      play(drop, [
+        { transform: "translateY(-60px) rotate(14deg)", opacity: 0, easing: "ease-in" },
+        { opacity: 1, offset: 0.15 },
+        { transform: "translateY(2px) rotate(0deg)", offset: 0.85, easing: "ease-out" },
+        { transform: "translateY(0) rotate(0deg)", opacity: 1 },
+      ], { duration: FALL, delay: wait });
+      const touch = wait + FALL * 0.85;
+      for (const late of [0, 180]) {
+        const ripple = el("i", "ripple");
+        box.append(ripple);
+        play(ripple, [{ transform: "scale(.3)", opacity: 0 }, { opacity: .8, offset: 0.2 }, { transform: "scale(1)", opacity: 0 }],
+          { duration: 600, delay: touch + late });
+      }
+      play(label, [{ transform: "scale(.9)", opacity: 0 }, { transform: "scale(1)", opacity: 1 }], { duration: 300, delay: touch });
+    }
+    busyUntil = still ? 0 : Date.now() + wait + FALL + 300;
+    $("winLive").textContent = names.join(", ") + " 우승";
+  }
+
+  // 잔 위치를 따라가고, 문구가 서로 겹치지 않게 놓는다
+  function place() {
+    const base = table.getBoundingClientRect();
+    const seats = table.querySelectorAll(":scope > .seat");
+    const zoom = base.width / table.offsetWidth || 1;  // 카드 공개 때 테이블이 살짝 확대되는 만큼 보정
+    // 공용 카드와 팟은 가리지 않는다
+    const taken = [$("board"), $("pot")].map((node) => node.getBoundingClientRect()).filter((r) => r.width > 0)
+      .map((r) => ({ left: (r.left - base.left) / zoom, right: (r.right - base.left) / zoom,
+        top: (r.top - base.top) / zoom, bottom: (r.bottom - base.top) / zoom }));
+    for (const w of winners) {
+      const glass = seats[w.seat] && seats[w.seat].querySelector(".glass");
+      if (!glass) continue;
+      const box = glass.getBoundingClientRect();
+      const x = (box.left - base.left) / zoom, y = (box.top - base.top) / zoom;
+      const r = { width: box.width / zoom, height: box.height / zoom };
+      Object.assign(w.box.style, { left: x + "px", top: y + "px", width: r.width + "px", height: r.height + "px" });
+      const width = w.label.offsetWidth, height = w.label.offsetHeight;
+      const left = Math.min(Math.max(4, x + r.width / 2 - width / 2), table.offsetWidth - width - 4);
+      // 잔 아래, 잔 위 순서로 가까운 곳부터 한 칸씩 넓혀 가며 겹치지 않는 자리를 찾는다.
+      const step = height + 4;
+      const free = (t) => t >= 4 && t + height <= table.offsetHeight - 4
+        && !taken.some((o) => left < o.right && o.left < left + width && t < o.bottom && o.top < t + height);
+      const tries = [];
+      for (let n = 0; n < 8; n++) tries.push(y + r.height + 2 + n * step, y - height - 4 - n * step);
+      const top = tries.find(free);
+      const at = top === undefined ? Math.max(4, table.offsetHeight - step) : top;
+      taken.push({ left, right: left + width, top: at, bottom: at + height });
+      w.label.style.left = left + "px";
+      w.label.style.top = at + "px";
+    }
+  }
+
+  function update() {
+    const review = state.review;
+    const over = state.hasGame && state.phase === "over" && review && review.handNumber === state.handNumber;
+    if (!over) {  // 새 게임을 시작하면 잔은 다시 비어 있다
+      if (key) clear();
+      return;
+    }
+    const now = state.code + ":" + state.handNumber;
+    if (now !== key) {
+      clear();
+      key = now;
+      start(review.standings.filter((row) => row.rank === 1 && !row.out));
+    }
+    place();
+    requestAnimationFrame(place);  // 좌석 장식(잔)이 나중에 붙는 경우
+  }
+
+  // 화면을 누르면 바로 끝까지 보여 준다 (누른 버튼은 그대로 동작한다)
+  document.addEventListener("pointerdown", () => {
+    if (Date.now() >= busyUntil) return;
+    animations.forEach((a) => a.finish());
+    busyUntil = 0;
+  });
+
+  return { update, place, busy: () => Date.now() < busyUntil };
 })();
 </script>
 </body>
